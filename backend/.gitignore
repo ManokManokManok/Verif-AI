@@ -1,0 +1,6 @@
+# Keep secrets and local DB out of VCS
+.env
+*.env
+
+# Django local DB
+/db.sqlite3
