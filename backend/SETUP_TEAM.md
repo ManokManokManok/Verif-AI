@@ -46,6 +46,22 @@ python backend\manage.py runserver
 ```
 - Health endpoint: http://127.0.0.1:8000/api/health
 
+### Optional: Start server and warm models
+This pre-downloads and loads the models before serving requests (heavy):
+```powershell
+python backend\manage.py runserver_llm 8000
+```
+Or warm first, then start:
+```powershell
+python backend\manage.py warm_models
+python backend\manage.py runserver
+```
+
+Check model status:
+```powershell
+Invoke-WebRequest http://127.0.0.1:8000/api/models/status | Select-Object -ExpandProperty Content
+```
+
 ## Verify MongoDB
 - Management command:
 ```powershell

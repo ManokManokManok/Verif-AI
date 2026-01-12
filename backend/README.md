@@ -8,6 +8,7 @@ Minimal starter using Django with a clean architecture layout and MongoDB Atlas.
 - Windows PowerShell
 
 ## Quick Start (Windows)
+For teammate-focused steps, see the team guide: [backend/SETUP_TEAM.md](backend/SETUP_TEAM.md).
 1. Create and activate a virtual environment:
 ```powershell
 python -m venv .venv
