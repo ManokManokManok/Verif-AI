@@ -3,13 +3,18 @@
 *.env
 
 # Django local DB
-/db.sqlite3
+*.sqlite3
 
-# local
-backend/plans/
+# Local folders
+plans/
+scripts/
+
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
 
 # Django compiled files
-backend/verfai/__pycache__/
-backend/src/apps/**/__pycache__/
-backend/src/infrastructure/**/__pycache__/
-backend/src/use_cases/**/__pycache__/
+verfai/__pycache__/
+src/apps/**/__pycache__/
+src/infrastructure/**/__pycache__/
+src/use_cases/**/__pycache__/
