@@ -28,3 +28,8 @@ def get_database(db_name: str | None = None):
     if not name:
         raise RuntimeError('MONGODB_DB_NAME is not set. Add it to .env')
     return client[name]
+
+
+def get_database_name() -> str:
+    """Get database name from environment."""
+    return os.getenv('MONGODB_DB_NAME', 'verfai')
