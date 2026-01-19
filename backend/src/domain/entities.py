@@ -7,6 +7,7 @@ from typing import List, Optional
 class User:
     id: Optional[str]
     email: str
+    username: Optional[str]
     password_hash: str
     roles: List[str]
     is_active: bool = True

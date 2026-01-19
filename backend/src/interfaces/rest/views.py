@@ -65,6 +65,7 @@ def user_to_dict(user) -> Dict[str, Any]:
     return {
         'id': user.id,
         'email': user.email,
+        'username': getattr(user, 'username', None),
         'roles': user.roles,
         'is_active': user.is_active,
         'is_verified': user.is_verified,
@@ -96,13 +97,14 @@ def signup(request: Request) -> Response:
     """
     try:
         email = request.data.get('email', '').strip().lower()
+        username = request.data.get('username', '').strip()
         password = request.data.get('password', '')
         
-        if not email or not password:
+        if not email or not username or not password:
             return Response({
                 'error': {
                     'code': 'MISSING_FIELDS',
-                    'message': 'Email and password are required'
+                    'message': 'Email, username, and password are required'
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
         
@@ -120,7 +122,7 @@ def signup(request: Request) -> Response:
         )
         
         # Execute use case
-        user = signup_usecase.execute(email, password)
+        user = signup_usecase.execute(email, username, password)
         
         return Response({
             'message': 'User registered successfully',
