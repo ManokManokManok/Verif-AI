@@ -205,10 +205,12 @@ def login(request: Request) -> Response:
         }, status=status.HTTP_401_UNAUTHORIZED)
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()  # Print full traceback to console
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
-                'message': 'An unexpected error occurred'
+                'message': f'An unexpected error occurred: {str(e)}'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
