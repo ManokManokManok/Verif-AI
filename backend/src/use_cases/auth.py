@@ -26,12 +26,13 @@ class SignupUseCase:
         self.email_validator = email_validator
         self.password_validator = password_validator
     
-    def execute(self, email: str, password: str) -> User:
+    def execute(self, email: str, username: str, password: str) -> User:
         """
         Register a new user.
         
         Args:
             email: User's email
+            username: User's username
             password: Plain text password
         
         Returns:
@@ -45,6 +46,10 @@ class SignupUseCase:
         is_valid_email, email_error = self.email_validator.validate(email)
         if not is_valid_email:
             raise ValueError(email_error)
+
+        username = (username or "").strip()
+        if not username:
+            raise ValueError("Username is required")
         
         # Validate password
         is_valid_password, password_errors = self.password_validator.validate(password)
@@ -63,6 +68,7 @@ class SignupUseCase:
         user = User(
             id=None,
             email=email,
+            username=username,
             password_hash=password_hash,
             roles=["user"],  # Default role
             is_active=True,
