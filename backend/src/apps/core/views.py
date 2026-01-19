@@ -1,5 +1,5 @@
 from django.http import JsonResponse
-from src.infrastructure.ai.loaders import models_status
+from src.infrastructure.ai.loaders import models_status as get_models_status
 
 def health(_request):
     return JsonResponse({
@@ -9,7 +9,7 @@ def health(_request):
 
 
 def models_status(_request):
-    status = models_status()
+    status = get_models_status()
     if not (status.get('multihead_loaded') and status.get('gemma_loaded')):
         return JsonResponse({
             'ok': False,
