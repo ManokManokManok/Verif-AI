@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signupRequest } from '../api/client.js';
+import signupImage from '../../assets/image/signup.png';
 
 function EyeIcon({ slashed }) {
   return (
@@ -74,8 +75,8 @@ function Signup() {
         <div className="auth__overlay">
           <p className="auth__tagline">Keeping you Safe</p>
           <p className="auth__brand">VerifAI</p>
-          {/* Put your illustration image here as a background or <img> */}
         </div>
+        <img src={signupImage} alt="Signup illustration" className="auth__image" />
       </div>
 
       <div className="auth__panel auth__panel--right">

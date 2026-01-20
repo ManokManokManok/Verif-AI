@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { loginRequest } from '../api/client.js';
+import loginImage from '../../assets/image/login.png';
 
 function EyeIcon({ slashed }) {
   return (
@@ -71,8 +72,8 @@ function Login() {
         <div className="auth__overlay">
           <p className="auth__tagline">Know Whats Real</p>
           <p className="auth__brand">VerifAI</p>
-          {/* Put your illustration image here as a background or <img> */}
         </div>
+        <img src={loginImage} alt="Login illustration" className="auth__image" />
       </div>
 
       <div className="auth__panel auth__panel--right">
