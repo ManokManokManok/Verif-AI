@@ -4,6 +4,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from typing import Dict, Any
+import logging
 
 from ...use_cases.auth import (
     SignupUseCase, LoginUseCase, GetUserProfileUseCase,
@@ -13,6 +14,7 @@ from ...use_cases.security_auth import (
     EmailVerificationUseCase, PasswordResetUseCase, LogoutUseCase,
     RefreshTokenUseCase, InvalidTokenError
 )
+from ...use_cases.ai.scam_detection import ScamDetectionUseCase
 from ...domain.services import (
     BCryptPasswordHasher, EmailValidator, PasswordValidator,
     TokenGenerator, MockEmailService
@@ -21,7 +23,10 @@ from ...infrastructure.mongodb.connection import get_mongo_client, get_database_
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository, MongoDBTokenRepository
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.token_blacklist_service import MockTokenBlacklistService
+from ...infrastructure.ai.loaders import load_multihead_model
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 # Initialize dependencies
@@ -678,5 +683,77 @@ def refresh_token(request: Request) -> Response:
             'error': {
                 'code': 'INTERNAL_ERROR',
                 'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def detect_scam(request: Request) -> Response:
+    """
+    Detect if a message is a scam using the multi-head BERT model.
+    
+    Request body:
+    {
+        "message": "Text to analyze for scam indicators"
+    }
+    
+    Response:
+    {
+        "scam_score": 85.5,
+        "legit_score": 14.5,
+        "is_scam": true,
+        "label": "Scam",
+        "scam_type": "Banking Access & Payment",
+        "type_confidence": 92.3
+    }
+    """
+    try:
+        message = request.data.get('message', '').strip()
+        
+        if not message:
+            return Response({
+                'error': {
+                    'code': 'MISSING_MESSAGE',
+                    'message': 'Message is required for scam detection'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"[SCAM DETECTION] Analyzing message: {message[:100]}...")
+        
+        # Load model (cached after first load)
+        tokenizer, model, scam_types = load_multihead_model()
+        
+        if model is None or tokenizer is None:
+            logger.error("[SCAM DETECTION] Model or tokenizer is None")
+            return Response({
+                'error': {
+                    'code': 'MODEL_NOT_LOADED',
+                    'message': 'Scam detection model is not available'
+                }
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+        # Initialize and execute use case
+        scam_detection = ScamDetectionUseCase(tokenizer, model, scam_types)
+        result = scam_detection.detect(message)
+        
+        # Log result to console
+        logger.info(f"[SCAM DETECTION] Result for message: {message[:50]}...")
+        logger.info(f"[SCAM DETECTION] Label: {result['label']}")
+        logger.info(f"[SCAM DETECTION] Scam Score: {result['scam_score']:.2f}%")
+        logger.info(f"[SCAM DETECTION] Legit Score: {result['legit_score']:.2f}%")
+        if result['is_scam']:
+            logger.info(f"[SCAM DETECTION] Scam Type: {result['scam_type']}")
+            logger.info(f"[SCAM DETECTION] Type Confidence: {result['type_confidence']:.2f}%")
+        logger.info("=" * 80)
+        
+        return Response(result, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"[SCAM DETECTION] Error: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'DETECTION_ERROR',
+                'message': f'Error during scam detection: {str(e)}'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
