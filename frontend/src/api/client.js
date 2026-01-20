@@ -48,4 +48,11 @@ export async function signupRequest({ email, username, password }) {
   });
 }
 
+export async function detectScamRequest(message) {
+  return apiRequest('/detect/', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
 
