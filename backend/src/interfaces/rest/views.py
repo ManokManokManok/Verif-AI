@@ -65,6 +65,7 @@ def user_to_dict(user) -> Dict[str, Any]:
     return {
         'id': user.id,
         'email': user.email,
+        'username': user.username,
         'roles': user.roles,
         'is_active': user.is_active,
         'is_verified': user.is_verified,
@@ -91,12 +92,14 @@ def signup(request: Request) -> Response:
     Request body:
     {
         "email": "user@example.com",
-        "password": "SecurePass123!"
+        "password": "SecurePass123!",
+        "username": "johndoe" (optional)
     }
     """
     try:
         email = request.data.get('email', '').strip().lower()
         password = request.data.get('password', '')
+        username = request.data.get('username', '').strip() if request.data.get('username') else None
         
         if not email or not password:
             return Response({
@@ -120,9 +123,10 @@ def signup(request: Request) -> Response:
         )
         
         # Execute use case
-        user = signup_usecase.execute(email, password)
+        user = signup_usecase.execute(email, password, username)
         
         return Response({
+            'success': True,
             'message': 'User registered successfully',
             'user': user_to_dict(user)
         }, status=status.HTTP_201_CREATED)
@@ -191,6 +195,7 @@ def login(request: Request) -> Response:
         auth_result = login_usecase.execute(email, password)
         
         return Response({
+            'success': True,
             'message': 'Login successful',
             'user': user_to_dict(auth_result.user),
             'tokens': tokens_to_dict(auth_result.tokens)
@@ -607,6 +612,7 @@ def logout(request: Request) -> Response:
         logout_usecase.logout(access_token, refresh_token)
         
         return Response({
+            'success': True,
             'message': 'Logout successful'
         }, status=status.HTTP_200_OK)
         
@@ -656,6 +662,7 @@ def refresh_token(request: Request) -> Response:
         auth_result = refresh_usecase.refresh_token(refresh_token)
         
         return Response({
+            'success': True,
             'message': 'Token refreshed successfully',
             'user': user_to_dict(auth_result.user),
             'tokens': tokens_to_dict(auth_result.tokens)

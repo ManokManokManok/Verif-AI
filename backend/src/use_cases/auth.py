@@ -26,13 +26,14 @@ class SignupUseCase:
         self.email_validator = email_validator
         self.password_validator = password_validator
     
-    def execute(self, email: str, password: str) -> User:
+    def execute(self, email: str, password: str, username: str = None) -> User:
         """
         Register a new user.
         
         Args:
             email: User's email
             password: Plain text password
+            username: User's username (optional)
         
         Returns:
             Created user entity
@@ -65,6 +66,7 @@ class SignupUseCase:
             email=email,
             password_hash=password_hash,
             roles=["user"],  # Default role
+            username=username,
             is_active=True,
             is_verified=False  # Will be verified in Phase 2
         )

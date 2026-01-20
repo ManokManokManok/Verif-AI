@@ -9,6 +9,7 @@ class User:
     email: str
     password_hash: str
     roles: List[str]
+    username: Optional[str] = None
     is_active: bool = True
     is_verified: bool = False
     created_at: Optional[datetime] = None
