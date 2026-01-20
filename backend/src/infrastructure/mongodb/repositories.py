@@ -224,6 +224,7 @@ class MongoDBUserRepository:
         # Convert user to dict
         user_dict = {
             "email": user.email,
+            "username": user.username,
             "password_hash": user.password_hash,
             "roles": user.roles,
             "is_active": user.is_active,
@@ -316,6 +317,7 @@ class MongoDBUserRepository:
         return User(
             id=str(doc["_id"]),
             email=doc["email"],
+            username=doc.get("username"),
             password_hash=doc["password_hash"],
             roles=doc.get("roles", []),
             is_active=doc.get("is_active", True),
