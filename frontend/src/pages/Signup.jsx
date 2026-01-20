@@ -1,0 +1,188 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { signupRequest } from '../api/client.js';
+
+function EyeIcon({ slashed }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      {slashed && (
+        <path
+          d="M4 20L20 4"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}
+
+function Signup() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await signupRequest({ email, username, password });
+      navigate('/login');
+    } catch (err) {
+      setError(err.message || 'Failed to register');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth auth--signup">
+      <div className="auth__panel auth__panel--left">
+        <div className="auth__overlay">
+          <p className="auth__tagline">Keeping you Safe</p>
+          <p className="auth__brand">VerifAI</p>
+          {/* Put your illustration image here as a background or <img> */}
+        </div>
+      </div>
+
+      <div className="auth__panel auth__panel--right">
+        <div className="auth__header-row">
+          <button
+            type="button"
+            className="auth__logo-link"
+            onClick={() => navigate('/')}
+          >
+            VerifAI
+          </button>
+        </div>
+
+        <h1 className="auth__title">Sign up</h1>
+        <p className="auth__subtitle">
+          If you already have an account register
+          <br />
+          You can{' '}
+          <Link to="/login" className="auth__link">
+            Login here !
+          </Link>
+        </p>
+
+        <form
+          className="auth__form"
+          onSubmit={handleSubmit}
+        >
+          <label className="auth__field">
+            <span>Email</span>
+            <input
+              type="email"
+              placeholder="Enter your email address"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+
+          <label className="auth__field">
+            <span>Username</span>
+            <input
+              type="text"
+              placeholder="Enter your User name"
+              required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </label>
+
+          <label className="auth__field">
+            <span>Password</span>
+            <div className="auth__password-wrapper">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter your Password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="auth__password-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <span className="auth__password-icon">
+                  <EyeIcon slashed={!showPassword} />
+                </span>
+              </button>
+            </div>
+          </label>
+
+          <label className="auth__field">
+            <span>Confirm Password</span>
+            <div className="auth__password-wrapper">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                placeholder="Confirm your Password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="auth__password-toggle"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                aria-label={
+                  showConfirmPassword ? 'Hide password' : 'Show password'
+                }
+              >
+                <span className="auth__password-icon">
+                  <EyeIcon slashed={!showConfirmPassword} />
+                </span>
+              </button>
+            </div>
+          </label>
+
+          {error && <p className="auth__error">{error}</p>}
+
+          <button type="submit" className="auth__primary">
+            {loading ? 'Registering…' : 'Register'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default Signup;
+
