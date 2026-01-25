@@ -5,6 +5,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import { validationService } from '../../../domain/services';
 import type { LoginCredentials } from '../../../domain/types';
 
 /**
@@ -26,7 +27,13 @@ export const LoginForm: React.FC = () => {
     setServerError(null);
     
     try {
-      await login(data);
+      // Sanitize email before sending
+      const sanitizedData = {
+        email: validationService.sanitizeEmail(data.email),
+        password: data.password // Don't sanitize passwords
+      };
+      
+      await login(sanitizedData);
       navigate('/dashboard');
     } catch (error: any) {
       // Check if error has a response from the backend
@@ -72,10 +79,15 @@ export const LoginForm: React.FC = () => {
               id="email"
               type="email"
               placeholder="name@example.com"
+              maxLength={254}
               {...register('email', { 
                 required: 'Email is required',
+                maxLength: {
+                  value: 254,
+                  message: 'Email must not exceed 254 characters'
+                },
                 pattern: {
-                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
                   message: 'Invalid email format'
                 }
               })}
@@ -100,11 +112,16 @@ export const LoginForm: React.FC = () => {
               id="password"
               type="password"
               placeholder="Enter your password"
+              maxLength={128}
               {...register('password', { 
                 required: 'Password is required',
                 minLength: {
-                  value: 8,
-                  message: 'Password must be at least 8 characters'
+                  value: 1,
+                  message: 'Password is required'
+                },
+                maxLength: {
+                  value: 128,
+                  message: 'Password must not exceed 128 characters'
                 }
               })}
               className={`pl-10 bg-slate-800 border-slate-600 text-white placeholder-slate-400 focus:border-pink-500 focus:ring-pink-500 ${errors.password ? 'border-red-500' : ''}`}

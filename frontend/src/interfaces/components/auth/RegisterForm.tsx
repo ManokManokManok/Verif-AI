@@ -5,6 +5,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import { validationService } from '../../../domain/services';
 import type { RegisterData } from '../../../domain/types';
 
 interface RegisterFormData extends RegisterData {
@@ -14,13 +15,18 @@ interface RegisterFormData extends RegisterData {
 
 /**
  * Registration form component
- * Handles new user account creation
+ * Handles new user account creation with OWASP-compliant validation
  */
 export const RegisterForm: React.FC = () => {
   const { register: registerUser } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [passwordStrength, setPasswordStrength] = useState<{
+    score: number;
+    label: string;
+    color: string;
+  } | null>(null);
   
   const {
     register,
@@ -31,17 +37,52 @@ export const RegisterForm: React.FC = () => {
 
   const password = watch('password');
 
+  // Update password strength indicator when password changes
+  React.useEffect(() => {
+    if (password) {
+      setPasswordStrength(validationService.getPasswordStrength(password));
+    } else {
+      setPasswordStrength(null);
+    }
+  }, [password]);
+
+  /**
+   * Custom password validation function using ValidationService
+   * This ensures frontend and backend validation rules are aligned
+   */
+  const validatePasswordStrength = (value: string): string | true => {
+    const result = validationService.validatePassword(value);
+    if (!result.isValid) {
+      return result.errors[0]; // Return first error for cleaner UX
+    }
+    return true;
+  };
+
+  /**
+   * Custom username validation function
+   */
+  const validateUsernameFormat = (value: string): string | true => {
+    const result = validationService.validateUsername(value);
+    if (!result.isValid) {
+      return result.errors[0];
+    }
+    return true;
+  };
+
   const onSubmit = async (data: RegisterFormData) => {
     setServerError(null);
     setSuccessMessage(null);
     
     try {
-      const result = await registerUser({
-        email: data.email,
-        password: data.password,
+      // Sanitize inputs before sending
+      const sanitizedData = {
+        email: validationService.sanitizeEmail(data.email),
+        password: data.password, // Don't sanitize passwords
         confirmPassword: data.confirmPassword,
-        username: data.username
-      });
+        username: validationService.sanitizeString(data.username, 50)
+      };
+
+      const result = await registerUser(sanitizedData);
       
       setSuccessMessage(result.message || 'Registration successful! Please check your email for verification.');
       
@@ -53,9 +94,18 @@ export const RegisterForm: React.FC = () => {
       if (error?.response?.status === 409) {
         setServerError('This email address is already registered. Please use a different email or try logging in.');
       } else if (error?.response?.status === 400) {
-        setServerError('Please check your information and try again. Make sure all fields are filled correctly.');
+        // Try to extract validation error details from response
+        const errorDetails = error?.response?.data?.error?.details;
+        if (errorDetails && Array.isArray(errorDetails)) {
+          const messages = errorDetails.map((d: any) => d.message).join('. ');
+          setServerError(messages || 'Please check your information and try again.');
+        } else {
+          setServerError('Please check your information and try again. Make sure all fields are filled correctly.');
+        }
       } else if (error?.response?.status === 422) {
         setServerError('Invalid information provided. Please check your email format and password requirements.');
+      } else if (error?.response?.status === 429) {
+        setServerError('Too many registration attempts. Please try again later.');
       } else if (error instanceof Error) {
         setServerError(error.message);
       } else {
@@ -92,10 +142,15 @@ export const RegisterForm: React.FC = () => {
               id="email"
               type="email"
               placeholder="name@example.com"
+              maxLength={254}
               {...register('email', { 
                 required: 'Email is required',
+                maxLength: {
+                  value: 254,
+                  message: 'Email must not exceed 254 characters'
+                },
                 pattern: {
-                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
                   message: 'Invalid email format'
                 }
               })}
@@ -121,12 +176,10 @@ export const RegisterForm: React.FC = () => {
               id="username"
               type="text"
               placeholder="Choose a username"
+              maxLength={50}
               {...register('username', { 
                 required: 'Username is required',
-                minLength: {
-                  value: 3,
-                  message: 'Username must be at least 3 characters'
-                }
+                validate: validateUsernameFormat
               })}
               className={`pl-10 bg-slate-800 border-slate-600 text-white placeholder-slate-400 focus:border-pink-500 focus:ring-pink-500 ${errors.username ? 'border-red-500' : ''}`}
               disabled={isSubmitting || !!successMessage}
@@ -150,16 +203,10 @@ export const RegisterForm: React.FC = () => {
               id="password"
               type="password"
               placeholder="Create a strong password"
+              maxLength={128}
               {...register('password', { 
                 required: 'Password is required',
-                minLength: {
-                  value: 8,
-                  message: 'Password must be at least 8 characters'
-                },
-                pattern: {
-                  value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])/,
-                  message: 'Password must contain uppercase, lowercase, number, and special character'
-                }
+                validate: validatePasswordStrength
               })}
               className={`pl-10 bg-slate-800 border-slate-600 text-white placeholder-slate-400 focus:border-pink-500 focus:ring-pink-500 ${errors.password ? 'border-red-500' : ''}`}
               disabled={isSubmitting || !!successMessage}
@@ -168,8 +215,26 @@ export const RegisterForm: React.FC = () => {
           {errors.password && (
             <p className="text-sm text-red-400 mt-1">{errors.password.message}</p>
           )}
+          {/* Password Strength Indicator */}
+          {passwordStrength && (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 ${
+                    passwordStrength.label === 'weak' ? 'bg-red-500 w-1/4' :
+                    passwordStrength.label === 'fair' ? 'bg-yellow-500 w-2/4' :
+                    passwordStrength.label === 'good' ? 'bg-blue-500 w-3/4' :
+                    'bg-green-500 w-full'
+                  }`}
+                />
+              </div>
+              <span className={`text-xs ${passwordStrength.color}`}>
+                {passwordStrength.label}
+              </span>
+            </div>
+          )}
           <p className="text-xs text-slate-500">
-            Must be at least 8 characters with uppercase, lowercase, number, and special character
+            Must be 8-128 characters with uppercase, lowercase, number, special character, and no spaces
           </p>
         </div>
         

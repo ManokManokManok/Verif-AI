@@ -1,9 +1,24 @@
+"""
+REST API Views
+
+Implements secure API endpoints following OWASP best practices:
+- Strict input validation and sanitization
+- Proper error handling without information leakage
+- Rate limiting via middleware
+- Secure authentication with JWT
+
+OWASP References:
+- https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html
+- https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+"""
+
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from typing import Dict, Any
+import logging
 
 from ...use_cases.auth import (
     SignupUseCase, LoginUseCase, GetUserProfileUseCase,
@@ -21,7 +36,17 @@ from ...infrastructure.mongodb.connection import get_mongo_client, get_database_
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository, MongoDBTokenRepository
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.token_blacklist_service import MockTokenBlacklistService
+from ...infrastructure.input_validator import (
+    validate_input, validate_content_type, validate_request_size,
+    SIGNUP_SCHEMA, LOGIN_SCHEMA, EMAIL_ONLY_SCHEMA, TOKEN_ONLY_SCHEMA,
+    PASSWORD_RESET_SCHEMA, REFRESH_TOKEN_SCHEMA, LOGOUT_SCHEMA,
+    CHECK_PERMISSION_SCHEMA, sanitize_email
+)
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
+
+
+# Configure logger for security events
+security_logger = logging.getLogger('security')
 
 
 # Initialize dependencies
@@ -95,19 +120,36 @@ def signup(request: Request) -> Response:
         "password": "SecurePass123!",
         "username": "johndoe" (optional)
     }
+    
+    Security:
+    - Strict input validation with schema
+    - Password strength enforcement
+    - Email format validation
+    - Mass assignment prevention
     """
     try:
-        email = request.data.get('email', '').strip().lower()
-        password = request.data.get('password', '')
-        username = request.data.get('username', '').strip() if request.data.get('username') else None
+        # Validate Content-Type header
+        content_error = validate_content_type(request)
+        if content_error:
+            return Response(content_error, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
-        if not email or not password:
-            return Response({
-                'error': {
-                    'code': 'MISSING_FIELDS',
-                    'message': 'Email and password are required'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Validate request size (prevent DoS via large payloads)
+        size_error = validate_request_size(request, max_bytes=10240)  # 10KB max
+        if size_error:
+            return Response(size_error, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        
+        # Validate and sanitize input using schema
+        validation_result = validate_input(request.data, SIGNUP_SCHEMA, strict=True)
+        if not validation_result.is_valid:
+            return Response(
+                validation_result.to_error_response(),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Extract validated data
+        email = sanitize_email(validation_result.data['email'])
+        password = validation_result.data['password']  # Not sanitized (passwords as-is)
+        username = validation_result.data.get('username')
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -125,6 +167,9 @@ def signup(request: Request) -> Response:
         # Execute use case
         user = signup_usecase.execute(email, password, username)
         
+        # Log successful registration
+        security_logger.info(f"User registered: email={email}")
+        
         return Response({
             'success': True,
             'message': 'User registered successfully',
@@ -132,6 +177,8 @@ def signup(request: Request) -> Response:
         }, status=status.HTTP_201_CREATED)
         
     except UserAlreadyExistsError as e:
+        # Log failed registration attempt
+        security_logger.warning(f"Registration failed - email exists: {request.data.get('email', 'unknown')}")
         return Response({
             'error': {
                 'code': 'EMAIL_ALREADY_EXISTS',
@@ -148,6 +195,8 @@ def signup(request: Request) -> Response:
         }, status=status.HTTP_400_BAD_REQUEST)
     
     except Exception as e:
+        # Log internal errors for debugging (don't expose details to client)
+        security_logger.error(f"Signup error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
@@ -167,18 +216,34 @@ def login(request: Request) -> Response:
         "email": "user@example.com",
         "password": "SecurePass123!"
     }
+    
+    Security:
+    - Strict input validation
+    - Generic error messages to prevent user enumeration
+    - Rate limited via middleware
     """
     try:
-        email = request.data.get('email', '').strip().lower()
-        password = request.data.get('password', '')
+        # Validate Content-Type header
+        content_error = validate_content_type(request)
+        if content_error:
+            return Response(content_error, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
-        if not email or not password:
-            return Response({
-                'error': {
-                    'code': 'MISSING_FIELDS',
-                    'message': 'Email and password are required'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Validate request size
+        size_error = validate_request_size(request, max_bytes=4096)  # 4KB max
+        if size_error:
+            return Response(size_error, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        
+        # Validate and sanitize input using schema
+        validation_result = validate_input(request.data, LOGIN_SCHEMA, strict=True)
+        if not validation_result.is_valid:
+            return Response(
+                validation_result.to_error_response(),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Extract validated data
+        email = sanitize_email(validation_result.data['email'])
+        password = validation_result.data['password']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -194,6 +259,9 @@ def login(request: Request) -> Response:
         # Execute use case
         auth_result = login_usecase.execute(email, password)
         
+        # Log successful login
+        security_logger.info(f"Login successful: email={email}")
+        
         return Response({
             'success': True,
             'message': 'Login successful',
@@ -202,14 +270,18 @@ def login(request: Request) -> Response:
         }, status=status.HTTP_200_OK)
         
     except InvalidCredentialsError as e:
+        # Log failed login attempt (for security monitoring)
+        security_logger.warning(f"Login failed: email={request.data.get('email', 'unknown')}")
+        # Generic error message to prevent user enumeration
         return Response({
             'error': {
                 'code': 'INVALID_CREDENTIALS',
-                'message': str(e)
+                'message': 'Invalid email or password'
             }
         }, status=status.HTTP_401_UNAUTHORIZED)
     
     except Exception as e:
+        security_logger.error(f"Login error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
@@ -274,6 +346,10 @@ def check_permission(request: Request) -> Response:
         "permission": "create_user",
         "resource": "user"  # optional
     }
+    
+    Security:
+    - Requires authentication
+    - Validates permission/resource format
     """
     try:
         # Get user ID from request (set by middleware)
@@ -286,16 +362,16 @@ def check_permission(request: Request) -> Response:
                 }
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        permission = request.data.get('permission', '')
-        resource = request.data.get('resource', None)
+        # Validate input
+        validation_result = validate_input(request.data, CHECK_PERMISSION_SCHEMA, strict=True)
+        if not validation_result.is_valid:
+            return Response(
+                validation_result.to_error_response(),
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not permission:
-            return Response({
-                'error': {
-                    'code': 'MISSING_PERMISSION',
-                    'message': 'Permission is required'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        permission = validation_result.data['permission']
+        resource = validation_result.data.get('resource')
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -311,6 +387,7 @@ def check_permission(request: Request) -> Response:
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
+        security_logger.error(f"Check permission error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
@@ -331,17 +408,21 @@ def send_verification_email(request: Request) -> Response:
     {
         "email": "user@example.com"
     }
+    
+    Security:
+    - Rate limited to prevent email bombing
+    - Generic response to prevent user enumeration
     """
     try:
-        email = request.data.get('email', '').strip().lower()
+        # Validate input
+        validation_result = validate_input(request.data, EMAIL_ONLY_SCHEMA, strict=True)
+        if not validation_result.is_valid:
+            return Response(
+                validation_result.to_error_response(),
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not email:
-            return Response({
-                'error': {
-                    'code': 'MISSING_EMAIL',
-                    'message': 'Email is required'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        email = sanitize_email(validation_result.data['email'])
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -359,19 +440,21 @@ def send_verification_email(request: Request) -> Response:
         # Execute use case
         verification_usecase.send_verification_email(email)
         
+        # Always return success to prevent user enumeration
+        # Even if user doesn't exist, return same response
         return Response({
-            'message': 'Verification email sent successfully'
+            'message': 'If the email exists, a verification email has been sent'
         }, status=status.HTTP_200_OK)
         
     except UserNotFoundError as e:
+        # Return generic success to prevent user enumeration (OWASP)
+        security_logger.info(f"Verification email requested for non-existent: {email}")
         return Response({
-            'error': {
-                'code': 'USER_NOT_FOUND',
-                'message': str(e)
-            }
-        }, status=status.HTTP_404_NOT_FOUND)
+            'message': 'If the email exists, a verification email has been sent'
+        }, status=status.HTTP_200_OK)
     
     except Exception as e:
+        security_logger.error(f"Send verification error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
@@ -390,17 +473,21 @@ def verify_email(request: Request) -> Response:
     {
         "token": "verification_token_here"
     }
+    
+    Security:
+    - Token format validation
+    - Rate limited via middleware
     """
     try:
-        token = request.data.get('token', '')
+        # Validate input
+        validation_result = validate_input(request.data, TOKEN_ONLY_SCHEMA, strict=True)
+        if not validation_result.is_valid:
+            return Response(
+                validation_result.to_error_response(),
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not token:
-            return Response({
-                'error': {
-                    'code': 'MISSING_TOKEN',
-                    'message': 'Verification token is required'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        token = validation_result.data['token']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -418,19 +505,23 @@ def verify_email(request: Request) -> Response:
         # Execute use case
         verification_usecase.verify_email(token)
         
+        security_logger.info("Email verified successfully")
+        
         return Response({
             'message': 'Email verified successfully'
         }, status=status.HTTP_200_OK)
         
     except InvalidTokenError as e:
+        security_logger.warning("Invalid email verification token used")
         return Response({
             'error': {
                 'code': 'INVALID_TOKEN',
-                'message': str(e)
+                'message': 'Invalid or expired verification token'
             }
         }, status=status.HTTP_400_BAD_REQUEST)
     
     except Exception as e:
+        security_logger.error(f"Verify email error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
@@ -449,17 +540,21 @@ def request_password_reset(request: Request) -> Response:
     {
         "email": "user@example.com"
     }
+    
+    Security:
+    - Rate limited to prevent email bombing
+    - Generic response to prevent user enumeration
     """
     try:
-        email = request.data.get('email', '').strip().lower()
+        # Validate input
+        validation_result = validate_input(request.data, EMAIL_ONLY_SCHEMA, strict=True)
+        if not validation_result.is_valid:
+            return Response(
+                validation_result.to_error_response(),
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not email:
-            return Response({
-                'error': {
-                    'code': 'MISSING_EMAIL',
-                    'message': 'Email is required'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        email = sanitize_email(validation_result.data['email'])
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -481,19 +576,20 @@ def request_password_reset(request: Request) -> Response:
         # Execute use case
         reset_usecase.request_password_reset(email)
         
+        # Always return success to prevent user enumeration (OWASP)
         return Response({
-            'message': 'Password reset email sent successfully'
+            'message': 'If the email exists, a password reset email has been sent'
         }, status=status.HTTP_200_OK)
         
     except UserNotFoundError as e:
+        # Return generic success to prevent user enumeration
+        security_logger.info(f"Password reset requested for non-existent: {email}")
         return Response({
-            'error': {
-                'code': 'USER_NOT_FOUND',
-                'message': str(e)
-            }
-        }, status=status.HTTP_404_NOT_FOUND)
+            'message': 'If the email exists, a password reset email has been sent'
+        }, status=status.HTTP_200_OK)
     
     except Exception as e:
+        security_logger.error(f"Password reset request error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
@@ -513,18 +609,22 @@ def reset_password(request: Request) -> Response:
         "token": "reset_token_here",
         "new_password": "NewSecurePass123!"
     }
+    
+    Security:
+    - Token and password validation
+    - Password strength enforcement
     """
     try:
-        token = request.data.get('token', '')
-        new_password = request.data.get('new_password', '')
+        # Validate input
+        validation_result = validate_input(request.data, PASSWORD_RESET_SCHEMA, strict=True)
+        if not validation_result.is_valid:
+            return Response(
+                validation_result.to_error_response(),
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not token or not new_password:
-            return Response({
-                'error': {
-                    'code': 'MISSING_FIELDS',
-                    'message': 'Token and new password are required'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        token = validation_result.data['token']
+        new_password = validation_result.data['new_password']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -546,15 +646,18 @@ def reset_password(request: Request) -> Response:
         # Execute use case
         reset_usecase.reset_password(token, new_password)
         
+        security_logger.info("Password reset completed")
+        
         return Response({
             'message': 'Password reset successfully'
         }, status=status.HTTP_200_OK)
         
     except InvalidTokenError as e:
+        security_logger.warning("Invalid password reset token used")
         return Response({
             'error': {
                 'code': 'INVALID_TOKEN',
-                'message': str(e)
+                'message': 'Invalid or expired reset token'
             }
         }, status=status.HTTP_400_BAD_REQUEST)
     
@@ -567,6 +670,7 @@ def reset_password(request: Request) -> Response:
         }, status=status.HTTP_400_BAD_REQUEST)
     
     except Exception as e:
+        security_logger.error(f"Password reset error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
@@ -584,6 +688,10 @@ def logout(request: Request) -> Response:
     {
         "refresh_token": "optional_refresh_token_here"
     }
+    
+    Security:
+    - Requires valid access token
+    - Blacklists both access and refresh tokens
     """
     try:
         # Get access token from Authorization header
@@ -597,7 +705,12 @@ def logout(request: Request) -> Response:
             }, status=status.HTTP_400_BAD_REQUEST)
         
         access_token = auth_header[7:]  # Remove 'Bearer ' prefix
-        refresh_token = request.data.get('refresh_token', '')
+        
+        # Validate optional refresh_token in body
+        validation_result = validate_input(request.data, LOGOUT_SCHEMA, strict=True)
+        refresh_token = ''
+        if validation_result.is_valid and validation_result.data:
+            refresh_token = validation_result.data.get('refresh_token', '')
         
         # Initialize use case
         jwt_service = get_jwt_service()
@@ -611,12 +724,15 @@ def logout(request: Request) -> Response:
         # Execute use case
         logout_usecase.logout(access_token, refresh_token)
         
+        security_logger.info(f"User logged out: user_id={getattr(request, 'user_id', 'unknown')}")
+        
         return Response({
             'success': True,
             'message': 'Logout successful'
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
+        security_logger.error(f"Logout error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
@@ -635,17 +751,21 @@ def refresh_token(request: Request) -> Response:
     {
         "refresh_token": "refresh_token_here"
     }
+    
+    Security:
+    - JWT format validation
+    - Rate limited via middleware
     """
     try:
-        refresh_token = request.data.get('refresh_token', '')
+        # Validate input
+        validation_result = validate_input(request.data, REFRESH_TOKEN_SCHEMA, strict=True)
+        if not validation_result.is_valid:
+            return Response(
+                validation_result.to_error_response(),
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not refresh_token:
-            return Response({
-                'error': {
-                    'code': 'MISSING_REFRESH_TOKEN',
-                    'message': 'Refresh token is required'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        refresh_token_value = validation_result.data['refresh_token']
         
         # Initialize use case
         jwt_service = get_jwt_service()
@@ -659,7 +779,7 @@ def refresh_token(request: Request) -> Response:
         )
         
         # Execute use case
-        auth_result = refresh_usecase.refresh_token(refresh_token)
+        auth_result = refresh_usecase.refresh_token(refresh_token_value)
         
         return Response({
             'success': True,
@@ -669,14 +789,16 @@ def refresh_token(request: Request) -> Response:
         }, status=status.HTTP_200_OK)
         
     except InvalidTokenError as e:
+        security_logger.warning("Invalid refresh token used")
         return Response({
             'error': {
                 'code': 'INVALID_TOKEN',
-                'message': str(e)
+                'message': 'Invalid or expired refresh token'
             }
         }, status=status.HTTP_401_UNAUTHORIZED)
     
     except Exception as e:
+        security_logger.error(f"Token refresh error: {type(e).__name__}")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
