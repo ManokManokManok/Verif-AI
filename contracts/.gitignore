@@ -1,0 +1,48 @@
+# =============================================================================
+# Smart Contracts .gitignore
+# =============================================================================
+
+# Dependencies (teammates will run npm install)
+node_modules/
+
+# Build artifacts (can be regenerated with npm run compile)
+build/
+
+# Cache
+.cache/
+cache/
+
+# Coverage reports
+coverage/
+coverage.json
+
+# Local Ganache data
+.ganache/
+
+# Environment files (if any)
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# =============================================================================
+# WHAT IS TRACKED (for teammates):
+# =============================================================================
+# ✅ contracts/*.sol      - Solidity source code
+# ✅ migrations/*.js      - Deployment scripts
+# ✅ test/*.js            - Contract tests
+# ✅ truffle-config.js    - Truffle configuration
+# ✅ package.json         - Dependencies manifest
+# ✅ package-lock.json    - Locked dependencies
+# ✅ scripts/*.js         - Helper scripts
+# =============================================================================

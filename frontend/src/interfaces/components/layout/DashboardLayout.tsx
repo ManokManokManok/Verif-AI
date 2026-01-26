@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   Bell,
-  ChevronDown
+  ChevronDown,
+  Shield
 } from 'lucide-react';
 
 export const DashboardLayout: React.FC = () => {
@@ -29,6 +30,7 @@ export const DashboardLayout: React.FC = () => {
     { path: '/dashboard', icon: Home, label: 'Model Health' },
     { path: '/dashboard/users', icon: User, label: 'Users' },
     { path: '/dashboard/statistics', icon: Settings, label: 'Statistics' },
+    { path: '/dashboard/blockchain', icon: Shield, label: 'Blockchain' },
   ];
 
   const isActive = (path: string) => {

@@ -170,36 +170,6 @@ export const LoginForm: React.FC = () => {
           </Link>
         </p>
       </div>
-
-      {/* Social Login */}
-      <div className="space-y-4">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-600"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-slate-950 text-slate-400">or continue with</span>
-          </div>
-        </div>
-        
-        <div className="flex justify-center space-x-4">
-          <button className="p-2 border border-slate-600 rounded-lg hover:bg-slate-800 transition-colors duration-200">
-            <svg className="w-5 h-5 text-slate-300" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-            </svg>
-          </button>
-          <button className="p-2 border border-slate-600 rounded-lg hover:bg-slate-800 transition-colors duration-200">
-            <svg className="w-5 h-5 text-slate-300" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z"/>
-            </svg>
-          </button>
-          <button className="p-2 border border-slate-600 rounded-lg hover:bg-slate-800 transition-colors duration-200">
-            <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012-2v-1a2 2 0 012-2h1.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 002-2v-1a2 2 0 012-2h1.945M12 3.935V5.5A2.5 2.5 0 0114.5 8h.5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 002-2v-1a2 2 0 012-2h1.945" />
-            </svg>
-          </button>
-        </div>
-      </div>
     </div>
   );
 };

@@ -75,6 +75,17 @@ DEFAULT_RATE_LIMITS = {
         window_seconds=int(os.getenv('RATE_LIMIT_TOKEN_REFRESH_WINDOW', '60')),  # 10 per minute
         block_duration_seconds=int(os.getenv('RATE_LIMIT_TOKEN_REFRESH_BLOCK', '300'))
     ),
+    # Blockchain endpoints - restrictive for write, moderate for read
+    'blockchain_write': RateLimitConfig(
+        requests=int(os.getenv('RATE_LIMIT_BLOCKCHAIN_WRITE_REQUESTS', '10')),
+        window_seconds=int(os.getenv('RATE_LIMIT_BLOCKCHAIN_WRITE_WINDOW', '60')),  # 10 per minute
+        block_duration_seconds=int(os.getenv('RATE_LIMIT_BLOCKCHAIN_WRITE_BLOCK', '300'))  # 5 min block
+    ),
+    'blockchain_read': RateLimitConfig(
+        requests=int(os.getenv('RATE_LIMIT_BLOCKCHAIN_READ_REQUESTS', '30')),
+        window_seconds=int(os.getenv('RATE_LIMIT_BLOCKCHAIN_READ_WINDOW', '60')),  # 30 per minute
+        block_duration_seconds=int(os.getenv('RATE_LIMIT_BLOCKCHAIN_READ_BLOCK', '120'))
+    ),
     # Default fallback
     'default': RateLimitConfig(
         requests=int(os.getenv('RATE_LIMIT_DEFAULT_REQUESTS', '60')),

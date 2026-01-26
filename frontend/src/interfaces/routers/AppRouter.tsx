@@ -8,6 +8,7 @@ import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { DashboardHomePage } from '../components/dashboard/DashboardHomePage';
 import { UsersPage } from '../pages/dashboard/UsersPage';
 import { StatisticsPage } from '../pages/dashboard/StatisticsPage';
+import { BlockchainPage } from '../pages/dashboard/BlockchainPage';
 
 /**
  * Main application router
@@ -28,6 +29,7 @@ export const AppRouter: React.FC = () => {
             <Route path="/dashboard" element={<DashboardHomePage />} />
             <Route path="/dashboard/users" element={<UsersPage />} />
             <Route path="/dashboard/statistics" element={<StatisticsPage />} />
+            <Route path="/dashboard/blockchain" element={<BlockchainPage />} />
           </Route>
         </Route>
         

@@ -24,8 +24,6 @@ export const TodaysResultsCard: React.FC<TodaysResultsCardProps> = ({
     { value: 25, color: "bg-green-500" }
   ]
 }) => {
-  const totalSegments = segments.reduce((sum, segment) => sum + segment.value, 0);
-  
   return (
     <div className="bg-gray-50 rounded-xl shadow-sm p-6 border border-gray-200">
       {/* Header */}

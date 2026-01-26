@@ -14,7 +14,7 @@ interface CorrectlyClassifiedFraudScamCardProps {
 export const CorrectlyClassifiedFraudScamCard: React.FC<CorrectlyClassifiedFraudScamCardProps> = ({
   title = "Correctly Classified Fraud/Scam",
   totalValue = "128,7K",
-  chartData = [
+  chartData: _chartData = [
     { date: "29 July", value: 220342.76, percentage: "+3.4%" },
     { date: "28 July", value: 185234.12, percentage: "+2.1%" },
     { date: "27 July", value: 198456.89, percentage: "+1.8%" },

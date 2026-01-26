@@ -2,3 +2,4 @@
 export { HttpClient, httpClient } from './HttpClient';
 export { AuthApi, authApi } from './AuthApi';
 export { UserApi, userApi } from './UserApi';
+export { BlockchainApi, blockchainApi } from './BlockchainApi';

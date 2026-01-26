@@ -18,3 +18,10 @@ redis>=4.5.0
 
 # CORS
 django-cors-headers>=4.0.0
+
+# Blockchain Integration (Phase 0+)
+# Web3 - Ethereum interaction
+web3>=6.0.0,<7.0.0
+
+# Cryptography - Keccak-256 hashing (Ethereum-compatible)
+pycryptodome>=3.19.0

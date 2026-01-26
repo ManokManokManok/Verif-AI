@@ -1,10 +1,10 @@
 """
-Use Cases Module
+Analysis Use Cases
 
-Contains all application use cases organized by domain.
+Business logic for analysis operations including blockchain anchoring.
 """
 
-from .analysis import (
+from .anchor_analysis import (
     AnchorAnalysisUseCase,
     VerifyAnalysisUseCase,
     GetAnchoredAnalysisUseCase,
@@ -12,7 +12,6 @@ from .analysis import (
 )
 
 __all__ = [
-    # Analysis use cases
     'AnchorAnalysisUseCase',
     'VerifyAnalysisUseCase',
     'GetAnchoredAnalysisUseCase',
