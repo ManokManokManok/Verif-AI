@@ -1,3 +1,9 @@
+
+export async function getChatHistory() {
+  return authApiRequest('/history/', {
+    method: 'GET',
+  });
+}
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
   'http://localhost:8000/api';
@@ -45,7 +51,7 @@ async function apiRequest(path, options = {}) {
 /**
  * Make an authenticated API request
  */
-async function authApiRequest(path, options = {}) {
+export async function authApiRequest(path, options = {}) {
   return apiRequest(path, {
     ...options,
     headers: {
@@ -99,6 +105,9 @@ export async function logoutRequest() {
 export async function detectScamRequest(message) {
   return apiRequest('/detect/', {
     method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ message }),
   });
 }

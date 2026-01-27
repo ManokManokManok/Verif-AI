@@ -59,15 +59,19 @@ class AnalysisResultRepository:
         """Create indexes for efficient queries."""
         # Unique index on ref_id (used for blockchain anchoring)
         self.collection.create_index("ref_id", unique=True)
-        
+        # Index on user_id for chat history
+        self.collection.create_index("user_id", sparse=True)
         # Index on message_hash for lookup by message
         self.collection.create_index("message_hash", sparse=True)
-        
         # Index on created_at for time-based queries
         self.collection.create_index("created_at")
-        
         # Index on chain metadata for anchored records
         self.collection.create_index("chain_metadata.payload_hash", sparse=True)
+
+    def get_by_user_id(self, user_id: str, limit: int = 50):
+        """Fetch all analysis results for a user, most recent first."""
+        docs = self.collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+        return [self._document_to_entity(doc) for doc in docs]
     
     def save(self, result: AnalysisResult) -> AnalysisResult:
         """
@@ -241,6 +245,10 @@ class AnalysisResultRepository:
     
     def _entity_to_document(self, entity: AnalysisResult) -> Dict[str, Any]:
         """Convert AnalysisResult entity to MongoDB document."""
+        import logging
+        logger = logging.getLogger(__name__)
+        # Ensure user_id is always a string or None
+        user_id_val = str(entity.user_id) if entity.user_id is not None else None
         doc = {
             "ref_id": entity.ref_id,
             "scam_class": entity.scam_class,
@@ -249,12 +257,20 @@ class AnalysisResultRepository:
             "is_scam": entity.is_scam,
             "analyzer_type": entity.analyzer_type,
             "analyzer_version": entity.analyzer_version,
-            "created_at": entity.created_at or datetime.utcnow()
+            "created_at": entity.created_at or datetime.utcnow(),
+            "user_id": user_id_val,
+            "message": entity.message,
+            "scam_score": entity.scam_score,
+            "legit_score": entity.legit_score,
+            "label": entity.label,
+            "type_confidence": entity.type_confidence,
+            "summary": entity.summary,
+            "key_markers": entity.key_markers,
         }
-        
+        if entity.id:
+            doc["_id"] = entity.id
         if entity.message_hash:
             doc["message_hash"] = entity.message_hash
-        
         if entity.chain_metadata:
             doc["chain_metadata"] = {
                 "schema_version": entity.chain_metadata.schema_version,
@@ -266,13 +282,13 @@ class AnalysisResultRepository:
                 "anchored_at": entity.chain_metadata.anchored_at,
                 "block_number": entity.chain_metadata.block_number
             }
-        
+        logger.debug(f"[DEBUG] AnalysisResult entity before mapping: {entity}")
+        logger.debug(f"[DEBUG] MongoDB document to be saved: {doc}")
         return doc
     
     def _document_to_entity(self, doc: Dict[str, Any]) -> AnalysisResult:
         """Convert MongoDB document to AnalysisResult entity."""
         chain_metadata = None
-        
         if "chain_metadata" in doc and doc["chain_metadata"]:
             chain_doc = doc["chain_metadata"]
             chain_metadata = ChainMetadata(
@@ -285,7 +301,6 @@ class AnalysisResultRepository:
                 anchored_at=chain_doc["anchored_at"],
                 block_number=chain_doc.get("block_number")
             )
-        
         return AnalysisResult(
             id=str(doc["_id"]),
             ref_id=doc["ref_id"],
@@ -297,5 +312,13 @@ class AnalysisResultRepository:
             analyzer_version=doc["analyzer_version"],
             created_at=doc.get("created_at"),
             message_hash=doc.get("message_hash"),
+            user_id=doc.get("user_id"),
+            message=doc.get("message"),
+            scam_score=doc.get("scam_score"),
+            legit_score=doc.get("legit_score"),
+            label=doc.get("label"),
+            type_confidence=doc.get("type_confidence"),
+            summary=doc.get("summary"),
+            key_markers=doc.get("key_markers"),
             chain_metadata=chain_metadata
         )
