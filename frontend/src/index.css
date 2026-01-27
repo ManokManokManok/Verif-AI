@@ -23,6 +23,7 @@
 .anim-out.anim-right {
   animation: carouselOutRight 0.4s forwards;
 }
+
 .anim-in.anim-left {
   animation: carouselInLeft 0.4s forwards;
 }
@@ -330,31 +331,43 @@ button {
 .auth__panel--left {
   background: #050b18;
   position: relative;
-  padding: 40px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
 }
 
 .auth__overlay {
-  position: absolute;
-  inset: 40px;
-  border-radius: 24px;
-  background: #050b18;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 80px;
+  justify-content: flex-start;
+  padding: 20px 0;
+  margin-top: 10px;
+  width: 100%;
+  text-align: center;
 }
 
 .auth__tagline {
   font-size: 32px;
   font-weight: 600;
+  margin: 0;
 }
 
 .auth__brand {
   margin-top: 8px;
   font-size: 40px;
   font-weight: 700;
+  margin-bottom: 0;
+}
+
+.auth__image {
+  width: 100%;
+  max-width: 500px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
 }
 
 .auth__panel--right {
@@ -388,7 +401,7 @@ button {
 }
 
 .auth__link {
-  color: #ec4899;
+  color: #60a5fa;
   text-decoration: none;
 }
 
@@ -426,6 +439,32 @@ button {
   color: #6b7280;
 }
 
+.auth__input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth__input-wrapper input {
+  width: 100%;
+  padding-left: 32px;
+}
+
+.auth__input-icon {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth__input-icon--left {
+  left: 4px;
+}
+
 .auth__row {
   display: flex;
   align-items: center;
@@ -451,6 +490,7 @@ button {
 
 .auth__password-wrapper input {
   width: 100%;
+  padding-left: 32px;
   padding-right: 40px;
 }
 
@@ -483,6 +523,11 @@ button {
   grid-template-columns: 92px 1fr;
   background: radial-gradient(circle at 35% 30%, #111b33 0%, #070a12 70%);
   color: #f9fafb;
+  transition: grid-template-columns 0.3s ease-in-out;
+}
+
+.detect--sidebar-open {
+  grid-template-columns: 320px 1fr;
 }
 
 .detect__sidebar {
@@ -492,6 +537,13 @@ button {
   align-items: center;
   padding: 18px 0;
   gap: 16px;
+  transition: width 0.3s ease-in-out, padding 0.3s ease-in-out;
+  overflow: hidden;
+}
+
+.detect__sidebar--open {
+  padding: 18px 16px;
+  align-items: stretch;
 }
 
 .detect__sidebtn {
@@ -504,6 +556,94 @@ button {
   display: grid;
   place-items: center;
   box-shadow: 0 16px 35px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s ease-in-out;
+  flex-shrink: 0;
+}
+
+.detect__sidebtn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.detect__sidebtn--menu {
+  background: #4f46e5;
+  margin-bottom: 8px;
+}
+
+.detect__chat-history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.detect__chat-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: #f9fafb;
+  padding: 0 8px;
+}
+
+.detect__chat-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+
+.detect__chat-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  border: 1px solid transparent;
+}
+
+.detect__chat-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.detect__chat-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f9fafb;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detect__chat-item-preview {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.detect__chat-item-time {
+  font-size: 11px;
+  color: #6b7280;
+  text-align: right;
 }
 
 .detect__spacer {
@@ -671,7 +811,7 @@ button {
   margin-top: 12px;
   padding: 12px;
   border-radius: 999px;
-  background: #ec4899;
+  background: #60a5fa;
   color: #ffffff;
   border: none;
 }

@@ -1,6 +1,11 @@
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+import logging  # <-- Add this import
+
+# Reduce pymongo and urllib3 log verbosity
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')

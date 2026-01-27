@@ -3,6 +3,69 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from bson import ObjectId
+
+@api_view(['GET'])
+def history_detail(request: Request, analysis_id: str) -> Response:
+    """
+    Get a single analysis result by its database id (for chat history details).
+    Requires authentication (JWT in Authorization header).
+    """
+    try:
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                jwt_service = get_jwt_service()
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[JWT] Could not extract user_id for history detail: {jwt_error}")
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'AUTHENTICATION_REQUIRED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        repository = get_analysis_repository()
+        result = repository.get_by_id(analysis_id)
+        if not result or str(result.user_id) != str(user_id):
+            return Response({'error': {'code': 'NOT_FOUND', 'message': 'Analysis not found'}}, status=status.HTTP_404_NOT_FOUND)
+
+        # Return all fields for the analysis result
+        return Response({
+            'id': result.id,
+            'ref_id': result.ref_id,
+            'title': result.scam_type or "Analysis Result",
+            'description': result.summary or "",
+            'summary': result.summary or "",
+            'timestamp': result.created_at.isoformat() if result.created_at else None,
+            'is_scam': result.is_scam,
+            'scam_score': result.scam_score,
+            'legit_score': result.legit_score,
+            'label': result.label,
+            'scam_type': result.scam_type,
+            'type_confidence': result.type_confidence,
+            'key_markers': result.key_markers,
+            'message': result.message,
+            # Add any other fields you want to expose
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"[HISTORY_DETAIL] Error: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'Failed to fetch analysis detail'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 from typing import Dict, Any
 import logging
 
@@ -31,6 +94,63 @@ from ...infrastructure.ai.loaders import load_multihead_model, load_gemma_model
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
 
 logger = logging.getLogger(__name__)
+
+@api_view(['GET'])
+def history(request: Request) -> Response:
+    """
+    Get the current user's detection analysis history (chat history).
+    Requires authentication (JWT in Authorization header).
+    """
+    try:
+        # Extract user_id from JWT (same as in detect_scam)
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                jwt_service = get_jwt_service()
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[JWT] Could not extract user_id for history: {jwt_error}")
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'AUTHENTICATION_REQUIRED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Query analysis results for this user using repository method
+        repository = get_analysis_repository()
+        analysis_results = repository.get_by_user_id(user_id, limit=50)
+        history = []
+        for result in analysis_results:
+            history.append({
+                "id": result.id,
+                "ref_id": result.ref_id,
+                "title": result.scam_type or "Analysis Result",
+                "description": result.summary or "",
+                "timestamp": result.created_at.isoformat() if result.created_at else None,
+                "is_scam": result.is_scam,
+                "scam_score": result.scam_score,
+                "legit_score": result.legit_score,
+                "label": result.label,
+                "scam_type": result.scam_type,
+                "type_confidence": result.type_confidence,
+                "key_markers": result.key_markers,
+                "message": result.message,
+            })
+        return Response({"history": history}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"[HISTORY] Error: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'Failed to fetch chat history'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # Initialize dependencies
@@ -701,6 +821,7 @@ def refresh_token(request: Request) -> Response:
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def detect_scam(request: Request) -> Response:
+
     """
     Detect if a message is a scam using multi-head BERT + Gemma LLM analysis.
     
@@ -727,9 +848,26 @@ def detect_scam(request: Request) -> Response:
         "key_markers": ["marker 1", "marker 2", ...]
     }
     """
+
     try:
         message = request.data.get('message', '').strip()
-        
+
+        # Extract user_id from JWT if present
+
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                jwt_service = get_jwt_service()
+                payload = jwt_service.verify_access_token(token)
+                logger.debug(f"[JWT PAYLOAD] {payload}")
+                user_id = payload.get('user_id')
+                logger.debug(f"[JWT user_id] value={user_id} type={type(user_id)}")
+                logger.debug(f"[DEBUG] Extracted user_id from JWT: {user_id}")
+            except Exception as jwt_error:
+                logger.warning(f"[JWT] Could not extract user_id: {jwt_error}")
+
         if not message:
             return Response({
                 'error': {
@@ -799,7 +937,7 @@ def detect_scam(request: Request) -> Response:
         try:
             # Create message hash for lookup (privacy: we don't store raw message)
             message_hash = hashlib.sha256(message.encode('utf-8')).hexdigest()
-            
+
             # Map scam_type string to scam_class integer
             scam_class = -1  # Default: not scam
             if bert_result['is_scam'] and bert_result.get('scam_type'):
@@ -808,15 +946,26 @@ def detect_scam(request: Request) -> Response:
                     if type_name == bert_result['scam_type']:
                         scam_class = class_id
                         break
-            
+
             # Convert confidence to basis points (0-10000)
             # type_confidence is 0-100, scam_score is 0-100
             if bert_result['is_scam']:
                 confidence_bps = int(bert_result.get('type_confidence', 0) * 100)
             else:
                 confidence_bps = int(bert_result.get('legit_score', 0) * 100)
-            
-            # Create analysis result entity
+
+            # Ensure user_account is defined in this scope
+            user_account = None
+            if user_id:
+                try:
+                    user_repo = get_user_repository()
+                    user_account = user_repo.get_by_id(user_id)
+                except Exception as user_lookup_error:
+                    logger.warning(f"[USER] Could not fetch user_account for user_id={user_id}: {user_lookup_error}")
+
+            # Create analysis result entity (store full details for authenticated users only)
+            # Always set user_id from user_account.id if available, else None
+            resolved_user_id = str(user_account.id) if user_account and getattr(user_account, 'id', None) else None
             analysis = AnalysisResult.create(
                 scam_class=scam_class,
                 scam_type=bert_result.get('scam_type') or 'Not Scam',
@@ -824,19 +973,34 @@ def detect_scam(request: Request) -> Response:
                 is_scam=bert_result['is_scam'],
                 analyzer_type='bert',
                 analyzer_version='v1',
-                message_hash=message_hash
+                message_hash=message_hash,
+                user_id=resolved_user_id,
+                message=message if resolved_user_id else None,
+                scam_score=bert_result.get('scam_score'),
+                legit_score=bert_result.get('legit_score'),
+                label=bert_result.get('label'),
+                type_confidence=bert_result.get('type_confidence'),
+                summary=llm_result.get('summary'),
+                key_markers=llm_result.get('key_markers'),
             )
-            
+
+            # Log the analysis entity before saving
+            logger.debug(f"[DEBUG] AnalysisResult entity before save: {{'ref_id': {analysis.ref_id}, 'user_id': {analysis.user_id}, 'scam_class': {analysis.scam_class}, 'scam_type': {analysis.scam_type}, 'confidence_bps': {analysis.confidence_bps}, 'is_scam': {analysis.is_scam}, 'analyzer_type': {analysis.analyzer_type}, 'analyzer_version': {analysis.analyzer_version}, 'message_hash': {analysis.message_hash}, 'created_at': {analysis.created_at}}}")
+
             # Save to database
             repository = get_analysis_repository()
             saved_analysis = repository.save(analysis)
-            
+
+            # Log the document as it will be sent to MongoDB
+            doc_for_db = repository._entity_to_document(analysis)
+            logger.debug(f"[DEBUG] Document sent to MongoDB: {doc_for_db}")
+
             logger.info(f"[DB] Analysis saved: ref_id={saved_analysis.ref_id}")
-            
+
             # Include ref_id in response for blockchain anchoring
             ref_id = saved_analysis.ref_id
             is_anchored = saved_analysis.is_anchored
-            
+
         except Exception as db_error:
             logger.error(f"[DB] Error saving analysis: {str(db_error)}")
             # Don't fail the request if DB save fails
@@ -848,8 +1012,15 @@ def detect_scam(request: Request) -> Response:
             'message': message,  # Include original message for display
             'ref_id': ref_id,  # For blockchain anchoring
             'is_anchored': is_anchored,  # Blockchain status
+            'created_at': (saved_analysis.created_at.isoformat() if saved_analysis and hasattr(saved_analysis, 'created_at') and saved_analysis.created_at else None),
             **bert_result,
-            **llm_result
+            **llm_result,
+            # Debug info for browser console
+            'jwt_debug': {
+                'payload': payload if 'payload' in locals() else None,
+                'user_id_value': user_id if 'user_id' in locals() else None,
+                'user_id_type': str(type(user_id)) if 'user_id' in locals() else None,
+            }
         }
         
         logger.info("=" * 80)

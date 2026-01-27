@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getChatHistory } from '../api/client';
+import { getAnalysisDetail } from '../api/analysis';
+import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
 import { detectScamRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +14,35 @@ function Detection() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectionResult, setDetectionResult] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const res = await getChatHistory();
+        if (res.history && res.history.length > 0) {
+          setChatHistory(res.history);
+        } else {
+          setChatHistory(mockChatHistory);
+        }
+      } catch (err) {
+        setChatHistory(mockChatHistory);
+      }
+    }
+    fetchHistory();
+  }, []);
+
+  // Handle click on a chat history item
+  const handleChatClick = async (chat) => {
+    try {
+      const detail = await getAnalysisDetail(chat.id);
+      setDetectionResult(detail);
+      setSidebarOpen(false);
+    } catch (err) {
+      alert('Failed to load analysis details.');
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -94,20 +126,48 @@ function Detection() {
 
   return (
     <div className="detect">
-      <aside className="detect__sidebar">
-        <button className="detect__sidebtn" type="button" aria-label="Menu">
-          ☰
+      <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
+        <button
+          className="detect__sidebtn detect__sidebtn--menu"
+          type="button"
+          aria-label="Menu"
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          {sidebarOpen ? '✕' : '☰'}
         </button>
-        <button className="detect__sidebtn" type="button" aria-label="Edit">
-          ✎
-        </button>
-        <div className="detect__spacer" />
-        <button className="detect__sidebtn" type="button" aria-label="Settings">
-          ⚙
-        </button>
+        {sidebarOpen && (
+          <div className="detect__chat-history">
+            <div className="detect__chat-title">Chat History</div>
+            <div className="detect__chat-list">
+              {chatHistory.map((chat) => (
+                <div
+                  className="detect__chat-item"
+                  key={chat.id}
+                  onClick={() => handleChatClick(chat)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="detect__chat-item-title">{chat.title}</div>
+                  <div className="detect__chat-item-preview">{chat.description}</div>
+                  <div className="detect__chat-item-time">{chat.timestamp}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!sidebarOpen && (
+          <>
+            <button className="detect__sidebtn" type="button" aria-label="Edit">
+              ✎
+            </button>
+            <div className="detect__spacer" />
+            <button className="detect__sidebtn" type="button" aria-label="Settings">
+              ⚙
+            </button>
+          </>
+        )}
       </aside>
 
-      <div className="detect__main">
+      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
         <header className="nav nav--detect">
           <div className="brand brand--small">[INSERT LOGO / Verf AI] Fraud Detection</div>
           <nav className="nav__links">
