@@ -1,5 +1,6 @@
 from django.http import JsonResponse
 from src.infrastructure.ai.loaders import models_status as get_models_status
+from src.interfaces.rest.views import detect_scam
 
 def health(_request):
     return JsonResponse({

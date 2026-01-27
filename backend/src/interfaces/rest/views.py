@@ -4,6 +4,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from typing import Dict, Any
+import logging
 
 from ...use_cases.auth import (
     SignupUseCase, LoginUseCase, GetUserProfileUseCase,
@@ -13,6 +14,8 @@ from ...use_cases.security_auth import (
     EmailVerificationUseCase, PasswordResetUseCase, LogoutUseCase,
     RefreshTokenUseCase, InvalidTokenError
 )
+from ...use_cases.ai.scam_detection import ScamDetectionUseCase
+from ...use_cases.ai.llm_analysis import LLMAnalysisUseCase
 from ...domain.services import (
     BCryptPasswordHasher, EmailValidator, PasswordValidator,
     TokenGenerator, MockEmailService
@@ -21,7 +24,10 @@ from ...infrastructure.mongodb.connection import get_mongo_client, get_database_
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository, MongoDBTokenRepository
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.token_blacklist_service import MockTokenBlacklistService
+from ...infrastructure.ai.loaders import load_multihead_model, load_gemma_model
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 # Initialize dependencies
@@ -678,5 +684,117 @@ def refresh_token(request: Request) -> Response:
             'error': {
                 'code': 'INTERNAL_ERROR',
                 'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def detect_scam(request: Request) -> Response:
+    """
+    Detect if a message is a scam using multi-head BERT + Gemma LLM analysis.
+    
+    Request body:
+    {
+        "message": "Text to analyze for scam indicators"
+    }
+    
+    Response:
+    {
+        "message": "original user input text",
+        "scam_score": 85.5,
+        "legit_score": 14.5,
+        "is_scam": true,
+        "label": "Scam",
+        "scam_type": "Banking Access & Payment",
+        "type_confidence": 92.3,
+        "summary": "Short explanation from Gemma",
+        "key_markers": ["marker 1", "marker 2", ...]
+    }
+    """
+    try:
+        message = request.data.get('message', '').strip()
+        
+        if not message:
+            return Response({
+                'error': {
+                    'code': 'MISSING_MESSAGE',
+                    'message': 'Message is required for scam detection'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"[SCAM DETECTION] Analyzing message: {message[:100]}...")
+        
+        # Load BERT model (cached after first load)
+        tokenizer, model, scam_types = load_multihead_model()
+        
+        if model is None or tokenizer is None:
+            logger.error("[SCAM DETECTION] Model or tokenizer is None")
+            return Response({
+                'error': {
+                    'code': 'MODEL_NOT_LOADED',
+                    'message': 'Scam detection model is not available'
+                }
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+        # Step 1: BERT Analysis
+        scam_detection = ScamDetectionUseCase(tokenizer, model, scam_types)
+        bert_result = scam_detection.detect(message)
+        
+        # Log BERT result
+        logger.info(f"[BERT] Label: {bert_result['label']}")
+        logger.info(f"[BERT] Scam Score: {bert_result['scam_score']:.2f}%")
+        logger.info(f"[BERT] Legit Score: {bert_result['legit_score']:.2f}%")
+        if bert_result['is_scam']:
+            logger.info(f"[BERT] Scam Type: {bert_result['scam_type']}")
+            logger.info(f"[BERT] Type Confidence: {bert_result['type_confidence']:.2f}%")
+        
+        # Step 2: Gemma LLM Analysis (only if scam detected)
+        llm_result = {'summary': '', 'key_markers': []}
+        
+        if bert_result['is_scam']:
+            try:
+                llm = load_gemma_model()
+                if llm is not None:
+                    llm_analysis = LLMAnalysisUseCase(llm)
+                    llm_result = llm_analysis.analyze(message, bert_result)
+                    logger.info(f"[GEMMA] Summary: {llm_result['summary'][:100]}...")
+                    logger.info(f"[GEMMA] Key Markers: {llm_result['key_markers']}")
+                else:
+                    logger.warning("[GEMMA] LLM not loaded, skipping analysis")
+                    llm_result = {
+                        'summary': f"This appears to be a {bert_result['scam_type']} scam attempt.",
+                        'key_markers': ['Suspicious patterns detected']
+                    }
+            except Exception as llm_error:
+                logger.error(f"[GEMMA] Error during LLM analysis: {str(llm_error)}")
+                # Provide fallback if Gemma fails
+                llm_result = {
+                    'summary': f"This appears to be a {bert_result['scam_type']} scam attempt.",
+                    'key_markers': ['Suspicious patterns detected']
+                }
+        else:
+            llm_result = {
+                'summary': 'This message appears to be legitimate with no scam indicators detected.',
+                'key_markers': []
+            }
+        
+        # Combine results
+        combined_result = {
+            'message': message,  # Include original message for display
+            **bert_result,
+            **llm_result
+        }
+        
+        logger.info("=" * 80)
+        
+        return Response(combined_result, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"[SCAM DETECTION] Error: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'DETECTION_ERROR',
+                'message': f'Error during scam detection: {str(e)}'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
