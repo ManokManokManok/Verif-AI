@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { loginRequest } from '../api/client.js';
+import { useAuth } from '../context/AuthContext';
 
 function EyeIcon({ slashed }) {
   return (
@@ -38,6 +38,7 @@ function EyeIcon({ slashed }) {
 
 function Login() {
   const navigate = useNavigate();
+  const { login, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -50,13 +51,7 @@ function Login() {
     setLoading(true);
 
     try {
-      const data = await loginRequest({ email, password });
-
-      if (data?.tokens) {
-        window.localStorage.setItem('access_token', data.tokens.access_token);
-        window.localStorage.setItem('refresh_token', data.tokens.refresh_token);
-      }
-
+      await login({ email, password });
       navigate('/detection');
     } catch (err) {
       setError(err.message || 'Failed to log in');
