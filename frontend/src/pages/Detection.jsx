@@ -1,19 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { detectScamRequest } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 function Detection() {
   const navigate = useNavigate();
+  const { isLoggedIn, isAdmin, logout, user } = useAuth();
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectionResult, setDetectionResult] = useState(null);
 
-  const isLoggedIn = useMemo(
-    () => Boolean(window.localStorage.getItem('access_token')),
-    [],
-  );
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
 
   const handleTextChange = (e) => {
     setText(e.target.value);
@@ -81,17 +83,36 @@ function Detection() {
             >
               AI Chatbot
             </button>
-            <button className="nav__link nav__btn" type="button">
-              Membership
-            </button>
+            {isAdmin && (
+              <button
+                className="nav__link nav__btn"
+                type="button"
+                onClick={() => navigate('/blockchain')}
+              >
+                Admin
+              </button>
+            )}
           </nav>
-          <button
-            className="nav__login"
-            type="button"
-            onClick={() => navigate(isLoggedIn ? '/' : '/login')}
-          >
-            {isLoggedIn ? 'Profile' : 'Login/Signup'}
-          </button>
+          {isLoggedIn ? (
+            <div className="nav__user-actions">
+              <span className="nav__username">{user?.username || user?.email}</span>
+              <button
+                className="nav__login"
+                type="button"
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button
+              className="nav__login"
+              type="button"
+              onClick={() => navigate('/login')}
+            >
+              Login/Signup
+            </button>
+          )}
         </header>
 
         <main className="detect__content">

@@ -1,8 +1,9 @@
 
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination } from 'swiper/modules';
+import { useAuth } from '../context/AuthContext';
 
 import 'swiper/css';
 import 'swiper/css/pagination';
@@ -39,14 +40,37 @@ const CAROUSEL_SLIDES = [
 
 function Landing() {
   const navigate = useNavigate();
+  const { isLoggedIn, isAdmin, logout, user } = useAuth();
   const swiperRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [textAnimClass, setTextAnimClass] = useState('');
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const textRef = useRef(null);
-  const isLoggedIn = useMemo(
-    () => Boolean(window.localStorage.getItem('access_token')),
-    [],
-  );
+
+  // Handle logout
+  const handleLogout = async () => {
+    await logout();
+    setShowUserMenu(false);
+    navigate('/');
+  };
+
+  // Handle admin button click
+  const handleAdminClick = () => {
+    if (!isLoggedIn) {
+      // Redirect to login if not logged in
+      navigate('/login');
+      return;
+    }
+    
+    if (!isAdmin) {
+      // Show error or redirect if not admin
+      alert('Admin access required. Please log in with an admin account.');
+      return;
+    }
+    
+    // Navigate to blockchain/admin page
+    navigate('/blockchain');
+  };
 
   // Click left/right overlay to navigate
   const handleSideClick = (e) => {
@@ -77,6 +101,15 @@ function Landing() {
     setTextAnimClass('carousel-text-anim');
   }, []);
 
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setShowUserMenu(false);
+    if (showUserMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showUserMenu]);
+
   return (
     <div className="page page--landing">
       <header className="nav">
@@ -85,11 +118,54 @@ function Landing() {
           <button className="nav__link nav__btn" type="button">About us</button>
           <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
           <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
-          <button className="nav__link nav__btn" type="button">Membership</button>
         </nav>
-        <button className="nav__login" type="button" onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}>
-          {isLoggedIn ? 'Profile' : 'Login/Signup'}
-        </button>
+        
+        {isLoggedIn ? (
+          <div className="nav__user-menu" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="nav__login" 
+              type="button" 
+              onClick={() => setShowUserMenu(!showUserMenu)}
+            >
+              {user?.username || user?.email || 'Profile'}
+            </button>
+            {showUserMenu && (
+              <div className="nav__dropdown">
+                <button 
+                  className="nav__dropdown-item" 
+                  type="button"
+                  onClick={() => { navigate('/detection'); setShowUserMenu(false); }}
+                >
+                  Dashboard
+                </button>
+                {isAdmin && (
+                  <button 
+                    className="nav__dropdown-item nav__dropdown-item--admin" 
+                    type="button"
+                    onClick={() => { navigate('/blockchain'); setShowUserMenu(false); }}
+                  >
+                    Admin Panel
+                  </button>
+                )}
+                <button 
+                  className="nav__dropdown-item nav__dropdown-item--logout" 
+                  type="button"
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button 
+            className="nav__login" 
+            type="button" 
+            onClick={() => navigate('/login')}
+          >
+            Login/Signup
+          </button>
+        )}
       </header>
 
       <main className="landing">
@@ -125,7 +201,9 @@ function Landing() {
               onClick={() => swiperRef.current && swiperRef.current.slideNext()}
             />
           </div>
-          <button className="admin-btn" type="button">ADMIN</button>
+          <button className="admin-btn" type="button" onClick={handleAdminClick}>
+            ADMIN
+          </button>
         </section>
 
         <section className="landing__right">
