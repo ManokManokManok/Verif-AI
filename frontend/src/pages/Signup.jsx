@@ -37,6 +37,99 @@ function EyeIcon({ slashed }) {
   );
 }
 
+function EmailIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <polyline
+        points="22,6 12,13 2,6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="12"
+        cy="7"
+        r="4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect
+        x="3"
+        y="11"
+        width="18"
+        height="11"
+        rx="2"
+        ry="2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="12"
+        cy="16"
+        r="1"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7 11V7a5 5 0 0 1 10 0v4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function Signup() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -74,7 +167,7 @@ function Signup() {
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
           <p className="auth__tagline">Keeping you Safe</p>
-          <p className="auth__brand">VerifAI</p>
+          <p className="auth__brand">Verif-AI</p>
         </div>
         <img src={signupImage} alt="Signup illustration" className="auth__image" />
       </div>
@@ -86,7 +179,7 @@ function Signup() {
             className="auth__logo-link"
             onClick={() => navigate('/')}
           >
-            VerifAI
+            Verif-AI
           </button>
         </div>
 
@@ -106,24 +199,34 @@ function Signup() {
         >
           <label className="auth__field">
             <span>Email</span>
-            <input
-              type="email"
-              placeholder="Enter your email address"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <div className="auth__input-wrapper">
+              <input
+                type="email"
+                placeholder="Enter your email address"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <span className="auth__input-icon">
+                <EmailIcon />
+              </span>
+            </div>
           </label>
 
           <label className="auth__field">
             <span>Username</span>
-            <input
-              type="text"
-              placeholder="Enter your User name"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
+            <div className="auth__input-wrapper">
+              <input
+                type="text"
+                placeholder="Enter your User name"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <span className="auth__input-icon">
+                <UserIcon />
+              </span>
+            </div>
           </label>
 
           <label className="auth__field">
@@ -136,6 +239,9 @@ function Signup() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <span className="auth__input-icon auth__input-icon--left">
+                <LockIcon />
+              </span>
               <button
                 type="button"
                 className="auth__password-toggle"
@@ -159,6 +265,9 @@ function Signup() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
+              <span className="auth__input-icon auth__input-icon--left">
+                <LockIcon />
+              </span>
               <button
                 type="button"
                 className="auth__password-toggle"

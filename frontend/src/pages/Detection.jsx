@@ -1,28 +1,72 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { placeholderChats } from '../responses/placeholder_chat.js';
 
 function Detection() {
   const navigate = useNavigate();
   const [text, setText] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isLoggedIn = useMemo(
     () => Boolean(window.localStorage.getItem('access_token')),
     [],
   );
 
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+
+    if (diffInHours < 24) {
+      return `${diffInHours}h ago`;
+    } else {
+      const diffInDays = Math.floor(diffInHours / 24);
+      return `${diffInDays}d ago`;
+    }
+  };
+
   return (
-    <div className="detect">
-      <aside className="detect__sidebar">
-        <button className="detect__sidebtn" type="button" aria-label="Menu">
-          ☰
+    <div className={`detect ${sidebarOpen ? 'detect--sidebar-open' : ''}`}>
+      <aside className={`detect__sidebar ${sidebarOpen ? 'detect__sidebar--open' : ''}`}>
+        <button
+          className="detect__sidebtn detect__sidebtn--menu"
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Toggle menu"
+        >
+          {sidebarOpen ? '✕' : '☰'}
         </button>
-        <button className="detect__sidebtn" type="button" aria-label="Edit">
-          ✎
-        </button>
-        <div className="detect__spacer" />
-        <button className="detect__sidebtn" type="button" aria-label="Settings">
-          ⚙
-        </button>
+
+        {sidebarOpen && (
+          <div className="detect__chat-history">
+            <h3 className="detect__chat-title">Chat History</h3>
+            <div className="detect__chat-list">
+              {placeholderChats.map((chat) => (
+                <div key={chat.id} className="detect__chat-item">
+                  <div className="detect__chat-item-title">{chat.title}</div>
+                  <div className="detect__chat-item-preview">{chat.preview}</div>
+                  <div className="detect__chat-item-time">{formatTimestamp(chat.timestamp)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!sidebarOpen && (
+          <>
+            <button className="detect__sidebtn" type="button" aria-label="New chat">
+              ✎
+            </button>
+            <div className="detect__spacer" />
+            <button className="detect__sidebtn" type="button" aria-label="Settings">
+              ⚙
+            </button>
+          </>
+        )}
       </aside>
 
       <div className="detect__main">
