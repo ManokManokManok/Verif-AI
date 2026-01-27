@@ -132,5 +132,3 @@ function Detection() {
 }
 
 export default Detection;
-
-
