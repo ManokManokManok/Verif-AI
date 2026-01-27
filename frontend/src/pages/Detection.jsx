@@ -1,19 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { detectScamRequest } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 function Detection() {
   const navigate = useNavigate();
+  const { isLoggedIn, isAdmin, logout, user } = useAuth();
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectionResult, setDetectionResult] = useState(null);
 
-  const isLoggedIn = useMemo(
-    () => Boolean(window.localStorage.getItem('access_token')),
-    [],
-  );
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
 
   const handleTextChange = (e) => {
     setText(e.target.value);
@@ -47,6 +49,47 @@ function Detection() {
     setDetectionResult(null);
     setText('');
     setIsExpanded(false);
+    setVerificationResult(null);
+  };
+
+  const handleAnchor = async () => {
+    if (!detectionResult?.ref_id || isAnchoring) return;
+    
+    setIsAnchoring(true);
+    try {
+      const result = await anchorAnalysis(detectionResult.ref_id);
+      console.log('[ANCHOR RESULT]', result);
+      // Update the detection result with anchored status
+      setDetectionResult(prev => ({
+        ...prev,
+        is_anchored: true,
+        tx_hash: result.tx_hash,
+        block_number: result.block_number
+      }));
+      alert('Analysis anchored to blockchain successfully!');
+    } catch (error) {
+      console.error('[ANCHOR ERROR]', error);
+      alert(`Error anchoring: ${error.message || 'Failed to anchor'}`);
+    } finally {
+      setIsAnchoring(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!detectionResult?.ref_id || isVerifying) return;
+    
+    setIsVerifying(true);
+    setVerificationResult(null);
+    try {
+      const result = await verifyAnalysis(detectionResult.ref_id);
+      console.log('[VERIFY RESULT]', result);
+      setVerificationResult(result);
+    } catch (error) {
+      console.error('[VERIFY ERROR]', error);
+      setVerificationResult({ verified: false, error: error.message });
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
@@ -81,17 +124,36 @@ function Detection() {
             >
               AI Chatbot
             </button>
-            <button className="nav__link nav__btn" type="button">
-              Membership
-            </button>
+            {isAdmin && (
+              <button
+                className="nav__link nav__btn"
+                type="button"
+                onClick={() => navigate('/blockchain')}
+              >
+                Admin
+              </button>
+            )}
           </nav>
-          <button
-            className="nav__login"
-            type="button"
-            onClick={() => navigate(isLoggedIn ? '/' : '/login')}
-          >
-            {isLoggedIn ? 'Profile' : 'Login/Signup'}
-          </button>
+          {isLoggedIn ? (
+            <div className="nav__user-actions">
+              <span className="nav__username">{user?.username || user?.email}</span>
+              <button
+                className="nav__login"
+                type="button"
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button
+              className="nav__login"
+              type="button"
+              onClick={() => navigate('/login')}
+            >
+              Login/Signup
+            </button>
+          )}
         </header>
 
         <main className="detect__content">

@@ -20,8 +20,11 @@ from ...domain.services import (
     BCryptPasswordHasher, EmailValidator, PasswordValidator,
     TokenGenerator, MockEmailService
 )
+from ...domain.analysis_entities import AnalysisResult
+from ...domain.scam_types import scam_types as SCAM_TYPES_MAP
 from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository, MongoDBTokenRepository
+from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.token_blacklist_service import MockTokenBlacklistService
 from ...infrastructure.ai.loaders import load_multihead_model, load_gemma_model
@@ -59,6 +62,13 @@ def get_token_repository():
     client = get_mongo_client()
     db_name = get_database_name()
     return MongoDBTokenRepository(client, db_name)
+
+
+def get_analysis_repository():
+    """Get analysis repository instance."""
+    client = get_mongo_client()
+    db_name = get_database_name()
+    return AnalysisResultRepository(client, db_name)
 
 
 def get_email_service():
@@ -694,6 +704,9 @@ def detect_scam(request: Request) -> Response:
     """
     Detect if a message is a scam using multi-head BERT + Gemma LLM analysis.
     
+    Analysis results are automatically saved to the database for optional
+    blockchain anchoring by administrators.
+    
     Request body:
     {
         "message": "Text to analyze for scam indicators"
@@ -702,6 +715,8 @@ def detect_scam(request: Request) -> Response:
     Response:
     {
         "message": "original user input text",
+        "ref_id": "uuid-for-blockchain-anchoring",
+        "is_anchored": false,
         "scam_score": 85.5,
         "legit_score": 14.5,
         "is_scam": true,
@@ -779,9 +794,60 @@ def detect_scam(request: Request) -> Response:
                 'key_markers': []
             }
         
+        # Step 3: Save analysis result to database for blockchain anchoring
+        import hashlib
+        try:
+            # Create message hash for lookup (privacy: we don't store raw message)
+            message_hash = hashlib.sha256(message.encode('utf-8')).hexdigest()
+            
+            # Map scam_type string to scam_class integer
+            scam_class = -1  # Default: not scam
+            if bert_result['is_scam'] and bert_result.get('scam_type'):
+                # Find the scam_class from the type name
+                for class_id, type_name in SCAM_TYPES_MAP.items():
+                    if type_name == bert_result['scam_type']:
+                        scam_class = class_id
+                        break
+            
+            # Convert confidence to basis points (0-10000)
+            # type_confidence is 0-100, scam_score is 0-100
+            if bert_result['is_scam']:
+                confidence_bps = int(bert_result.get('type_confidence', 0) * 100)
+            else:
+                confidence_bps = int(bert_result.get('legit_score', 0) * 100)
+            
+            # Create analysis result entity
+            analysis = AnalysisResult.create(
+                scam_class=scam_class,
+                scam_type=bert_result.get('scam_type') or 'Not Scam',
+                confidence_bps=confidence_bps,
+                is_scam=bert_result['is_scam'],
+                analyzer_type='bert',
+                analyzer_version='v1',
+                message_hash=message_hash
+            )
+            
+            # Save to database
+            repository = get_analysis_repository()
+            saved_analysis = repository.save(analysis)
+            
+            logger.info(f"[DB] Analysis saved: ref_id={saved_analysis.ref_id}")
+            
+            # Include ref_id in response for blockchain anchoring
+            ref_id = saved_analysis.ref_id
+            is_anchored = saved_analysis.is_anchored
+            
+        except Exception as db_error:
+            logger.error(f"[DB] Error saving analysis: {str(db_error)}")
+            # Don't fail the request if DB save fails
+            ref_id = None
+            is_anchored = False
+        
         # Combine results
         combined_result = {
             'message': message,  # Include original message for display
+            'ref_id': ref_id,  # For blockchain anchoring
+            'is_anchored': is_anchored,  # Blockchain status
             **bert_result,
             **llm_result
         }

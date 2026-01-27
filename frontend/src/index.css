@@ -118,6 +118,64 @@ button {
   background: #1f2937;
 }
 
+/* Nav user actions */
+.nav__user-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav__username {
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nav__user-menu {
+  position: relative;
+}
+
+.nav__dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  min-width: 180px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 8px 0;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.nav__dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  color: #d1d5db;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s ease;
+}
+
+.nav__dropdown-item:hover {
+  background: #374151;
+  color: #ffffff;
+}
+
+.nav__dropdown-item--danger {
+  color: #f87171;
+}
+
+.nav__dropdown-item--danger:hover {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
 .nav--detect {
   background: transparent;
   padding: 24px 40px 0;
@@ -182,7 +240,6 @@ button {
   height: 100%;
   object-fit: cover;
   display: block;
-}
 }
 
 .carousel__panel {
@@ -923,6 +980,736 @@ button {
 
 @media (max-width: 1024px) {
   .detect__resultsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Blockchain Status in Detection Results */
+.detect__blockchain {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+}
+
+.detect__blockchainTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: #60a5fa;
+}
+
+.detect__blockchainInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.detect__blockchainRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detect__blockchainLabel {
+  font-size: 14px;
+  color: #9ca3af;
+  min-width: 100px;
+}
+
+.detect__blockchainValue {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  color: #e5e7eb;
+  word-break: break-all;
+}
+
+.detect__blockchainValue--small {
+  font-size: 11px;
+}
+
+.detect__blockchainStatus {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.detect__blockchainStatus--anchored {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.detect__blockchainStatus--pending {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.detect__blockchainActions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detect__blockchainBtn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.detect__blockchainBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.detect__blockchainBtn--verify {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.detect__blockchainBtn--verify:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.3);
+}
+
+.detect__blockchainBtn--anchor {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.detect__blockchainBtn--anchor:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.3);
+}
+
+.detect__verification {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.detect__verification--success {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.detect__verification--fail {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.detect__verificationIcon {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* ============================================
+   BLOCKCHAIN PAGE STYLES
+   ============================================ */
+
+.blockchain {
+  display: flex;
+  min-height: 100vh;
+  background: #050b16;
+  color: #f7f7ff;
+}
+
+.blockchain__sidebar {
+  width: 60px;
+  min-height: 100vh;
+  background: #111827;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
+  gap: 12px;
+}
+
+.blockchain__sidebtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.blockchain__sidebtn:hover {
+  background: #1f2937;
+  color: #fff;
+}
+
+.blockchain__sidebtn--active {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.blockchain__spacer {
+  flex: 1;
+}
+
+.blockchain__main {
+  flex: 1;
+  padding: 32px 48px;
+  overflow-y: auto;
+}
+
+.blockchain__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+}
+
+.blockchain__header-left {
+  flex: 1;
+}
+
+.blockchain__header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.blockchain__title {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: #fff;
+}
+
+.blockchain__subtitle {
+  font-size: 16px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.blockchain__admin-badge {
+  padding: 6px 12px;
+  background: #7c3aed;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Buttons */
+.blockchain__btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.blockchain__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.blockchain__btn--primary {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.blockchain__btn--primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.blockchain__btn--secondary {
+  background: #374151;
+  color: #fff;
+}
+
+.blockchain__btn--secondary:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+.blockchain__btn--verify {
+  background: #1f2937;
+  color: #60a5fa;
+  border: 1px solid #374151;
+}
+
+.blockchain__btn--verify:hover:not(:disabled) {
+  background: #374151;
+}
+
+.blockchain__btn--anchor {
+  background: #059669;
+  color: #fff;
+}
+
+.blockchain__btn--anchor:hover:not(:disabled) {
+  background: #047857;
+}
+
+.blockchain__btn--reanchor {
+  background: #d97706;
+  color: #fff;
+}
+
+.blockchain__btn--reanchor:hover:not(:disabled) {
+  background: #b45309;
+}
+
+/* Top Row: Status + Stats */
+.blockchain__top-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+/* Status Card */
+.blockchain__status-card {
+  background: #1f2937;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #374151;
+}
+
+.blockchain__status-card--connected {
+  border-color: #059669;
+}
+
+.blockchain__status-card--disconnected,
+.blockchain__status-card--error {
+  border-color: #dc2626;
+}
+
+.blockchain__status-card--loading {
+  border-color: #3b82f6;
+}
+
+.blockchain__status-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 16px;
+}
+
+.blockchain__status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.blockchain__status-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.blockchain__status-label {
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: uppercase;
+}
+
+.blockchain__status-value {
+  font-size: 14px;
+  color: #e5e7eb;
+}
+
+.blockchain__status-value--connected {
+  color: #34d399;
+}
+
+.blockchain__status-value--disconnected {
+  color: #f87171;
+}
+
+.blockchain__status-value--mono {
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.blockchain__status-text {
+  color: #9ca3af;
+  margin: 0;
+}
+
+.blockchain__status-text--error {
+  color: #f87171;
+}
+
+/* Stats Card */
+.blockchain__stats-card {
+  background: #1f2937;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #374151;
+}
+
+.blockchain__stats-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 16px;
+}
+
+.blockchain__stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.blockchain__stat {
+  text-align: center;
+}
+
+.blockchain__stat-value {
+  display: block;
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.blockchain__stat-label {
+  display: block;
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.blockchain__stat--success .blockchain__stat-value {
+  color: #34d399;
+}
+
+.blockchain__stat--pending .blockchain__stat-value {
+  color: #fbbf24;
+}
+
+/* Filters */
+.blockchain__filters {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.blockchain__filter-group {
+  display: flex;
+  gap: 8px;
+}
+
+.blockchain__filter-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #9ca3af;
+  font-size: 14px;
+  border: 1px solid #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.blockchain__filter-btn:hover {
+  background: #374151;
+  color: #fff;
+}
+
+.blockchain__filter-btn--active {
+  background: #3b82f6;
+  color: #fff;
+  border-color: #3b82f6;
+}
+
+.blockchain__search {
+  flex: 1;
+  max-width: 320px;
+}
+
+.blockchain__search-input {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #fff;
+  font-size: 14px;
+}
+
+.blockchain__search-input::placeholder {
+  color: #6b7280;
+}
+
+.blockchain__search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* Content Area */
+.blockchain__content {
+  min-height: 400px;
+}
+
+.blockchain__loading,
+.blockchain__empty {
+  text-align: center;
+  padding: 64px 24px;
+  color: #9ca3af;
+}
+
+.blockchain__error-box {
+  text-align: center;
+  padding: 48px 24px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.blockchain__error-box p {
+  color: #fca5a5;
+  margin: 0 0 16px;
+}
+
+/* Grid */
+.blockchain__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+/* Analysis Card */
+.blockchain__analysis-card {
+  background: #1f2937;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #374151;
+  transition: all 0.2s;
+}
+
+.blockchain__analysis-card:hover {
+  border-color: #4b5563;
+}
+
+.blockchain__analysis-card--anchored {
+  border-color: #059669;
+}
+
+.blockchain__analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.blockchain__analysis-id {
+  font-family: monospace;
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.blockchain__analysis-body {
+  margin-bottom: 16px;
+}
+
+.blockchain__analysis-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #374151;
+}
+
+.blockchain__analysis-row:last-child {
+  border-bottom: none;
+}
+
+.blockchain__analysis-label {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.blockchain__analysis-value {
+  font-size: 13px;
+  color: #e5e7eb;
+}
+
+.blockchain__analysis-value--mono {
+  font-family: monospace;
+}
+
+.blockchain__analysis-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Badges */
+.blockchain__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.blockchain__badge-icon {
+  font-size: 14px;
+}
+
+.blockchain__badge--verified {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.blockchain__badge--not-verified {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.blockchain__badge--not-anchored {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+}
+
+.blockchain__badge--error {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.blockchain__badge--loading {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+/* Verify/Anchor Wrappers */
+.blockchain__verify-wrapper,
+.blockchain__anchor-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.blockchain__verify-result {
+  margin-left: auto;
+}
+
+.blockchain__error {
+  font-size: 12px;
+  color: #f87171;
+}
+
+/* Pagination */
+.blockchain__pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #374151;
+}
+
+.blockchain__page-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #fff;
+  font-size: 14px;
+  border: 1px solid #374151;
+  cursor: pointer;
+}
+
+.blockchain__page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.blockchain__page-btn:hover:not(:disabled) {
+  background: #374151;
+}
+
+.blockchain__page-info {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+/* Auth Required */
+.blockchain__auth-required {
+  text-align: center;
+  padding: 64px 24px;
+}
+
+.blockchain__auth-required h2 {
+  font-size: 24px;
+  margin: 0 0 12px;
+}
+
+.blockchain__auth-required p {
+  color: #9ca3af;
+  margin: 0 0 24px;
+}
+
+.blockchain__container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .blockchain__top-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .blockchain__stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .blockchain__main {
+    padding: 24px;
+  }
+  
+  .blockchain__header {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .blockchain__filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .blockchain__search {
+    max-width: none;
+  }
+  
+  .blockchain__grid {
     grid-template-columns: 1fr;
   }
 }
