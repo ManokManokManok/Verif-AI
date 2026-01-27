@@ -99,7 +99,8 @@ class AnchorAnalysisUseCase:
             )
         
         # Step 3: Build canonical payload
-        canonical_payload = self._build_canonical_payload(analysis)
+        # For re-anchoring (force=True), use current timestamp to generate new hash
+        canonical_payload = self._build_canonical_payload(analysis, force_new_timestamp=force)
         
         # Step 4: Anchor on-chain
         anchor_result = self._blockchain_service.anchor_analysis(canonical_payload)
@@ -137,18 +138,23 @@ class AnchorAnalysisUseCase:
             'schema_version': chain_metadata.schema_version
         }
     
-    def _build_canonical_payload(self, analysis: AnalysisResult) -> CanonicalPayload:
+    def _build_canonical_payload(self, analysis: AnalysisResult, force_new_timestamp: bool = False) -> CanonicalPayload:
         """
         Build a canonical payload from an analysis result.
         
         Args:
             analysis: The analysis result to convert
+            force_new_timestamp: If True, use current time to generate unique hash for re-anchoring
             
         Returns:
             CanonicalPayload ready for anchoring
         """
-        # Format created_at to ISO 8601 with milliseconds
-        if analysis.created_at:
+        # For re-anchoring, use current timestamp to generate a new unique payload hash
+        # This is necessary because the smart contract doesn't allow duplicate hashes
+        if force_new_timestamp:
+            created_at_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            logger.info(f"Re-anchoring with new timestamp: {created_at_str}")
+        elif analysis.created_at:
             created_at_str = analysis.created_at.strftime("%Y-%m-%dT%H:%M:%S.000Z")
         else:
             created_at_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")

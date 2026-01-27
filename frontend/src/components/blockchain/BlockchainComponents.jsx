@@ -226,16 +226,39 @@ export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, on
   const isAnchored = analysis.isAnchored || analysis.is_anchored;
   const refId = analysis.refId || analysis.ref_id || analysis.id;
   
-  // Format date
+  // Format date - handle ISO string format from backend
   const createdAt = analysis.createdAt || analysis.created_at;
-  const formattedDate = createdAt 
-    ? new Date(createdAt).toLocaleString()
-    : 'Unknown';
+  let formattedDate = 'Unknown';
+  if (createdAt) {
+    try {
+      const date = new Date(createdAt);
+      if (!isNaN(date.getTime())) {
+        formattedDate = date.toLocaleString();
+      }
+    } catch (e) {
+      formattedDate = createdAt;
+    }
+  }
 
-  // Scam classification display
-  const scamClass = analysis.scamClassification || analysis.scam_classification || analysis.classification;
-  const confidence = analysis.confidenceScore || analysis.confidence_score || analysis.confidence;
-  const confidencePercent = confidence ? (confidence * 100).toFixed(1) : null;
+  // Scam classification display - backend returns scam_type
+  const scamType = analysis.scam_type || analysis.scamType || analysis.scamClassification || analysis.scam_classification || analysis.classification;
+  
+  // Confidence - backend returns confidence_bps (basis points 0-10000)
+  const confidenceBps = analysis.confidence_bps || analysis.confidenceBps;
+  const confidenceScore = analysis.confidence_score || analysis.confidenceScore || analysis.confidence;
+  
+  let confidencePercent = null;
+  if (confidenceBps != null) {
+    // Convert basis points to percentage (divide by 100)
+    confidencePercent = (confidenceBps / 100).toFixed(1);
+  } else if (confidenceScore != null) {
+    // Handle if it's already a decimal or percentage
+    if (confidenceScore <= 1) {
+      confidencePercent = (confidenceScore * 100).toFixed(1);
+    } else {
+      confidencePercent = confidenceScore.toFixed(1);
+    }
+  }
 
   return (
     <div className={`blockchain__analysis-card ${isAnchored ? 'blockchain__analysis-card--anchored' : ''}`}>
@@ -249,7 +272,7 @@ export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, on
       <div className="blockchain__analysis-body">
         <div className="blockchain__analysis-row">
           <span className="blockchain__analysis-label">Classification:</span>
-          <span className="blockchain__analysis-value">{scamClass || 'Unknown'}</span>
+          <span className="blockchain__analysis-value">{scamType || 'Unknown'}</span>
         </div>
         {confidencePercent && (
           <div className="blockchain__analysis-row">

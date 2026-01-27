@@ -49,6 +49,47 @@ function Detection() {
     setDetectionResult(null);
     setText('');
     setIsExpanded(false);
+    setVerificationResult(null);
+  };
+
+  const handleAnchor = async () => {
+    if (!detectionResult?.ref_id || isAnchoring) return;
+    
+    setIsAnchoring(true);
+    try {
+      const result = await anchorAnalysis(detectionResult.ref_id);
+      console.log('[ANCHOR RESULT]', result);
+      // Update the detection result with anchored status
+      setDetectionResult(prev => ({
+        ...prev,
+        is_anchored: true,
+        tx_hash: result.tx_hash,
+        block_number: result.block_number
+      }));
+      alert('Analysis anchored to blockchain successfully!');
+    } catch (error) {
+      console.error('[ANCHOR ERROR]', error);
+      alert(`Error anchoring: ${error.message || 'Failed to anchor'}`);
+    } finally {
+      setIsAnchoring(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!detectionResult?.ref_id || isVerifying) return;
+    
+    setIsVerifying(true);
+    setVerificationResult(null);
+    try {
+      const result = await verifyAnalysis(detectionResult.ref_id);
+      console.log('[VERIFY RESULT]', result);
+      setVerificationResult(result);
+    } catch (error) {
+      console.error('[VERIFY ERROR]', error);
+      setVerificationResult({ verified: false, error: error.message });
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
