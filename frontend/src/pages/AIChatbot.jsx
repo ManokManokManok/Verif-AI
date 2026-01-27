@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import chatHistoryData from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -6,6 +7,13 @@ function AIChatbot() {
   const navigate = useNavigate();
   const { isLoggedIn, isAdmin, logout, user } = useAuth();
   const [text, setText] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+
+  useEffect(() => {
+    // Simulate fetching chat history from backend
+    setChatHistory(chatHistoryData);
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -14,20 +22,43 @@ function AIChatbot() {
 
   return (
     <div className="detect">
-      <aside className="detect__sidebar">
-        <button className="detect__sidebtn" type="button" aria-label="Menu">
-          ☰
+      <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
+        <button
+          className="detect__sidebtn detect__sidebtn--menu"
+          type="button"
+          aria-label="Menu"
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          {sidebarOpen ? '✕' : '☰'}
         </button>
-        <button className="detect__sidebtn" type="button" aria-label="Edit">
-          ✎
-        </button>
-        <div className="detect__spacer" />
-        <button className="detect__sidebtn" type="button" aria-label="Settings">
-          ⚙
-        </button>
+        {sidebarOpen && (
+          <div className="detect__chat-history">
+            <div className="detect__chat-title">Chat History</div>
+            <div className="detect__chat-list">
+              {chatHistory.map((chat) => (
+                <div className="detect__chat-item" key={chat.id}>
+                  <div className="detect__chat-item-title">{chat.title}</div>
+                  <div className="detect__chat-item-preview">{chat.description}</div>
+                  <div className="detect__chat-item-time">{chat.timestamp}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!sidebarOpen && (
+          <>
+            <button className="detect__sidebtn" type="button" aria-label="Edit">
+              ✎
+            </button>
+            <div className="detect__spacer" />
+            <button className="detect__sidebtn" type="button" aria-label="Settings">
+              ⚙
+            </button>
+          </>
+        )}
       </aside>
 
-      <div className="detect__main">
+      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
         <header className="nav nav--detect">
           <div className="brand brand--small">
             [INSERT LOGO / Verf AI] Fraud Detection

@@ -70,24 +70,33 @@ class AnalysisResult:
     """
     # Core identification
     ref_id: str  # UUID for blockchain reference
-    
+
     # Analysis results (non-PII)
     scam_class: int  # Integer classification (ScamClass enum value)
     scam_type: str  # Human-readable scam type name
     confidence_bps: int  # Confidence in basis points (0-10000)
     is_scam: bool
-    
+
     # Analyzer metadata
     analyzer_type: str  # "stub" | "rules" | "bert" | "llm"
     analyzer_version: str
-    
+
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
-    
+
     # Optional fields
+    user_id: Optional[str] = None  # User ID for chat history (None for anonymous)
     id: Optional[str] = None  # Database ID (set after persistence)
     message_hash: Optional[str] = None  # SHA-256 of original message (for lookup)
-    
+    # New fields for chat history and full analysis
+    message: Optional[str] = None
+    scam_score: Optional[float] = None
+    legit_score: Optional[float] = None
+    label: Optional[str] = None
+    type_confidence: Optional[float] = None
+    summary: Optional[str] = None
+    key_markers: Optional[list] = None
+
     # Blockchain anchoring (None until anchored)
     chain_metadata: Optional[ChainMetadata] = None
     
@@ -100,25 +109,23 @@ class AnalysisResult:
         is_scam: bool,
         analyzer_type: str = AnalyzerType.BERT,
         analyzer_version: str = "v1",
-        message_hash: Optional[str] = None
+        message_hash: Optional[str] = None,
+        user_id: Optional[str] = None,
+        message: Optional[str] = None,
+        scam_score: Optional[float] = None,
+        legit_score: Optional[float] = None,
+        label: Optional[str] = None,
+        type_confidence: Optional[float] = None,
+        summary: Optional[str] = None,
+        key_markers: Optional[list] = None
     ) -> 'AnalysisResult':
         """
         Factory method to create a new AnalysisResult with generated ref_id.
-        
-        Args:
-            scam_class: Integer classification (0-14 for scam types, -1 for not scam)
-            scam_type: Human-readable scam type name
-            confidence_bps: Confidence in basis points (0-10000)
-            is_scam: Whether the message is classified as scam
-            analyzer_type: Type of analyzer used
-            analyzer_version: Version of the analyzer
-            message_hash: Optional SHA-256 hash of original message
-            
-        Returns:
-            New AnalysisResult instance
+        Accepts all analysis fields for full chat history support.
         """
         return cls(
             ref_id=str(uuid.uuid4()),
+            user_id=user_id,
             scam_class=scam_class,
             scam_type=scam_type,
             confidence_bps=confidence_bps,
@@ -126,6 +133,13 @@ class AnalysisResult:
             analyzer_type=analyzer_type,
             analyzer_version=analyzer_version,
             message_hash=message_hash,
+            message=message,
+            scam_score=scam_score,
+            legit_score=legit_score,
+            label=label,
+            type_confidence=type_confidence,
+            summary=summary,
+            key_markers=key_markers,
             created_at=datetime.utcnow()
         )
     
@@ -145,12 +159,19 @@ class AnalysisResult:
             "analyzer_type": self.analyzer_type,
             "analyzer_version": self.analyzer_version,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "is_anchored": self.is_anchored
+            "user_id": self.user_id,
+            "message": self.message,
+            "scam_score": self.scam_score,
+            "legit_score": self.legit_score,
+            "label": self.label,
+            "type_confidence": self.type_confidence,
+            "summary": self.summary,
+            "key_markers": self.key_markers,
         }
-        
+
         if self.id:
             result["id"] = self.id
-            
+
         if self.chain_metadata:
             result["chain"] = {
                 "schema_version": self.chain_metadata.schema_version,
@@ -161,6 +182,7 @@ class AnalysisResult:
                 "anchored_at": self.chain_metadata.anchored_at.isoformat(),
                 "block_number": self.chain_metadata.block_number
             }
+            # user_id: Optional[str] = None  # (Removed stray duplicate)
             
         return result
 
