@@ -236,7 +236,9 @@ class MongoDBUserRepository:
         # Insert user
         result = self.users_collection.insert_one(user_dict)
         user.id = str(result.inserted_id)
-        
+        # Add user_id field (string of _id) for easier tracking
+        self.users_collection.update_one({"_id": result.inserted_id}, {"$set": {"user_id": user.id}})
+        user_dict["user_id"] = user.id
         return user
     
     def get_by_email(self, email: str) -> Optional[User]:
