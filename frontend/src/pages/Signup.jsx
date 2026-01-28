@@ -286,7 +286,7 @@ function Signup() {
           {error && <p className="auth__error">{error}</p>}
 
           <button type="submit" className="auth__primary">
-            {loading ? 'Registering…' : 'Register'}
+            <strong>{loading ? 'Registering…' : 'Register'}</strong>
           </button>
         </form>
       </div>
