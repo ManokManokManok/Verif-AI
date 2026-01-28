@@ -1,6 +1,6 @@
 # Verif-AI — Team Guide
 
-Welcome to Verif-AI. This README gives a quick, practical guide for teammates to set up, run, and contribute.
+TEAM GUIDE !!! BASAHIN NYO !!!
 
 ## Stack
 - Backend: Django (Python) + MongoDB Atlas via `pymongo`
@@ -42,6 +42,15 @@ python backend\manage.py runserver
 - Default branch: `main`
 - Feature branches: `feat/<topic>` or `fix/<topic>` (e.g., `feat/auth-signup`)
 - Pull Requests: target `main`, require review before merge
+- ITS WEIRD THAT I HAVE TO SAY THIS. N E V E R PUSH DIRECTLY ONTO MAIN, specially if untested code
+- push to your branch then ask for pull request (this is INDUSTRY STANDARD. bat kelangan pa sabihin)
+- ALSO test your code before pushing, make sure na "mergeable" sya. dont expect someone to test YOUR code
+
+## Important branches to take note
+- main branch: main
+- AI branch: LLM (capitalized)
+- general backend branch: (INSERT HERE BACKEND DEVS)
+- Blockcahin branch: (insert here)
 
 ## Auth Work (for teammates)
 - Create a new app under `backend/src/apps/auth` (or similar)
