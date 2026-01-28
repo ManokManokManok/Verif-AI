@@ -71,7 +71,7 @@ function Detection() {
 
       <div className="detect__main">
         <header className="nav nav--detect">
-          <div className="brand brand--small">[INSERT LOGO / Verf AI] Fraud Detection</div>
+          <div className="brand brand--small">[INSERT LOGO / Verif-AI] Fraud Detection</div>
           <nav className="nav__links">
             <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>
               About us
@@ -95,12 +95,12 @@ function Detection() {
             type="button"
             onClick={() => navigate(isLoggedIn ? '/' : '/login')}
           >
-            {isLoggedIn ? 'Profile' : 'Login/Signup'}
+            {isLoggedIn ? 'Profile' : 'Login / Signup'}
           </button>
         </header>
 
         <main className="detect__content">
-          <h1 className="detect__title">Welcome to VerfAI fraud detection</h1>
+          <h1 className="detect__title">Welcome to Verif-AI Fraud Detection</h1>
           <p className="detect__subtitle">
             Write the promo/message you want to analyze, or press the plus button to submit a file
           </p>

@@ -183,7 +183,7 @@ function Login() {
     <div className="auth auth--login">
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
-          <p className="auth__tagline">Know Whats Real</p>
+          <p className="auth__tagline">Know What's Real</p>
           <p className="auth__brand">Verif-AI</p>
         </div>
         <img src={loginImage} alt="Login illustration" className="auth__image" />
@@ -269,7 +269,7 @@ function Login() {
           {error && <p className="auth__error">{error}</p>}
 
           <button type="submit" className="auth__primary">
-            {loading ? 'Logging in…' : 'Login'}
+            <strong>{loading ? 'Logging in…' : 'Login'}</strong>
           </button>
 
           <p className="auth__or">or continue with</p>

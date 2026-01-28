@@ -80,7 +80,7 @@ function Landing() {
   return (
     <div className="page page--landing">
       <header className="nav">
-        <div className="brand">VerifAI</div>
+        <div className="brand">Verif-AI</div>
         <nav className="nav__links">
           <button className="nav__link nav__btn" type="button">About us</button>
           <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
@@ -88,7 +88,7 @@ function Landing() {
           <button className="nav__link nav__btn" type="button">Membership</button>
         </nav>
         <button className="nav__login" type="button" onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}>
-          {isLoggedIn ? 'Profile' : 'Login/Signup'}
+          {isLoggedIn ? 'Profile' : 'Login / Signup'}
         </button>
       </header>
 

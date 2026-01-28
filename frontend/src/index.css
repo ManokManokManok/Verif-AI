@@ -109,6 +109,8 @@ button {
 .nav__login {
   padding: 12px 22px;
   border-radius: 999px;
+  font-size: 18px;
+  font-weight: 600;
   background: #111827;
   color: #ffffff;
   border: 1px solid #374151;
@@ -182,7 +184,6 @@ button {
   height: 100%;
   object-fit: cover;
   display: block;
-}
 }
 
 .carousel__panel {
@@ -292,14 +293,14 @@ button {
 }
 
 .auth__tagline {
-  font-size: 32px;
+  font-size: 50px;
   font-weight: 600;
   margin: 0;
 }
 
 .auth__brand {
   margin-top: 8px;
-  font-size: 40px;
+  font-size: 50px;
   font-weight: 700;
   margin-bottom: 0;
 }
@@ -332,13 +333,13 @@ button {
 
 .auth__title {
   margin-top: 24px;
-  font-size: 26px;
-  font-weight: 600;
+  font-size: 35px;
+  font-weight: bold;
 }
 
 .auth__subtitle {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: 16px;
   color: #d1d5db;
 }
 
@@ -608,14 +609,14 @@ button {
 
 .detect__title {
   margin: 0;
-  font-size: 34px;
+  font-size: 40px;
   font-weight: 700;
 }
 
 .detect__subtitle {
   margin: 12px 0 0;
   color: #d1d5db;
-  font-size: 14px;
+  font-size: 18px;
   max-width: 520px;
 }
 
@@ -752,6 +753,7 @@ button {
 .auth__primary {
   margin-top: 12px;
   padding: 12px;
+  font-size: 18px;
   border-radius: 999px;
   background: #60a5fa;
   color: #ffffff;

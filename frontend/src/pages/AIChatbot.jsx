@@ -72,7 +72,7 @@ function AIChatbot() {
       <div className="detect__main">
         <header className="nav nav--detect">
           <div className="brand brand--small">
-            [INSERT LOGO / Verf AI] Fraud Detection
+            [INSERT LOGO / Verif-AI] Fraud Detection
           </div>
           <nav className="nav__links">
             <button
@@ -104,12 +104,12 @@ function AIChatbot() {
             type="button"
             onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}
           >
-            {isLoggedIn ? 'Profile' : 'Login/Signup'}
+            {isLoggedIn ? 'Profile' : 'Login / Signup'}
           </button>
         </header>
 
         <main className="detect__content">
-          <h1 className="detect__title">Welcome to VerfAI Guidance</h1>
+          <h1 className="detect__title">Welcome to Verif-AI Guidance</h1>
           <p className="detect__subtitle">What do you need help with?</p>
 
           <div className="detect__inputRow">
