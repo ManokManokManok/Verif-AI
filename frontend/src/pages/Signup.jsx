@@ -36,6 +36,26 @@ function EyeIcon({ slashed }) {
   );
 }
 
+/**
+ * Format error message for display.
+ * Handles both string errors and structured validation errors.
+ * 
+ * @param {string|object} error - Error message or validation errors object
+ * @returns {string[]} Array of error messages
+ */
+function parseErrors(error) {
+  if (!error) return [];
+  if (typeof error === 'string') {
+    // Split by periods and filter empty entries
+    return error.split('. ').filter(Boolean).map(e => e.endsWith('.') ? e : e);
+  }
+  if (typeof error === 'object') {
+    // Handle structured validation errors { field: [errors] }
+    return Object.values(error).flat().filter(Boolean);
+  }
+  return [String(error)];
+}
+
 function Signup() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -46,10 +66,12 @@ function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    setFieldErrors({});
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -62,11 +84,19 @@ function Signup() {
       await signupRequest({ email, username, password });
       navigate('/login');
     } catch (err) {
+      // Store structured validation errors if available
+      if (err.isValidationError && err.validationErrors) {
+        setFieldErrors(err.validationErrors);
+      }
       setError(err.message || 'Failed to register');
     } finally {
       setLoading(false);
     }
   };
+
+  // Parse error message into list for multi-error display
+  const errorList = parseErrors(error);
+  const hasMultipleErrors = errorList.length > 1;
 
   return (
     <div className="auth auth--signup">
@@ -173,7 +203,19 @@ function Signup() {
             </div>
           </label>
 
-          {error && <p className="auth__error">{error}</p>}
+          {error && (
+            <div className="auth__error-container">
+              {hasMultipleErrors ? (
+                <ul className="auth__error-list">
+                  {errorList.map((err, index) => (
+                    <li key={index} className="auth__error-item">{err}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="auth__error">{error}</p>
+              )}
+            </div>
+          )}
 
           <button type="submit" className="auth__primary">
             {loading ? 'Registering…' : 'Register'}
