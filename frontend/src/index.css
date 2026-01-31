@@ -517,6 +517,32 @@ button {
   margin: 4px 0 0;
 }
 
+/* Enhanced error display for multiple validation errors */
+.auth__error-container {
+  margin: 8px 0;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+}
+
+.auth__error-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style-type: disc;
+}
+
+.auth__error-item {
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 4px 0;
+}
+
+.auth__error-container .auth__error {
+  margin: 0;
+}
+
 .detect {
   min-height: 100vh;
   display: grid;
@@ -794,6 +820,48 @@ button {
   box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4),
               inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
+
+/* =============================================================================
+   Security: Error Messages and Character Count
+   ============================================================================= */
+
+.detect__error {
+  margin-top: 16px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  max-width: 600px;
+}
+
+.detect__error--validation {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.detect__error--ratelimit {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+
+.detect__charCount {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.7);
+  text-align: right;
+  width: min(860px, 95vw);
+}
+
+.detect__charCount--warning {
+  color: #fbbf24;
+}
+
+/* =============================================================================
+   End Security Styles
+   ============================================================================= */
 
 .detect__footer {
   padding: 22px 24px 28px;
@@ -1582,6 +1650,41 @@ button {
   border-color: #3b82f6;
 }
 
+/* Classification Filter Dropdown */
+.blockchain__classification-filter {
+  flex-shrink: 0;
+}
+
+.blockchain__classification-select {
+  padding: 10px 36px 10px 16px;
+  border-radius: 8px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  min-width: 180px;
+}
+
+.blockchain__classification-select:hover {
+  border-color: #4b5563;
+}
+
+.blockchain__classification-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.blockchain__classification-select option {
+  background: #1f2937;
+  color: #fff;
+  padding: 8px;
+}
+
 .blockchain__search {
   flex: 1;
   max-width: 320px;
@@ -1843,6 +1946,18 @@ button {
   .blockchain__filters {
     flex-direction: column;
     align-items: stretch;
+  }
+  
+  .blockchain__filter-group {
+    flex-wrap: wrap;
+  }
+  
+  .blockchain__classification-filter {
+    width: 100%;
+  }
+  
+  .blockchain__classification-select {
+    width: 100%;
   }
   
   .blockchain__search {

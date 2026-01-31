@@ -2,13 +2,22 @@
 Blockchain Configuration
 
 Loads blockchain settings from environment variables.
+
+SECURITY:
+- Private keys are loaded from environment only
+- No default values for sensitive data
+- Validation on startup
 """
 
 import os
+import logging
 from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
+security_logger = logging.getLogger('security')
 
 # Load env from backend directory (where .env is located)
 BACKEND_DIR = Path(__file__).resolve().parents[3]  # blockchain -> infrastructure -> src -> backend
@@ -71,6 +80,11 @@ def get_blockchain_config() -> BlockchainConfig:
     
     Returns:
         BlockchainConfig instance loaded from environment
+        
+    Security:
+        - Private keys are never logged
+        - Validates key format before use
+        - Warns about test/placeholder values
     """
     global _config
     
@@ -79,18 +93,47 @@ def get_blockchain_config() -> BlockchainConfig:
         enabled = enabled_str in ('true', '1', 'yes')
         
         private_key = os.getenv('CHAIN_PRIVATE_KEY', '')
-        # Normalize private key format (ensure 0x prefix)
-        if private_key and not private_key.startswith('0x'):
-            private_key = '0x' + private_key
+        
+        # Security: Validate private key format and warn about weak values
+        if private_key:
+            # Normalize private key format (ensure 0x prefix)
+            if not private_key.startswith('0x'):
+                private_key = '0x' + private_key
+            
+            # Check for placeholder/test values (don't log the actual key)
+            if private_key.startswith('0x_your_') or private_key == '0x' + '0' * 64:
+                security_logger.warning(
+                    "CHAIN_PRIVATE_KEY appears to be a placeholder. "
+                    "Set a real private key for blockchain operations."
+                )
+                if enabled:
+                    logger.error("Cannot enable blockchain with placeholder private key")
+                    enabled = False
+            
+            # Validate key length (should be 66 chars with 0x prefix)
+            if len(private_key) != 66:
+                security_logger.warning(
+                    f"CHAIN_PRIVATE_KEY has unexpected length ({len(private_key)}). "
+                    "Expected 66 characters (0x + 64 hex chars)."
+                )
         
         _config = BlockchainConfig(
             enabled=enabled,
             rpc_url=os.getenv('CHAIN_RPC_URL'),
-            private_key=private_key if private_key else None,
+            private_key=private_key if private_key and len(private_key) == 66 else None,
             contract_address=os.getenv('CHAIN_CONTRACT_ADDRESS'),
             network_name=os.getenv('CHAIN_NETWORK_NAME', 'ganache'),
             gas_limit=int(os.getenv('CHAIN_GAS_LIMIT', '500000'))
         )
+        
+        # Log configuration (without sensitive data)
+        if _config.enabled:
+            logger.info(
+                f"Blockchain config loaded: network={_config.network_name}, "
+                f"contract={_config.contract_address[:10]}... (truncated)"
+                if _config.contract_address else
+                f"Blockchain config loaded: network={_config.network_name}, contract=not set"
+            )
     
     return _config
 

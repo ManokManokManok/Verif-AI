@@ -30,11 +30,14 @@ function BlockchainPage() {
   const [analysesLoading, setAnalysesLoading] = useState(true);
   const [analysesError, setAnalysesError] = useState(null);
   const [page, setPage] = useState(1);
-  const [totalAnalyses, setTotalAnalyses] = useState(0);
-  const [totalAnchored, setTotalAnchored] = useState(0);
+  const [totalFiltered, setTotalFiltered] = useState(0);  // Total matching current filter
+  const [totalAnchored, setTotalAnchored] = useState(0);  // Total anchored (for stats)
+  const [totalAll, setTotalAll] = useState(0);  // Total of all analyses (for stats)
+  const [classifications, setClassifications] = useState([]);  // Available classification options
   const limit = 12;
 
   const [filter, setFilter] = useState('all'); // 'all', 'anchored', 'pending'
+  const [classificationFilter, setClassificationFilter] = useState('all');  // Classification filter
   const [searchTerm, setSearchTerm] = useState('');
 
   // Handle logout
@@ -62,11 +65,21 @@ function BlockchainPage() {
     setAnalysesLoading(true);
     setAnalysesError(null);
     try {
-      const response = await listAnalyses({ page, limit, status: filter });
+      const response = await listAnalyses({ 
+        page, 
+        limit, 
+        status: filter,
+        classification: classificationFilter 
+      });
       setAnalyses(response.analyses || []);
-      // Backend returns: total (all), count (current page), total_anchored (all anchored)
-      setTotalAnalyses(response.total || response.count || 0);
+      // Backend returns: total (matching filter), total_all (all analyses), total_anchored (all anchored)
+      setTotalFiltered(response.total || response.count || 0);
       setTotalAnchored(response.total_anchored || 0);
+      setTotalAll(response.total_all || response.total || 0);
+      // Update available classifications
+      if (response.classifications) {
+        setClassifications(response.classifications);
+      }
     } catch (err) {
       if (err.status === 401) {
         setAnalysesError('Please log in to view analyses');
@@ -76,7 +89,7 @@ function BlockchainPage() {
     } finally {
       setAnalysesLoading(false);
     }
-  }, [page, filter]);
+  }, [page, filter, classificationFilter]);
 
   // Initial fetch
   useEffect(() => {
@@ -106,29 +119,38 @@ function BlockchainPage() {
 
   // Compute stats from backend data
   const stats = useMemo(() => {
-    // total = total count of all analyses from backend
-    // totalAnchored = total_anchored from backend (accurate count)
+    // Use totalAll for total, totalAnchored for anchored count
     // pending = total - anchored
     return {
-      total: totalAnalyses,
+      total: totalAll,
       anchored: totalAnchored,
-      pending: Math.max(0, totalAnalyses - totalAnchored),
+      pending: Math.max(0, totalAll - totalAnchored),
     };
-  }, [totalAnalyses, totalAnchored]);
+  }, [totalAll, totalAnchored]);
 
   // Filter analyses by search term (client-side for displayed items)
   const filteredAnalyses = useMemo(() => {
     if (!searchTerm) return analyses;
     const term = searchTerm.toLowerCase();
     return analyses.filter(a => {
-      const refId = (a.refId || a.ref_id || a.id || '').toLowerCase();
-      const classification = (a.scamClassification || a.scam_classification || a.classification || '').toLowerCase();
-      return refId.includes(term) || classification.includes(term);
+      // Search by ref_id
+      const refId = (a.ref_id || a.refId || a.id || '').toLowerCase();
+      // Search by scam_type (classification)
+      const scamType = (a.scam_type || a.scamType || '').toLowerCase();
+      // Search by message content
+      const message = (a.message || '').toLowerCase();
+      // Search by label
+      const label = (a.label || '').toLowerCase();
+      
+      return refId.includes(term) || 
+             scamType.includes(term) || 
+             message.includes(term) ||
+             label.includes(term);
     });
   }, [analyses, searchTerm]);
 
-  // Total pages
-  const totalPages = Math.ceil(totalAnalyses / limit);
+  // Total pages based on filtered total
+  const totalPages = Math.ceil(totalFiltered / limit);
 
   // Not logged in
   if (!isLoggedIn) {
@@ -276,11 +298,28 @@ function BlockchainPage() {
               Pending
             </button>
           </div>
+          
+          {/* Classification Filter Dropdown */}
+          <div className="blockchain__classification-filter">
+            <select
+              className="blockchain__classification-select"
+              value={classificationFilter}
+              onChange={(e) => { setClassificationFilter(e.target.value); setPage(1); }}
+            >
+              <option value="all">All Classifications</option>
+              {classifications.map((cls) => (
+                <option key={cls.value} value={cls.value}>
+                  {cls.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          
           <div className="blockchain__search">
             <input
               type="text"
               className="blockchain__search-input"
-              placeholder="Search by ID or classification..."
+              placeholder="Search by ID, type, or message..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
