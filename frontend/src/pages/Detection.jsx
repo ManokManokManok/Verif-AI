@@ -5,6 +5,7 @@ import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
 import { detectScamRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 
 function Detection() {
   const navigate = useNavigate();
@@ -16,6 +17,8 @@ function Detection() {
   const [detectionResult, setDetectionResult] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const [validationError, setValidationError] = useState(null);
+  const [rateLimitError, setRateLimitError] = useState(null);
 
   useEffect(() => {
     async function fetchHistory() {
@@ -50,20 +53,40 @@ function Detection() {
   };
 
   const handleTextChange = (e) => {
-    setText(e.target.value);
+    const newText = e.target.value;
+    setText(newText);
+    
+    // Clear previous errors when user types
+    setValidationError(null);
+    setRateLimitError(null);
+    
+    // Validate on change for immediate feedback
+    if (newText.length > CONSTRAINTS.message.maxLength) {
+      setValidationError(`Message exceeds ${CONSTRAINTS.message.maxLength} character limit`);
+    }
+    
     // Auto-expand when text grows
-    if (e.target.value.length > 50 && !isExpanded) {
+    if (newText.length > 50 && !isExpanded) {
       setIsExpanded(true);
-    } else if (e.target.value.length === 0) {
+    } else if (newText.length === 0) {
       setIsExpanded(false);
     }
   };
 
   const handleDetect = async () => {
     if (!text.trim() || isDetecting) return;
+    
+    // Client-side validation
+    const validation = validateMessage(text);
+    if (!validation.valid) {
+      setValidationError(validation.error);
+      return;
+    }
 
     setIsDetecting(true);
-    setDetectionResult(null); // Clear previous results
+    setDetectionResult(null);
+    setValidationError(null);
+    setRateLimitError(null);
     
     try {
       const result = await detectScamRequest(text);
@@ -71,7 +94,15 @@ function Detection() {
       setDetectionResult(result);
     } catch (error) {
       console.error('[DETECTION ERROR]', error);
-      alert(`Error: ${error.message || 'Failed to detect scam'}`);
+      
+      // Handle rate limiting gracefully
+      if (error.isRateLimited) {
+        setRateLimitError(`Too many requests. Please wait ${error.retryAfter} and try again.`);
+      } else if (error.isValidationError) {
+        setValidationError(error.message);
+      } else {
+        alert(`Error: ${error.message || 'Failed to detect scam'}`);
+      }
     } finally {
       setIsDetecting(false);
     }
@@ -81,7 +112,8 @@ function Detection() {
     setDetectionResult(null);
     setText('');
     setIsExpanded(false);
-    setVerificationResult(null);
+    setValidationError(null);
+    setRateLimitError(null);
   };
 
   const handleAnchor = async () => {
@@ -224,6 +256,18 @@ function Detection() {
                 Write the promo/message you want to analyze, or press the plus button to submit a file
               </p>
 
+              {/* Error messages */}
+              {validationError && (
+                <div className="detect__error detect__error--validation">
+                  {validationError}
+                </div>
+              )}
+              {rateLimitError && (
+                <div className="detect__error detect__error--ratelimit">
+                  {rateLimitError}
+                </div>
+              )}
+
               <div 
                 className={`detect__inputRow ${isFocused ? 'detect__inputRow--focused' : ''} ${isExpanded ? 'detect__inputRow--expanded' : ''}`}
               >
@@ -238,16 +282,24 @@ function Detection() {
                   onBlur={() => setIsFocused(false)}
                   placeholder="Paste suspicious message or email here..."
                   rows={1}
+                  maxLength={CONSTRAINTS.message.maxLength}
                 />
                 <button 
-                  className={`detect__cta ${text.trim() ? 'detect__cta--active' : ''}`}
+                  className={`detect__cta ${text.trim() && !validationError ? 'detect__cta--active' : ''}`}
                   type="button"
-                  disabled={!text.trim() || isDetecting}
+                  disabled={!text.trim() || isDetecting || validationError}
                   onClick={handleDetect}
                 >
                   {isDetecting ? 'Analyzing...' : 'Detect'}
                 </button>
               </div>
+              
+              {/* Character count */}
+              {text.length > 0 && (
+                <div className={`detect__charCount ${text.length > CONSTRAINTS.message.maxLength * 0.9 ? 'detect__charCount--warning' : ''}`}>
+                  {text.length} / {CONSTRAINTS.message.maxLength}
+                </div>
+              )}
             </>
           ) : (
             <div className="detect__results">

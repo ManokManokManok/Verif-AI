@@ -333,13 +333,34 @@ class GetAnchoredAnalysisUseCase:
         return result
 
 
+# Classification types mapping
+CLASSIFICATION_TYPES = {
+    -1: 'Legitimate',
+    0: 'Banking Access & Payment',
+    1: 'Financial and Investment',
+    2: 'Health and Wellness',
+    3: 'Impersonation and Authority',
+    4: 'International or Cross-Border',
+    5: 'Job, Business, and Work-from-Home',
+    6: 'Legal and Document',
+    7: 'Mobile and Digital',
+    8: 'Prize, Raffle & Reward',
+    9: 'Property & Rental',
+    10: 'Psychological, Urgency, & Emotional',
+    11: 'Romance, Dating, and Relationship',
+    12: 'Shopping and E-Commerce',
+    13: 'Tax, Banking, and Loan',
+    14: 'Tech and Online Account',
+}
+
+
 class ListAnalysesUseCase:
     """
     Use case for listing analysis results with filtering.
     
     Usage:
         use_case = ListAnalysesUseCase(repository)
-        results = use_case.execute(anchored_only=True, limit=20)
+        results = use_case.execute(filter_mode='anchored', page=1, limit=20, classification=5)
     """
     
     def __init__(self, repository: AnalysisResultRepository):
@@ -347,34 +368,80 @@ class ListAnalysesUseCase:
     
     def execute(
         self,
-        anchored_only: bool = False,
-        limit: int = 50
+        filter_mode: str = 'all',
+        page: int = 1,
+        limit: int = 50,
+        classification: Optional[int] = None,
+        anchored_only: bool = False  # Deprecated, kept for backward compatibility
     ) -> Dict[str, Any]:
         """
         List analysis results.
         
         Args:
-            anchored_only: If True, only return anchored analyses
-            limit: Maximum number of results
+            filter_mode: 'all', 'anchored', or 'pending'
+            page: Page number (1-indexed)
+            limit: Maximum number of results per page
+            classification: Filter by scam_class (0-14, -1 for legit, None for all)
+            anchored_only: Deprecated, use filter_mode='anchored' instead
             
         Returns:
             Dict with:
                 - analyses: List of analysis dicts
-                - total: int (total count of all analyses)
-                - total_anchored: int
+                - total: int (total count matching filter)
+                - total_anchored: int (total anchored count)
                 - count: int (count in current response)
+                - page: int (current page)
+                - limit: int (page size)
+                - classifications: List of available classification options
         """
-        analyses = self._repository.list_recent(limit=limit, anchored_only=anchored_only)
-        total_anchored = self._repository.count_anchored()
-        total = self._repository.count_all()
+        # Handle backward compatibility
+        if anchored_only and filter_mode == 'all':
+            filter_mode = 'anchored'
+        
+        # Get paginated results based on filter mode and classification
+        analyses = self._repository.list_with_filter(
+            filter_mode=filter_mode,
+            page=page,
+            limit=limit,
+            classification=classification
+        )
+        
+        # Get counts
+        total_anchored = self._repository.count_anchored(classification=classification)
+        total_all = self._repository.count_all(classification=classification)
+        total_pending = total_all - total_anchored
+        
+        # Get global counts (without classification filter) for stats
+        global_total_all = self._repository.count_all()
+        global_total_anchored = self._repository.count_anchored()
+        
+        # Determine total count based on filter
+        if filter_mode == 'anchored':
+            total = total_anchored
+        elif filter_mode == 'pending':
+            total = total_pending
+        else:
+            total = total_all
+        
+        # Get distinct classifications in the database for filter options
+        available_classifications = self._repository.get_distinct_classifications()
+        classification_options = [
+            {'value': cls, 'label': CLASSIFICATION_TYPES.get(cls, f'Unknown ({cls})')}
+            for cls in sorted(available_classifications)
+        ]
         
         return {
             'analyses': [a.to_dict() for a in analyses],
             'total': total,
+            'total_all': global_total_all,
             'count': len(analyses),
-            'total_anchored': total_anchored,
+            'total_anchored': global_total_anchored,
+            'page': page,
+            'limit': limit,
             'filters': {
-                'anchored_only': anchored_only,
+                'status': filter_mode,
+                'classification': classification,
                 'limit': limit
-            }
+            },
+            'classifications': classification_options
         }

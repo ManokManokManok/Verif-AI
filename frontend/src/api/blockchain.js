@@ -67,13 +67,15 @@ export async function getBlockchainStatus() {
  * @param {number} params.page - Page number (default: 1)
  * @param {number} params.limit - Items per page (default: 20)
  * @param {string} params.status - Filter by status: 'anchored', 'pending', 'all'
- * @returns {Promise<{analyses: Array, total: number, page: number, limit: number}>}
+ * @param {number|string} params.classification - Filter by classification (scam_class), or 'all'
+ * @returns {Promise<{analyses: Array, total: number, page: number, limit: number, classifications: Array}>}
  */
-export async function listAnalyses({ page = 1, limit = 20, status = 'all' } = {}) {
+export async function listAnalyses({ page = 1, limit = 20, status = 'all', classification = 'all' } = {}) {
   const params = new URLSearchParams({
     page: String(page),
     limit: String(limit),
     ...(status !== 'all' && { status }),
+    ...(classification !== 'all' && classification !== null && { classification: String(classification) }),
   });
   return apiRequest(`/blockchain/analyses/?${params}`);
 }

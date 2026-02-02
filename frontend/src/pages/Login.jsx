@@ -2,6 +2,26 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+/**
+ * Format error message for display.
+ * Handles both string errors and structured validation errors.
+ * 
+ * @param {string|object} error - Error message or validation errors object
+ * @returns {string[]} Array of error messages
+ */
+function parseErrors(error) {
+  if (!error) return [];
+  if (typeof error === 'string') {
+    // Split by periods and filter empty entries
+    return error.split('. ').filter(Boolean);
+  }
+  if (typeof error === 'object') {
+    // Handle structured validation errors { field: [errors] }
+    return Object.values(error).flat().filter(Boolean);
+  }
+  return [String(error)];
+}
+
 function EyeIcon({ slashed }) {
   return (
     <svg
@@ -59,6 +79,10 @@ function Login() {
       setLoading(false);
     }
   };
+
+  // Parse error message into list for multi-error display
+  const errorList = parseErrors(error);
+  const hasMultipleErrors = errorList.length > 1;
 
   return (
     <div className="auth auth--login">
@@ -139,7 +163,19 @@ function Login() {
             </button>
           </div>
 
-          {error && <p className="auth__error">{error}</p>}
+          {error && (
+            <div className="auth__error-container">
+              {hasMultipleErrors ? (
+                <ul className="auth__error-list">
+                  {errorList.map((err, index) => (
+                    <li key={index} className="auth__error-item">{err}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="auth__error">{error}</p>
+              )}
+            </div>
+          )}
 
           <button type="submit" className="auth__primary">
             {loading ? 'Logging in…' : 'Login'}
