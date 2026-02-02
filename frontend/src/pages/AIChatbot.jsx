@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import chatHistoryData from '../mock_chat_history.json';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,7 +28,7 @@ function AIChatbot() {
         </button>
       </aside>
 
-      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
+      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,0,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
         <header className="nav nav--detect">
           <div className="brand brand--small">
             [INSERT LOGO / Verif-AI] Fraud Detection
