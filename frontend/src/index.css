@@ -91,6 +91,9 @@ button {
 .brand {
   font-size: 28px;
   font-weight: 700;
+  width: 300px;
+  min-width: 300px;
+  flex-shrink: 0;
 }
 
 .nav__links {
@@ -178,8 +181,15 @@ button {
 }
 
 .nav--detect {
-  background: transparent;
-  padding: 24px 40px 0;
+  height: 80px;
+  background: #111827;
+  padding: 0 110px;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  width: 100vw;
 }
 
 .brand--small {
@@ -281,15 +291,6 @@ button {
 .carousel__dot--active {
   width: 18px;
   background: #111827;
-}
-
-.admin-btn {
-  margin-top: 32px;
-  align-self: flex-start;
-  padding: 14px 28px;
-  border-radius: 8px;
-  background: #111827;
-  color: #f9fafb;
 }
 
 .landing__title {

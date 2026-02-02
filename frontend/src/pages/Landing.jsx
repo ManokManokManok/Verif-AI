@@ -40,7 +40,7 @@ const CAROUSEL_SLIDES = [
 
 function Landing() {
   const navigate = useNavigate();
-  const { isLoggedIn, isAdmin, logout, user } = useAuth();
+  const { isLoggedIn, logout, user } = useAuth();
   const swiperRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [textAnimClass, setTextAnimClass] = useState('');
@@ -52,24 +52,6 @@ function Landing() {
     await logout();
     setShowUserMenu(false);
     navigate('/');
-  };
-
-  // Handle admin button click
-  const handleAdminClick = () => {
-    if (!isLoggedIn) {
-      // Redirect to login if not logged in
-      navigate('/login');
-      return;
-    }
-    
-    if (!isAdmin) {
-      // Show error or redirect if not admin
-      alert('Admin access required. Please log in with an admin account.');
-      return;
-    }
-    
-    // Navigate to blockchain/admin page
-    navigate('/blockchain');
   };
 
   // Click left/right overlay to navigate
@@ -116,8 +98,8 @@ function Landing() {
         <div className="brand">VerifAI</div>
         <nav className="nav__links">
           <button className="nav__link nav__btn" type="button">About us</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}>Detection</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate(isLoggedIn ? '/chatbot' : '/login')}>AI Chatbot</button>
         </nav>
         
         {isLoggedIn ? (
@@ -138,15 +120,6 @@ function Landing() {
                 >
                   Dashboard
                 </button>
-                {isAdmin && (
-                  <button 
-                    className="nav__dropdown-item nav__dropdown-item--admin" 
-                    type="button"
-                    onClick={() => { navigate('/blockchain'); setShowUserMenu(false); }}
-                  >
-                    Admin Panel
-                  </button>
-                )}
                 <button 
                   className="nav__dropdown-item nav__dropdown-item--logout" 
                   type="button"
@@ -201,9 +174,6 @@ function Landing() {
               onClick={() => swiperRef.current && swiperRef.current.slideNext()}
             />
           </div>
-          <button className="admin-btn" type="button" onClick={handleAdminClick}>
-            ADMIN
-          </button>
         </section>
 
         <section className="landing__right">
