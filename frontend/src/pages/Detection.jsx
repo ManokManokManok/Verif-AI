@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react';
-import { getChatHistory } from '../api/client';
-import { getAnalysisDetail } from '../api/analysis';
-import mockChatHistory from '../mock_chat_history.json';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { detectScamRequest } from '../api/client';
-import { useAuth } from '../context/AuthContext';
-import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
+import { getAnalysisDetail } from '../api/analysis';
 import { anchorAnalysis, verifyAnalysis } from '../api/blockchain';
+import { detectScamRequest, getChatHistory } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import mockChatHistory from '../mock_chat_history.json';
+import { CONSTRAINTS, validateMessage } from '../utils/validation';
 
 function Detection() {
   const navigate = useNavigate();
@@ -210,7 +209,7 @@ function Detection() {
         )}
       </aside>
 
-      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
+      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,0,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
         <header className="nav nav--detect">
           <div className="brand brand--small">[INSERT LOGO / Verif-AI] Fraud Detection</div>
           <nav className="nav__links">

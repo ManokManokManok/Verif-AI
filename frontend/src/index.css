@@ -185,14 +185,17 @@ button {
 .nav--detect {
   height: 80px;
   background: #111827;
-  padding: 0 110px;
-  position: relative;
-  left: 50%;
-  right: 50%;
-  margin-left: -50vw;
-  margin-right: -50vw;
-  width: 100vw;
+  padding: 0 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin-left: -90px;
+  width: 110%;
 }
+
 
 .brand--small {
   font-size: 18px;
@@ -578,7 +581,7 @@ button {
 .detect__sidebtn {
   width: 54px;
   height: 54px;
-  border-radius: 999px;
+  border-radius: 99px;
   background: #2c66c3;
   color: #0b1020;
   font-weight: 800;
@@ -587,6 +590,7 @@ button {
   box-shadow: 0 16px 35px rgba(0, 0, 0, 0.35);
   transition: all 0.2s ease-in-out;
   flex-shrink: 0;
+  z-index: 50; 
 }
 
 .detect__sidebtn:hover {
