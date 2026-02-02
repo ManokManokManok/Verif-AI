@@ -167,7 +167,7 @@ function Detection() {
   };
 
   return (
-    <div className="detect">
+    <div className="detect" style={{ height: '100vh', overflow: 'visible' }}>
       <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
         <button
           className="detect__sidebtn detect__sidebtn--menu"
