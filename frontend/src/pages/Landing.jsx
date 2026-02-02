@@ -95,33 +95,33 @@ function Landing() {
   return (
     <div className="page page--landing">
       <header className="nav">
-        <div className="brand">VerifAI</div>
+        <div className="brand">Verif-AI</div>
         <nav className="nav__links">
           <button className="nav__link nav__btn" type="button">About us</button>
           <button className="nav__link nav__btn" type="button" onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}>Detection</button>
           <button className="nav__link nav__btn" type="button" onClick={() => navigate(isLoggedIn ? '/chatbot' : '/login')}>AI Chatbot</button>
         </nav>
-        
+
         {isLoggedIn ? (
           <div className="nav__user-menu" onClick={(e) => e.stopPropagation()}>
-            <button 
-              className="nav__login" 
-              type="button" 
+            <button
+              className="nav__login"
+              type="button"
               onClick={() => setShowUserMenu(!showUserMenu)}
             >
               {user?.username || user?.email || 'Profile'}
             </button>
             {showUserMenu && (
               <div className="nav__dropdown">
-                <button 
-                  className="nav__dropdown-item" 
+                <button
+                  className="nav__dropdown-item"
                   type="button"
                   onClick={() => { navigate('/detection'); setShowUserMenu(false); }}
                 >
                   Dashboard
                 </button>
-                <button 
-                  className="nav__dropdown-item nav__dropdown-item--logout" 
+                <button
+                  className="nav__dropdown-item nav__dropdown-item--logout"
                   type="button"
                   onClick={handleLogout}
                 >
@@ -131,9 +131,9 @@ function Landing() {
             )}
           </div>
         ) : (
-          <button 
-            className="nav__login" 
-            type="button" 
+          <button
+            className="nav__login"
+            type="button"
             onClick={() => navigate('/login')}
           >
             Login/Signup
