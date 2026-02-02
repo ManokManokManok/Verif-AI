@@ -8,24 +8,6 @@ function AIChatbot() {
   const { isLoggedIn, logout, user } = useAuth();
   const [text, setText] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [chatHistory, setChatHistory] = useState([]);
-
-  // Redirect to login if not logged in
-  useEffect(() => {
-    if (!isLoggedIn) {
-      navigate('/login', { replace: true });
-    }
-  }, [isLoggedIn, navigate]);
-
-  useEffect(() => {
-    // Simulate fetching chat history from backend
-    setChatHistory(chatHistoryData);
-  }, []);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/');
-  };
 
   return (
     <div className="detect">
@@ -38,37 +20,19 @@ function AIChatbot() {
         >
           {sidebarOpen ? '✕' : '☰'}
         </button>
-        {sidebarOpen && (
-          <div className="detect__chat-history">
-            <div className="detect__chat-title">Chat History</div>
-            <div className="detect__chat-list">
-              {chatHistory.map((chat) => (
-                <div className="detect__chat-item" key={chat.id}>
-                  <div className="detect__chat-item-title">{chat.title}</div>
-                  <div className="detect__chat-item-preview">{chat.description}</div>
-                  <div className="detect__chat-item-time">{chat.timestamp}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {!sidebarOpen && (
-          <>
-            <button className="detect__sidebtn" type="button" aria-label="Edit">
-              ✎
-            </button>
-            <div className="detect__spacer" />
-            <button className="detect__sidebtn" type="button" aria-label="Settings">
-              ⚙
-            </button>
-          </>
-        )}
+        <button className="detect__sidebtn" type="button" aria-label="Edit">
+          ✎
+        </button>
+        <div className="detect__spacer" />
+        <button className="detect__sidebtn" type="button" aria-label="Settings">
+          ⚙
+        </button>
       </aside>
 
       <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
         <header className="nav nav--detect">
           <div className="brand brand--small">
-            [INSERT LOGO / Verf AI] Fraud Detection
+            [INSERT LOGO / Verif-AI] Fraud Detection
           </div>
           <nav className="nav__links">
             <button
@@ -98,7 +62,7 @@ function AIChatbot() {
               <button
                 className="nav__login"
                 type="button"
-                onClick={handleLogout}
+                onClick={async () => { await logout(); navigate('/'); }}
               >
                 Logout
               </button>
@@ -115,7 +79,7 @@ function AIChatbot() {
         </header>
 
         <main className="detect__content">
-          <h1 className="detect__title">Welcome to VerfAI Guidance</h1>
+          <h1 className="detect__title">Welcome to Verif-AI Guidance</h1>
           <p className="detect__subtitle">What do you need help with?</p>
 
           <div className="detect__inputRow">

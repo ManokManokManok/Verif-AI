@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { detectScamRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
+import { anchorAnalysis, verifyAnalysis } from '../api/blockchain';
 
 function Detection() {
   const navigate = useNavigate();
@@ -19,6 +20,9 @@ function Detection() {
   const [chatHistory, setChatHistory] = useState([]);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
+  const [isAnchoring, setIsAnchoring] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
 
   // Redirect to login if not logged in
   useEffect(() => {
@@ -208,7 +212,7 @@ function Detection() {
 
       <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
         <header className="nav nav--detect">
-          <div className="brand brand--small">[INSERT LOGO / Verf AI] Fraud Detection</div>
+          <div className="brand brand--small">[INSERT LOGO / Verif-AI] Fraud Detection</div>
           <nav className="nav__links">
             <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>
               About us
@@ -247,13 +251,13 @@ function Detection() {
         </header>
 
         <main className="detect__content">
+          <h1 className="detect__title">Welcome to Verif-AI Fraud Detection</h1>
+          <p className="detect__subtitle">
+            Write the promo/message you want to analyze, or press the plus button to submit a file
+          </p>
+
           {!detectionResult ? (
             <>
-              <h1 className="detect__title">Welcome to VerfAI fraud detection</h1>
-              <p className="detect__subtitle">
-                Write the promo/message you want to analyze, or press the plus button to submit a file
-              </p>
-
               {/* Error messages */}
               {validationError && (
                 <div className="detect__error detect__error--validation">
@@ -266,7 +270,7 @@ function Detection() {
                 </div>
               )}
 
-              <div 
+              <div
                 className={`detect__inputRow ${isFocused ? 'detect__inputRow--focused' : ''} ${isExpanded ? 'detect__inputRow--expanded' : ''}`}
               >
                 <button className="detect__plus" type="button" aria-label="Upload">
@@ -282,16 +286,16 @@ function Detection() {
                   rows={1}
                   maxLength={CONSTRAINTS.message.maxLength}
                 />
-                <button 
+                <button
                   className={`detect__cta ${text.trim() && !validationError ? 'detect__cta--active' : ''}`}
                   type="button"
-                  disabled={!text.trim() || isDetecting || validationError}
+                  disabled={!text.trim() || isDetecting || !!validationError}
                   onClick={handleDetect}
                 >
                   {isDetecting ? 'Analyzing...' : 'Detect'}
                 </button>
               </div>
-              
+
               {/* Character count */}
               {text.length > 0 && (
                 <div className={`detect__charCount ${text.length > CONSTRAINTS.message.maxLength * 0.9 ? 'detect__charCount--warning' : ''}`}>
@@ -303,8 +307,8 @@ function Detection() {
             <div className="detect__results">
               <div className="detect__resultsHeader">
                 <h2 className="detect__resultsTitle">Analysis Results</h2>
-                <button 
-                  className="detect__newAnalysis" 
+                <button
+                  className="detect__newAnalysis"
                   type="button"
                   onClick={handleNewAnalysis}
                 >
@@ -317,7 +321,7 @@ function Detection() {
                 <div className="detect__resultCard detect__resultCard--summary">
                   <h3 className="detect__cardTitle">Summary</h3>
                   <p className="detect__summary">{detectionResult.summary}</p>
-                  
+
                   <h4 className="detect__cardSubtitle">Analyzed Message:</h4>
                   <div className="detect__originalMessage">
                     {detectionResult.message}
@@ -329,11 +333,11 @@ function Detection() {
                   <h3 className="detect__cardTitle">Scam Likelihood</h3>
                   <div className="detect__graph">
                     <div className="detect__graphBar">
-                      <div 
+                      <div
                         className="detect__graphFill detect__graphFill--scam"
                         style={{ width: `${detectionResult.scam_score}%` }}
                       />
-                      <div 
+                      <div
                         className="detect__graphFill detect__graphFill--legit"
                         style={{ width: `${detectionResult.legit_score}%` }}
                       />
@@ -349,7 +353,7 @@ function Detection() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="detect__verdict">
                     <span className={`detect__verdictLabel ${detectionResult.is_scam ? 'detect__verdictLabel--scam' : 'detect__verdictLabel--legit'}`}>
                       {detectionResult.label}
@@ -360,7 +364,7 @@ function Detection() {
                 {/* Right Column: Percentages & Key Factors */}
                 <div className="detect__resultCard detect__resultCard--details">
                   <h3 className="detect__cardTitle">Details</h3>
-                  
+
                   {detectionResult.is_scam && (
                     <div className="detect__scamType">
                       <div className="detect__detailLabel">Scam Type:</div>
@@ -400,5 +404,3 @@ function Detection() {
 }
 
 export default Detection;
-
-
