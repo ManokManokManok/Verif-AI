@@ -1,0 +1,429 @@
+"""
+Chatbot API Views
+
+REST API endpoints for chatbot interactions.
+"""
+
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+import logging
+
+from ...use_cases.chatbot import GeneralChatbotUseCase
+from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
+from ...infrastructure.mongodb.conversation_repository import ConversationRepository
+from ...infrastructure.ai.loaders import load_gemma_model
+from ...infrastructure.rate_limiter import rate_limit
+from ...infrastructure.validators import sanitize_for_logging
+
+
+logger = logging.getLogger(__name__)
+security_logger = logging.getLogger('security')
+
+# In-memory storage for anonymous user conversations (session-based)
+# Format: {session_id: [{"role": "user", "content": "..."}, ...]}
+_anonymous_conversations = {}
+
+
+def get_conversation_repository():
+    """Get conversation repository instance."""
+    client = get_mongo_client()
+    db_name = get_database_name()
+    return ConversationRepository(client, db_name)
+
+
+def get_chatbot_use_case():
+    """Get general chatbot use case instance."""
+    llm = load_gemma_model()
+    
+    if llm is None:
+        raise RuntimeError("Gemma LLM not loaded. Chatbot is unavailable.")
+    
+    conversation_repo = get_conversation_repository()
+    return GeneralChatbotUseCase(llm, conversation_repo)
+
+
+def _get_session_id(request: Request) -> str:
+    """
+    Get or create a session ID for anonymous users.
+    Uses custom header or creates a simple identifier.
+    """
+    # Check for custom session header
+    session_id = request.headers.get('X-Session-ID')
+    
+    if not session_id:
+        # Fallback: use IP address as session identifier
+        # In production, you might want to use Django sessions or cookies
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR', 'unknown')
+        session_id = f"anon_{ip}"
+    
+    return session_id
+
+
+def _handle_anonymous_chat(request: Request, message: str) -> dict:
+    """
+    Handle chat for anonymous (non-authenticated) users.
+    Uses in-memory storage that doesn't persist.
+    """
+    from ...use_cases.chatbot.general_chatbot import GENERAL_CHATBOT_SYSTEM_PROMPT
+    
+    session_id = _get_session_id(request)
+    logger.info(f"[CHATBOT] Anonymous session: {session_id}")
+    
+    # Get or create conversation history for this session
+    if session_id not in _anonymous_conversations:
+        _anonymous_conversations[session_id] = []
+        logger.info(f"[CHATBOT] Created new anonymous conversation for {session_id}")
+    
+    conversation_history = _anonymous_conversations[session_id]
+    
+    # Add user message
+    conversation_history.append({
+        "role": "user",
+        "content": message
+    })
+    
+    # Build messages for LLM
+    llm_messages = [
+        {"role": "system", "content": GENERAL_CHATBOT_SYSTEM_PROMPT}
+    ] + conversation_history
+    
+    # Limit conversation length for anonymous users (prevent memory bloat)
+    MAX_ANONYMOUS_MESSAGES = 20
+    if len(conversation_history) > MAX_ANONYMOUS_MESSAGES:
+        # Keep only recent messages
+        conversation_history = conversation_history[-MAX_ANONYMOUS_MESSAGES:]
+        _anonymous_conversations[session_id] = conversation_history
+        logger.info(f"[CHATBOT] Trimmed anonymous conversation to {MAX_ANONYMOUS_MESSAGES} messages")
+    
+    try:
+        # Generate response
+        llm = load_gemma_model()
+        if llm is None:
+            raise RuntimeError("Gemma LLM not loaded")
+        
+        response = llm.create_chat_completion(
+            messages=llm_messages,
+            max_tokens=500,
+            temperature=0.7,
+            stop=["<|im_start|>", "<|end|>", "<end>"]
+        )
+        
+        assistant_reply = response["choices"][0]["message"]["content"].strip()
+        
+        # Clean up stop tokens
+        for token in ["<|im_start|>", "<|end|>", "<end>", "end|", "<|end", "<end|"]:
+            assistant_reply = assistant_reply.replace(token, "").strip()
+        
+        # Fallback if empty
+        if not assistant_reply or len(assistant_reply) < 10:
+            assistant_reply = (
+                "I'm here to help you stay safe from scams! "
+                "Feel free to ask me about common scam types, red flags to watch for, "
+                "or what to do if you suspect you've encountered a scam."
+            )
+        
+        logger.info(f"[CHATBOT] Anonymous response: {assistant_reply[:100]}...")
+        
+    except Exception as e:
+        logger.error(f"[CHATBOT] Error generating anonymous response: {str(e)}", exc_info=True)
+        assistant_reply = (
+            "I apologize, but I'm having trouble processing your message right now. "
+            "Please try again in a moment."
+        )
+    
+    # Add assistant reply to history
+    conversation_history.append({
+        "role": "assistant",
+        "content": assistant_reply
+    })
+    
+    return {
+        "response": assistant_reply,
+        "message_count": len(conversation_history),
+        "session_id": session_id  # Return session_id so client can maintain it
+    }
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])  # Allow both authenticated and anonymous users
+@rate_limit('api_write')
+def send_message(request: Request) -> Response:
+    """
+    Send a message to the general chatbot.
+    
+    POST /api/chat/message
+    
+    Request body:
+    {
+        "message": "How do I spot a phishing email?"
+    }
+    
+    Response (Authenticated):
+    {
+        "response": "Great question! Here are key signs...",
+        "conversation_id": "mongodb_id",
+        "message_count": 4,
+        "is_authenticated": true
+    }
+    
+    Response (Anonymous):
+    {
+        "response": "Great question! Here are key signs...",
+        "message_count": 2,
+        "is_authenticated": false,
+        "disclaimer": "Thank you for trying out our guidance mode! Since you are not logged in, this conversation will not be saved and may be limited, but still feel free to continue conversing."
+    }
+    
+    Security:
+    - Works for both authenticated and anonymous users
+    - Rate limited (api_write: 30 requests per minute)
+    - Input validation and length limits
+    - Anonymous conversations are NOT saved to database
+    """
+    try:
+        # Extract user_id from JWT (optional)
+        user_id = None
+        is_authenticated = False
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                from ...infrastructure.jwt_service import JWTService
+                import os
+                secret_key = os.getenv('JWT_SECRET_KEY')
+                jwt_service = JWTService(secret_key, 900, 604800, None)
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+                is_authenticated = True
+                logger.info(f"[CHATBOT] Authenticated user: {user_id}")
+            except Exception as jwt_error:
+                logger.warning(f"[CHATBOT] Invalid/expired token: {jwt_error}")
+        
+        if not is_authenticated:
+            logger.info("[CHATBOT] Anonymous user detected")
+        
+        # Validate message
+        message = request.data.get('message', '').strip()
+        
+        if not message:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Message is required',
+                    'details': {'message': 'This field is required'}
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if len(message) > 2000:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Message is too long',
+                    'details': {'message': 'Maximum 2000 characters allowed'}
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Log sanitized message
+        user_label = user_id if user_id else "anonymous"
+        logger.info(f"[CHATBOT] User {user_label} message: {sanitize_for_logging(message, 100)}")
+        
+        # For anonymous users: Use in-memory conversation (not saved to DB)
+        if not is_authenticated:
+            result = _handle_anonymous_chat(request, message)
+            # Add disclaimer to first message
+            if result.get('message_count', 0) <= 2:  # First exchange
+                result['disclaimer'] = (
+                    "Thank you for trying out our guidance mode! Since you are not logged in, "
+                    "this conversation will not be saved and may be limited, but still feel free "
+                    "to continue conversing."
+                )
+            result['is_authenticated'] = False
+            return Response(result, status=status.HTTP_200_OK)
+        
+        # For authenticated users: Save to database
+        chatbot = get_chatbot_use_case()
+        result = chatbot.send_message(user_id, message)
+        result['is_authenticated'] = True
+        
+        return Response(result, status=status.HTTP_200_OK)
+        
+    except RuntimeError as e:
+        # LLM not loaded
+        logger.error(f"[CHATBOT] LLM not available: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'SERVICE_UNAVAILABLE',
+                'message': 'Chatbot is currently unavailable. Please try again later.'
+            }
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    
+    except Exception as e:
+        logger.error(f"[CHATBOT] Error processing message: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@rate_limit('api_read')
+def get_history(request: Request) -> Response:
+    """
+    Get user's general chatbot conversation history.
+    
+    GET /api/chat/history
+    
+    Response (Authenticated):
+    {
+        "conversation_id": "mongodb_id",
+        "messages": [...],
+        "created_at": "2026-02-01T15:00:00Z",
+        "updated_at": "2026-02-02T10:30:05Z",
+        "is_authenticated": true
+    }
+    
+    Response (Anonymous):
+    {
+        "messages": [...],
+        "is_authenticated": false,
+        "note": "Anonymous conversations are not saved"
+    }
+    
+    Security:
+    - Works for both authenticated and anonymous users
+    - Rate limited (api_read category)
+    - Anonymous users get session-based history only
+    """
+    try:
+        # Extract user_id from JWT (optional)
+        user_id = None
+        is_authenticated = False
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                from ...infrastructure.jwt_service import JWTService
+                import os
+                secret_key = os.getenv('JWT_SECRET_KEY')
+                jwt_service = JWTService(secret_key, 900, 604800, None)
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+                is_authenticated = True
+            except Exception as jwt_error:
+                logger.warning(f"[CHATBOT] Invalid/expired token: {jwt_error}")
+        
+        # For anonymous users: Return session-based history
+        if not is_authenticated:
+            session_id = _get_session_id(request)
+            conversation_history = _anonymous_conversations.get(session_id, [])
+            
+            return Response({
+                'messages': conversation_history,
+                'is_authenticated': False,
+                'note': 'Anonymous conversations are not saved'
+            }, status=status.HTTP_200_OK)
+        
+        # For authenticated users: Get saved conversation
+        chatbot = get_chatbot_use_case()
+        history = chatbot.get_conversation_history(user_id)
+        history['is_authenticated'] = True
+        
+        return Response(history, status=status.HTTP_200_OK)
+        
+    except RuntimeError as e:
+        logger.error(f"[CHATBOT] LLM not available: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'SERVICE_UNAVAILABLE',
+                'message': 'Chatbot is currently unavailable'
+            }
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    
+    except Exception as e:
+        logger.error(f"[CHATBOT] Error fetching history: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+@rate_limit('api_write')
+def clear_history(request: Request) -> Response:
+    """
+    Clear user's general chatbot conversation (start fresh).
+    
+    DELETE /api/chat/history
+    
+    Response:
+    {
+        "message": "Conversation cleared successfully"
+    }
+    
+    Security:
+    - Works for both authenticated and anonymous users
+    - Rate limited
+    """
+    try:
+        # Extract user_id from JWT (optional)
+        user_id = None
+        is_authenticated = False
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                from ...infrastructure.jwt_service import JWTService
+                import os
+                secret_key = os.getenv('JWT_SECRET_KEY')
+                jwt_service = JWTService(secret_key, 900, 604800, None)
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+                is_authenticated = True
+            except Exception as jwt_error:
+                logger.warning(f"[CHATBOT] Invalid/expired token: {jwt_error}")
+        
+        # For anonymous users: Clear session-based history
+        if not is_authenticated:
+            session_id = _get_session_id(request)
+            if session_id in _anonymous_conversations:
+                del _anonymous_conversations[session_id]
+                logger.info(f"[CHATBOT] Cleared anonymous conversation for {session_id}")
+            
+            return Response({
+                'message': 'Conversation cleared successfully'
+            }, status=status.HTTP_200_OK)
+        
+        # Clear conversation
+        chatbot = get_chatbot_use_case()
+        success = chatbot.clear_conversation(user_id)
+        
+        if success:
+            return Response({
+                'message': 'Conversation cleared successfully'
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'message': 'No conversation to clear'
+            }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"[CHATBOT] Error clearing history: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
