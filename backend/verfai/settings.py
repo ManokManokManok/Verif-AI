@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'src.apps.core',
     'src.apps.auth',
+    'src.apps.chatbot',
 ]
 
 MIDDLEWARE = [
@@ -105,6 +106,19 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-session-id',
+]
 
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
