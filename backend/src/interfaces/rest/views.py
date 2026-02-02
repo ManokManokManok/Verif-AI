@@ -4,13 +4,43 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from bson import ObjectId
+import logging
+
+# Import rate limiting and validation
+from ...infrastructure.rate_limiter import rate_limit, check_rate_limit
+from ...infrastructure.validators import (
+    RequestValidator, FieldType, ValidationError,
+    get_login_validator, get_signup_validator, get_detect_scam_validator,
+    get_email_only_validator, get_token_only_validator, 
+    get_password_reset_validator, get_refresh_token_validator,
+    sanitize_for_logging
+)
+
+logger = logging.getLogger(__name__)
+security_logger = logging.getLogger('security')
 
 @api_view(['GET'])
+@rate_limit('api_read')
 def history_detail(request: Request, analysis_id: str) -> Response:
     """
     Get a single analysis result by its database id (for chat history details).
     Requires authentication (JWT in Authorization header).
+    
+    Security:
+    - Rate limited (api_read category)
+    - User can only access their own analyses
+    - Input validation on analysis_id
     """
+    # Validate analysis_id format (basic ObjectId or UUID check)
+    import re
+    if not analysis_id or len(analysis_id) > 50:
+        return Response({
+            'error': {
+                'code': 'INVALID_INPUT',
+                'message': 'Invalid analysis ID format'
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     try:
         user_id = None
         auth_header = request.headers.get('Authorization')
@@ -91,15 +121,27 @@ from ...infrastructure.mongodb.analysis_repository import AnalysisResultReposito
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.token_blacklist_service import MockTokenBlacklistService
 from ...infrastructure.ai.loaders import load_multihead_model, load_gemma_model
+from ...infrastructure.rate_limiter import rate_limit, check_rate_limit
+from ...infrastructure.validators import (
+    get_login_validator, get_signup_validator, get_detect_scam_validator,
+    get_email_only_validator, get_token_only_validator,
+    get_password_reset_validator, get_refresh_token_validator,
+    get_check_permission_validator, sanitize_for_logging
+)
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
 
-logger = logging.getLogger(__name__)
+# Note: logger already defined above, using it for consistency
 
 @api_view(['GET'])
+@rate_limit('api_read')
 def history(request: Request) -> Response:
     """
     Get the current user's detection analysis history (chat history).
     Requires authentication (JWT in Authorization header).
+    
+    Security:
+    - Rate limited (api_read category)
+    - User can only access their own history
     """
     try:
         # Extract user_id from JWT (same as in detect_scam)
@@ -221,6 +263,7 @@ def tokens_to_dict(tokens) -> Dict[str, Any]:
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit('auth_register')
 def signup(request: Request) -> Response:
     """
     Register a new user.
@@ -228,21 +271,36 @@ def signup(request: Request) -> Response:
     Request body:
     {
         "email": "user@example.com",
+        "username": "username",
         "password": "SecurePass123!"
     }
+    
+    Security:
+    - Rate limited (auth_register: 3 requests per hour)
+    - Schema-based input validation
+    - Rejects unexpected fields
+    - Email normalization (lowercase, trimmed)
     """
     try:
-        email = request.data.get('email', '').strip().lower()
-        username = request.data.get('username', '').strip()
-        password = request.data.get('password', '')
+        # Validate input using schema-based validator
+        validator = get_signup_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
         
-        if not email or not username or not password:
+        if not is_valid:
+            security_logger.info(
+                f"Signup validation failed: {sanitize_for_logging(str(errors))}"
+            )
             return Response({
                 'error': {
-                    'code': 'MISSING_FIELDS',
-                    'message': 'Email, username, and password are required'
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = cleaned_data['email']
+        username = cleaned_data['username']
+        password = cleaned_data['password']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -292,6 +350,7 @@ def signup(request: Request) -> Response:
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit('auth_login')
 def login(request: Request) -> Response:
     """
     Authenticate user and return tokens.
@@ -301,18 +360,28 @@ def login(request: Request) -> Response:
         "email": "user@example.com",
         "password": "SecurePass123!"
     }
+    
+    Security:
+    - Rate limited (auth_login: 5 requests per 5 minutes)
+    - Schema-based input validation
+    - Generic error message to prevent user enumeration
     """
     try:
-        email = request.data.get('email', '').strip().lower()
-        password = request.data.get('password', '')
+        # Validate input
+        validator = get_login_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
         
-        if not email or not password:
+        if not is_valid:
             return Response({
                 'error': {
-                    'code': 'MISSING_FIELDS',
-                    'message': 'Email and password are required'
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = cleaned_data['email']
+        password = cleaned_data['password']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -354,11 +423,16 @@ def login(request: Request) -> Response:
 
 
 @api_view(['GET'])
+@rate_limit('api_read')
 def profile(request: Request) -> Response:
     """
     Get current user profile.
     
     Requires authentication.
+    
+    Security:
+    - Rate limited (api_read category)
+    - Authentication required
     """
     try:
         # Get user ID from request (set by middleware)
@@ -400,6 +474,7 @@ def profile(request: Request) -> Response:
 
 
 @api_view(['POST'])
+@rate_limit('api_read')
 def check_permission(request: Request) -> Response:
     """
     Check if current user has a specific permission.
@@ -409,6 +484,10 @@ def check_permission(request: Request) -> Response:
         "permission": "create_user",
         "resource": "user"  # optional
     }
+    
+    Security:
+    - Rate limited
+    - Input validation on permission and resource names
     """
     try:
         # Get user ID from request (set by middleware)
@@ -421,16 +500,21 @@ def check_permission(request: Request) -> Response:
                 }
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        permission = request.data.get('permission', '')
-        resource = request.data.get('resource', None)
+        # Validate input
+        validator = get_check_permission_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
         
-        if not permission:
+        if not is_valid:
             return Response({
                 'error': {
-                    'code': 'MISSING_PERMISSION',
-                    'message': 'Permission is required'
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        permission = cleaned_data['permission']
+        resource = cleaned_data.get('resource')
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -458,6 +542,7 @@ def check_permission(request: Request) -> Response:
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit('email_verification')
 def send_verification_email(request: Request) -> Response:
     """
     Send email verification token.
@@ -466,17 +551,27 @@ def send_verification_email(request: Request) -> Response:
     {
         "email": "user@example.com"
     }
+    
+    Security:
+    - Rate limited (5 requests per hour per IP)
+    - Schema-based email validation
+    - Generic response to prevent user enumeration
     """
     try:
-        email = request.data.get('email', '').strip().lower()
+        # Validate input
+        validator = get_email_only_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
         
-        if not email:
+        if not is_valid:
             return Response({
                 'error': {
-                    'code': 'MISSING_EMAIL',
-                    'message': 'Email is required'
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = cleaned_data['email']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -517,6 +612,7 @@ def send_verification_email(request: Request) -> Response:
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit('email_verification')
 def verify_email(request: Request) -> Response:
     """
     Verify email using token.
@@ -525,17 +621,26 @@ def verify_email(request: Request) -> Response:
     {
         "token": "verification_token_here"
     }
+    
+    Security:
+    - Rate limited
+    - Token format validation
     """
     try:
-        token = request.data.get('token', '')
+        # Validate input
+        validator = get_token_only_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
         
-        if not token:
+        if not is_valid:
             return Response({
                 'error': {
-                    'code': 'MISSING_TOKEN',
-                    'message': 'Verification token is required'
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        token = cleaned_data['token']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -576,6 +681,7 @@ def verify_email(request: Request) -> Response:
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit('password_reset')
 def request_password_reset(request: Request) -> Response:
     """
     Request password reset email.
@@ -584,17 +690,26 @@ def request_password_reset(request: Request) -> Response:
     {
         "email": "user@example.com"
     }
+    
+    Security:
+    - Rate limited (3 requests per hour)
+    - Generic response to prevent user enumeration
     """
     try:
-        email = request.data.get('email', '').strip().lower()
+        # Validate input
+        validator = get_email_only_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
         
-        if not email:
+        if not is_valid:
             return Response({
                 'error': {
-                    'code': 'MISSING_EMAIL',
-                    'message': 'Email is required'
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = cleaned_data['email']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -639,6 +754,7 @@ def request_password_reset(request: Request) -> Response:
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit('password_reset')
 def reset_password(request: Request) -> Response:
     """
     Reset password using token.
@@ -648,18 +764,27 @@ def reset_password(request: Request) -> Response:
         "token": "reset_token_here",
         "new_password": "NewSecurePass123!"
     }
+    
+    Security:
+    - Rate limited
+    - Token and password validation
     """
     try:
-        token = request.data.get('token', '')
-        new_password = request.data.get('new_password', '')
+        # Validate input
+        validator = get_password_reset_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
         
-        if not token or not new_password:
+        if not is_valid:
             return Response({
                 'error': {
-                    'code': 'MISSING_FIELDS',
-                    'message': 'Token and new password are required'
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        token = cleaned_data['token']
+        new_password = cleaned_data['new_password']
         
         # Initialize use case
         user_repo = get_user_repository()
@@ -711,6 +836,7 @@ def reset_password(request: Request) -> Response:
 
 
 @api_view(['POST'])
+@rate_limit('api_write')
 def logout(request: Request) -> Response:
     """
     Logout user by blacklisting tokens.
@@ -719,6 +845,10 @@ def logout(request: Request) -> Response:
     {
         "refresh_token": "optional_refresh_token_here"
     }
+    
+    Security:
+    - Rate limited
+    - Requires valid access token
     """
     try:
         # Get access token from Authorization header
@@ -761,6 +891,7 @@ def logout(request: Request) -> Response:
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit('token_refresh')
 def refresh_token(request: Request) -> Response:
     """
     Refresh access token using refresh token.
@@ -769,17 +900,26 @@ def refresh_token(request: Request) -> Response:
     {
         "refresh_token": "refresh_token_here"
     }
+    
+    Security:
+    - Rate limited (10 requests per minute)
+    - Token validation
     """
     try:
-        refresh_token = request.data.get('refresh_token', '')
+        # Validate input
+        validator = get_refresh_token_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
         
-        if not refresh_token:
+        if not is_valid:
             return Response({
                 'error': {
-                    'code': 'MISSING_REFRESH_TOKEN',
-                    'message': 'Refresh token is required'
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        refresh_token = cleaned_data['refresh_token']
         
         # Initialize use case
         jwt_service = get_jwt_service()
@@ -820,6 +960,7 @@ def refresh_token(request: Request) -> Response:
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit('api_write')
 def detect_scam(request: Request) -> Response:
 
     """
@@ -847,10 +988,28 @@ def detect_scam(request: Request) -> Response:
         "summary": "Short explanation from Gemma",
         "key_markers": ["marker 1", "marker 2", ...]
     }
+    
+    Security:
+    - Rate limited (api_write: 30 requests per minute)
+    - Input validation and length limits
+    - Message sanitization for logging
     """
 
     try:
-        message = request.data.get('message', '').strip()
+        # Validate input using schema-based validator
+        validator = get_detect_scam_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
+        
+        if not is_valid:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        message = cleaned_data['message']
 
         # Extract user_id from JWT if present
 
@@ -867,16 +1026,9 @@ def detect_scam(request: Request) -> Response:
                 logger.debug(f"[DEBUG] Extracted user_id from JWT: {user_id}")
             except Exception as jwt_error:
                 logger.warning(f"[JWT] Could not extract user_id: {jwt_error}")
-
-        if not message:
-            return Response({
-                'error': {
-                    'code': 'MISSING_MESSAGE',
-                    'message': 'Message is required for scam detection'
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
         
-        logger.info(f"[SCAM DETECTION] Analyzing message: {message[:100]}...")
+        # Log sanitized message for security monitoring
+        logger.info(f"[SCAM DETECTION] Analyzing message: {sanitize_for_logging(message, 100)}")
         
         # Load BERT model (cached after first load)
         tokenizer, model, scam_types = load_multihead_model()

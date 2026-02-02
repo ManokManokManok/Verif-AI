@@ -367,19 +367,28 @@ def list_analyses(request: Request) -> Response:
     GET /api/blockchain/analyses
     
     Query Parameters:
-        anchored_only: If "true", only return anchored analyses (default: false)
-        limit: Maximum number of results (default: 50, max: 100)
+        status: Filter by status: 'anchored', 'pending', 'all' (default: 'all')
+        classification: Filter by scam_class integer (0-14, or -1 for legit). Use 'all' for no filter.
+        anchored_only: If "true", only return anchored analyses (default: false) - DEPRECATED, use status
+        page: Page number (default: 1)
+        limit: Maximum number of results per page (default: 50, max: 100)
         
     Returns:
         200: List of analyses
         {
             "analyses": [...],
             "count": 10,
+            "total": 100,
+            "total_all": 100,
             "total_anchored": 5,
+            "page": 1,
+            "limit": 50,
             "filters": {
-                "anchored_only": false,
+                "status": "all",
+                "classification": null,
                 "limit": 50
-            }
+            },
+            "classifications": [...] // Available classification options
         }
         
         429: Rate limited
@@ -390,7 +399,35 @@ def list_analyses(request: Request) -> Response:
         return rate_response
     
     # Parse query parameters
-    anchored_only = request.query_params.get('anchored_only', '').lower() == 'true'
+    # Support both 'status' (new) and 'anchored_only' (deprecated) parameters
+    status_filter = request.query_params.get('status', 'all').lower()
+    anchored_only_param = request.query_params.get('anchored_only', '').lower() == 'true'
+    
+    # Parse classification filter
+    classification_param = request.query_params.get('classification', 'all')
+    classification_filter = None
+    if classification_param and classification_param.lower() != 'all':
+        try:
+            classification_filter = int(classification_param)
+            # Validate range: -1 (legit) to 14 (max scam class)
+            if classification_filter < -1 or classification_filter > 14:
+                classification_filter = None
+        except ValueError:
+            classification_filter = None
+    
+    # Map status to filter mode
+    if status_filter == 'anchored' or anchored_only_param:
+        filter_mode = 'anchored'
+    elif status_filter == 'pending':
+        filter_mode = 'pending'
+    else:
+        filter_mode = 'all'
+    
+    try:
+        page = int(request.query_params.get('page', '1'))
+        page = max(page, 1)  # Minimum page is 1
+    except ValueError:
+        page = 1
     
     try:
         limit = int(request.query_params.get('limit', '50'))
@@ -402,7 +439,12 @@ def list_analyses(request: Request) -> Response:
         repository = get_analysis_repository()
         use_case = ListAnalysesUseCase(repository)
         
-        result = use_case.execute(anchored_only=anchored_only, limit=limit)
+        result = use_case.execute(
+            filter_mode=filter_mode,
+            page=page,
+            limit=limit,
+            classification=classification_filter
+        )
         
         return Response(result, status=status.HTTP_200_OK)
         

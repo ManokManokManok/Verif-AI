@@ -156,6 +156,7 @@ class AnalysisResult:
             "scam_type": self.scam_type,
             "confidence_bps": self.confidence_bps,
             "is_scam": self.is_scam,
+            "is_anchored": self.is_anchored,
             "analyzer_type": self.analyzer_type,
             "analyzer_version": self.analyzer_version,
             "created_at": self.created_at.isoformat() if self.created_at else None,

@@ -235,13 +235,79 @@ class AnalysisResultRepository:
         
         return [self._document_to_entity(doc) for doc in docs]
     
-    def count_anchored(self) -> int:
-        """Count total number of anchored analysis results."""
-        return self.collection.count_documents({"chain_metadata": {"$exists": True}})
+    def list_with_filter(
+        self,
+        filter_mode: str = 'all',
+        page: int = 1,
+        limit: int = 50,
+        classification: int = None
+    ) -> List[AnalysisResult]:
+        """
+        List analysis results with filtering and pagination.
+        
+        Args:
+            filter_mode: 'all', 'anchored', or 'pending'
+            page: Page number (1-indexed)
+            limit: Maximum number of results per page
+            classification: Filter by scam_class (None for all)
+            
+        Returns:
+            List of AnalysisResult entities
+        """
+        query = {}
+        
+        # Status filter
+        if filter_mode == 'anchored':
+            query["chain_metadata"] = {"$exists": True}
+        elif filter_mode == 'pending':
+            query["$or"] = [
+                {"chain_metadata": {"$exists": False}},
+                {"chain_metadata": None}
+            ]
+        
+        # Classification filter
+        if classification is not None:
+            query["scam_class"] = classification
+        
+        # Calculate skip for pagination
+        skip = (page - 1) * limit
+        
+        docs = self.collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        
+        return [self._document_to_entity(doc) for doc in docs]
     
-    def count_all(self) -> int:
-        """Count total number of analysis results."""
-        return self.collection.count_documents({})
+    def get_distinct_classifications(self) -> List[int]:
+        """
+        Get list of distinct scam_class values in the database.
+        
+        Returns:
+            List of unique scam_class integers
+        """
+        return self.collection.distinct("scam_class")
+    
+    def count_anchored(self, classification: int = None) -> int:
+        """
+        Count total number of anchored analysis results.
+        
+        Args:
+            classification: Filter by scam_class (None for all)
+        """
+        query = {"chain_metadata": {"$exists": True}}
+        if classification is not None:
+            query["scam_class"] = classification
+        return self.collection.count_documents(query)
+    
+    def count_all(self, classification: int = None) -> int:
+        """
+        Count total number of analysis results.
+        
+        Args:
+            classification: Filter by scam_class (None for all)
+        """
+        query = {}
+        if classification is not None:
+            query["scam_class"] = classification
+        return self.collection.count_documents(query)
     
     def _entity_to_document(self, entity: AnalysisResult) -> Dict[str, Any]:
         """Convert AnalysisResult entity to MongoDB document."""
