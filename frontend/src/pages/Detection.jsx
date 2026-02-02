@@ -9,7 +9,7 @@ import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 
 function Detection() {
   const navigate = useNavigate();
-  const { isLoggedIn, isAdmin, logout, user } = useAuth();
+  const { isLoggedIn, logout, user } = useAuth();
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -19,6 +19,13 @@ function Detection() {
   const [chatHistory, setChatHistory] = useState([]);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
+
+  // Redirect to login if not logged in
+  useEffect(() => {
+    if (!isLoggedIn) {
+      navigate('/login', { replace: true });
+    }
+  }, [isLoggedIn, navigate]);
 
   useEffect(() => {
     async function fetchHistory() {
@@ -33,8 +40,8 @@ function Detection() {
         setChatHistory(mockChatHistory);
       }
     }
-    fetchHistory();
-  }, []);
+    if (isLoggedIn) fetchHistory();
+  }, [isLoggedIn]);
 
   // Handle click on a chat history item
   const handleChatClick = async (chat) => {
@@ -212,19 +219,10 @@ function Detection() {
             <button
               className="nav__link nav__btn"
               type="button"
-              onClick={() => navigate('/chatbot')}
+              onClick={() => navigate(isLoggedIn ? '/chatbot' : '/login')}
             >
               AI Chatbot
             </button>
-            {isAdmin && (
-              <button
-                className="nav__link nav__btn"
-                type="button"
-                onClick={() => navigate('/blockchain')}
-              >
-                Admin
-              </button>
-            )}
           </nav>
           {isLoggedIn ? (
             <div className="nav__user-actions">

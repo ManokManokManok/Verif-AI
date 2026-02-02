@@ -5,10 +5,17 @@ import { useAuth } from '../context/AuthContext';
 
 function AIChatbot() {
   const navigate = useNavigate();
-  const { isLoggedIn, isAdmin, logout, user } = useAuth();
+  const { isLoggedIn, logout, user } = useAuth();
   const [text, setText] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+
+  // Redirect to login if not logged in
+  useEffect(() => {
+    if (!isLoggedIn) {
+      navigate('/login', { replace: true });
+    }
+  }, [isLoggedIn, navigate]);
 
   useEffect(() => {
     // Simulate fetching chat history from backend
@@ -74,7 +81,7 @@ function AIChatbot() {
             <button
               className="nav__link nav__btn"
               type="button"
-              onClick={() => navigate('/detection')}
+              onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}
             >
               Detection
             </button>
@@ -84,15 +91,6 @@ function AIChatbot() {
             >
               AI Chatbot
             </button>
-            {isAdmin && (
-              <button
-                className="nav__link nav__btn"
-                type="button"
-                onClick={() => navigate('/blockchain')}
-              >
-                Admin
-              </button>
-            )}
           </nav>
           {isLoggedIn ? (
             <div className="nav__user-actions">
