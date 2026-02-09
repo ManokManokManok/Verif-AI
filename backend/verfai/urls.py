@@ -6,4 +6,5 @@ urlpatterns = [
     path('api/', include('src.apps.core.urls')),
     path('api/auth/', include('src.apps.auth.urls')),
     path('api/blockchain/', include('src.apps.blockchain.urls')),
+    path('api/chat/', include('src.apps.chatbot.urls')),
 ]

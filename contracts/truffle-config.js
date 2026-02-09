@@ -49,6 +49,6 @@ module.exports = {
 
   // Mocha testing configuration
   mocha: {
-    timeout: 100000
+    timeout: 120000  // 2 minutes only
   }
 };

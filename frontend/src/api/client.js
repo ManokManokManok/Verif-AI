@@ -27,6 +27,9 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
   'http://localhost:8000/api';
 
+/** Request timeout: 2 minutes only */
+const REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
+
 /**
  * Get auth headers with access token.
  * Tokens are stored in localStorage (consider sessionStorage for higher security).
@@ -52,10 +55,28 @@ async function apiRequest(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = options.signal
+    ? null
+    : setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal: options.signal ?? controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError' && !options.signal) {
+      const timeoutErr = new Error('Request timed out after 2 minutes');
+      timeoutErr.name = 'TimeoutError';
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 
   const isJson = response.headers
     .get('content-type')
