@@ -962,6 +962,33 @@ button {
   color: #f9fafb;
 }
 
+.detect__resultsActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.detect__reportBtn {
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detect__reportBtn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  transform: translateY(-1px);
+}
+
 .detect__newAnalysis {
   padding: 12px 24px;
   border-radius: 999px;

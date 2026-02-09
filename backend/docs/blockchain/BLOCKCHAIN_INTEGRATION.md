@@ -567,7 +567,7 @@ cd contracts
 npx truffle test
 
 # Run specific test file
-npx truffle test test/test_phase2_smart_contract.js
+npx truffle test test/test_smart_contract.js
 ```
 
 ### Manual Verification

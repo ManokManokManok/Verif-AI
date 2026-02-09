@@ -27,7 +27,7 @@ export async function sendChatMessage(message, accessToken = null) {
     headers['X-Session-ID'] = sessionId;
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/chat/message/`, {
+  const response = await fetch(`${API_BASE_URL}/chat/message/`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ message }),
