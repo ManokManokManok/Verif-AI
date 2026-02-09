@@ -96,7 +96,7 @@ export default function ChatBot({ accessToken = null }) {
     <div className="chatbot-container" style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <h2 style={styles.title}>🛡️ Bimby - Scam Prevention Assistant</h2>
+        <h2 style={styles.title}>🛡️ Verif-AI - Scam Prevention Assistant</h2>
         <button 
           onClick={handleClearChat}
           style={styles.clearButton}
@@ -126,7 +126,7 @@ export default function ChatBot({ accessToken = null }) {
       <div style={styles.messagesArea}>
         {messages.length === 0 && (
           <div style={styles.emptyState}>
-            <p>👋 Hi! I'm Bimby, your scam prevention assistant.</p>
+            <p>👋 Hi! I'm Verif-AI, your scam prevention assistant.</p>
             <p>Ask me about:</p>
             <ul style={styles.suggestedTopics}>
               <li>Common phishing tactics</li>
@@ -147,7 +147,7 @@ export default function ChatBot({ accessToken = null }) {
             }}
           >
             <div style={styles.messageHeader}>
-              <strong>{msg.role === 'user' ? '👤 You' : '🤖 Bimby'}</strong>
+              <strong>{msg.role === 'user' ? '👤 You' : '🤖 Verif-AI'}</strong>
               <span style={styles.timestamp}>
                 {new Date(msg.timestamp).toLocaleTimeString()}
               </span>
@@ -159,7 +159,7 @@ export default function ChatBot({ accessToken = null }) {
         {isLoading && (
           <div style={{ ...styles.message, ...styles.botMessage }}>
             <div style={styles.messageHeader}>
-              <strong>🤖 Bimby</strong>
+              <strong>🤖 Verif-AI</strong>
             </div>
             <div style={styles.messageContent}>
               <span style={styles.typing}>Thinking...</span>

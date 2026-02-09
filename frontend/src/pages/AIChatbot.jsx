@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sendChatMessage } from '../api/chatbot';
+import { sendChatMessage, getConversations, getChatHistory, deleteConversation } from '../api/chatbot';
 import { useAuth } from '../context/AuthContext';
-import chatHistoryData from '../mock_chat_history.json';
 
 function AIChatbot() {
   const navigate = useNavigate();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
   const [text, setText] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [chatHistory, setChatHistory] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [currentTitle, setCurrentTitle] = useState('New Conversation');
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [disclaimer, setDisclaimer] = useState(null);
   const messagesEndRef = useRef(null);
 
@@ -23,10 +25,74 @@ function AIChatbot() {
     scrollToBottom();
   }, [messages]);
 
+  // Fetch conversations list when logged in
   useEffect(() => {
-    // Simulate fetching chat history from backend
-    setChatHistory(chatHistoryData);
-  }, []);
+    if (isLoggedIn && accessToken) {
+      fetchConversations();
+    } else {
+      setConversations([]);
+    }
+  }, [isLoggedIn, accessToken]);
+
+  const fetchConversations = async () => {
+    if (!accessToken) return;
+    
+    setIsLoadingConversations(true);
+    try {
+      const response = await getConversations(accessToken);
+      setConversations(response.conversations || []);
+    } catch (error) {
+      console.error('Failed to fetch conversations:', error);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  };
+
+  // Load a specific conversation
+  const loadConversation = async (conversationId) => {
+    if (!accessToken) return;
+    
+    setIsLoading(true);
+    try {
+      const response = await getChatHistory(accessToken, conversationId);
+      setMessages(response.messages || []);
+      setCurrentConversationId(conversationId);
+      setCurrentTitle(response.title || 'Conversation');
+      setSidebarOpen(false);
+    } catch (error) {
+      console.error('Failed to load conversation:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Start a new conversation
+  const startNewConversation = () => {
+    setMessages([]);
+    setCurrentConversationId(null);
+    setCurrentTitle('New Conversation');
+    setDisclaimer(null);
+    setSidebarOpen(false);
+  };
+
+  // Delete a conversation
+  const handleDeleteConversation = async (conversationId, e) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this conversation?')) return;
+    
+    try {
+      await deleteConversation(conversationId, accessToken);
+      await fetchConversations();
+      
+      // If we deleted the current conversation, start fresh
+      if (conversationId === currentConversationId) {
+        startNewConversation();
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      alert('Failed to delete conversation');
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -50,10 +116,20 @@ function AIChatbot() {
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(userMessage, accessToken);
+      const response = await sendChatMessage(userMessage, accessToken, currentConversationId);
       
       if (response.disclaimer) {
         setDisclaimer(response.disclaimer);
+      }
+
+      // Update conversation ID if this is a new conversation
+      if (response.is_new_conversation || !currentConversationId) {
+        setCurrentConversationId(response.conversation_id);
+        setCurrentTitle(response.title || userMessage.substring(0, 50));
+        // Refresh conversations list
+        if (isLoggedIn) {
+          fetchConversations();
+        }
       }
 
       const botMessage = {
@@ -77,6 +153,19 @@ function AIChatbot() {
     }
   };
 
+  // Format date for sidebar
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   return (
     <div className="detect" style={{ height: '100vh', overflow: 'hidden' }}>
       <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
@@ -88,9 +177,150 @@ function AIChatbot() {
         >
           {sidebarOpen ? '✕' : '☰'}
         </button>
-        <button className="detect__sidebtn" type="button" aria-label="Edit">
+        <button 
+          className="detect__sidebtn" 
+          type="button" 
+          aria-label="New Chat"
+          onClick={startNewConversation}
+          title="New Conversation"
+        >
           ✎
         </button>
+        
+        {/* Conversation History - Only shown when sidebar is open and logged in */}
+        {sidebarOpen && isLoggedIn && (
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '12px',
+            marginTop: '8px',
+          }}>
+            <div style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              color: '#94a3b8',
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}>
+              Chat History
+            </div>
+            
+            {isLoadingConversations ? (
+              <div style={{ color: '#64748b', fontSize: '13px', padding: '8px' }}>
+                Loading...
+              </div>
+            ) : conversations.length === 0 ? (
+              <div style={{ color: '#64748b', fontSize: '13px', padding: '8px' }}>
+                No conversations yet
+              </div>
+            ) : (
+              conversations.map((conv) => (
+                <div
+                  key={conv.id}
+                  onClick={() => loadConversation(conv.id)}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    marginBottom: '6px',
+                    cursor: 'pointer',
+                    backgroundColor: conv.id === currentConversationId ? '#312e81' : 'transparent',
+                    border: conv.id === currentConversationId ? '1px solid #4338ca' : '1px solid transparent',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (conv.id !== currentConversationId) {
+                      e.currentTarget.style.backgroundColor = '#1e1b4b';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (conv.id !== currentConversationId) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                  }}>
+                    <div style={{
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: '#e2e8f0',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      flex: 1,
+                      marginRight: '8px',
+                    }}>
+                      {conv.title || 'Untitled'}
+                    </div>
+                    <button
+                      onClick={(e) => handleDeleteConversation(conv.id, e)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        padding: '2px 4px',
+                        borderRadius: '4px',
+                        opacity: 0.6,
+                        transition: 'opacity 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                      title="Delete conversation"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                  <div style={{
+                    fontSize: '11px',
+                    color: '#64748b',
+                    marginTop: '4px',
+                  }}>
+                    {conv.message_count || 0} messages · {formatDate(conv.updated_at)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+        
+        {/* Anonymous user message when sidebar is open */}
+        {sidebarOpen && !isLoggedIn && (
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '20px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '24px', marginBottom: '12px' }}>💬</div>
+            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '16px' }}>
+              Login to save your conversations
+            </div>
+            <button
+              onClick={() => navigate('/login')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: '#4f46e5',
+                color: 'white',
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Login
+            </button>
+          </div>
+        )}
+        
         <div className="detect__spacer" />
         <button className="detect__sidebtn" type="button" aria-label="Settings">
           ⚙
