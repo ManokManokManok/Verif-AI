@@ -6,5 +6,13 @@ export default defineConfig({
   server: {
     open: true,
   },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./tests/setup.js'],
+    css: true,
+    include: ['tests/**/*.{test,spec}.{js,jsx}'],
+    watch: false, // Disable watch mode by default - use --watch to enable
+  },
 });
 

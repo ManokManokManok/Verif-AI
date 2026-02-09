@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { detectScamRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
+import { ReportModal } from '../components/reports';
 
 function Detection() {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ function Detection() {
   const [chatHistory, setChatHistory] = useState([]);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   useEffect(() => {
     async function fetchHistory() {
@@ -305,13 +307,25 @@ function Detection() {
             <div className="detect__results">
               <div className="detect__resultsHeader">
                 <h2 className="detect__resultsTitle">Analysis Results</h2>
-                <button 
-                  className="detect__newAnalysis" 
-                  type="button"
-                  onClick={handleNewAnalysis}
-                >
-                  PROTOTYPE ONLY | New Analysis
-                </button>
+                <div className="detect__resultsActions">
+                  {isLoggedIn && (
+                    <button 
+                      className="detect__reportBtn" 
+                      type="button"
+                      onClick={() => setIsReportModalOpen(true)}
+                      title="Report an issue with this analysis"
+                    >
+                      🚩 Report Issue
+                    </button>
+                  )}
+                  <button 
+                    className="detect__newAnalysis" 
+                    type="button"
+                    onClick={handleNewAnalysis}
+                  >
+                    PROTOTYPE ONLY | New Analysis
+                  </button>
+                </div>
               </div>
 
               <div className="detect__resultsGrid">
@@ -397,6 +411,14 @@ function Detection() {
           </div>
         </footer>
       </div>
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        analysisId={detectionResult?.id}
+        analysisRefId={detectionResult?.ref_id}
+      />
     </div>
   );
 }

@@ -7,4 +7,7 @@ urlpatterns = [
     path('api/auth/', include('src.apps.auth.urls')),
     path('api/blockchain/', include('src.apps.blockchain.urls')),
     path('api/chat/', include('src.apps.chatbot.urls')),
+    path('api/admin/', include('src.apps.admin.urls')),
+    path('api/reports/', include('src.apps.reports.urls')),
+    path('api/analytics/', include('src.apps.analytics.urls')),
 ]

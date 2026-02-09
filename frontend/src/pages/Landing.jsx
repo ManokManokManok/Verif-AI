@@ -142,7 +142,7 @@ function Landing() {
                   <button 
                     className="nav__dropdown-item nav__dropdown-item--admin" 
                     type="button"
-                    onClick={() => { navigate('/blockchain'); setShowUserMenu(false); }}
+                    onClick={() => { navigate('/admin'); setShowUserMenu(false); }}
                   >
                     Admin Panel
                   </button>

@@ -314,6 +314,277 @@ class MongoDBUserRepository:
         role_docs = self.roles_collection.find({"name": {"$in": user["roles"]}})
         return [self._document_to_role(role_doc) for role_doc in role_docs]
     
+    # ==================== Admin User Management Methods ====================
+    
+    def get_all_users(
+        self,
+        search: Optional[str] = None,
+        role: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        is_verified: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "created_at",
+        sort_order: int = -1  # -1 for descending, 1 for ascending
+    ) -> tuple:
+        """
+        Get all users with filtering and pagination (Admin only).
+        
+        Args:
+            search: Search term for email or username
+            role: Filter by role name
+            is_active: Filter by active status
+            is_verified: Filter by verification status
+            limit: Maximum results to return
+            offset: Number of results to skip
+            sort_by: Field to sort by
+            sort_order: Sort direction (-1 desc, 1 asc)
+        
+        Returns:
+            Tuple of (list of User entities, total count)
+        """
+        filter_query = {
+            # Exclude soft-deleted users by default
+            "$or": [
+                {"deleted": {"$exists": False}},
+                {"deleted": False}
+            ]
+        }
+        
+        # Search filter (email or username)
+        if search:
+            # Need to combine with existing $or using $and
+            filter_query = {
+                "$and": [
+                    filter_query,
+                    {
+                        "$or": [
+                            {"email": {"$regex": search, "$options": "i"}},
+                            {"username": {"$regex": search, "$options": "i"}}
+                        ]
+                    }
+                ]
+            }
+        
+        # Role filter
+        if role:
+            if "$and" in filter_query:
+                filter_query["$and"].append({"roles": role})
+            else:
+                filter_query["roles"] = role
+        
+        # Status filters
+        if is_active is not None:
+            if "$and" in filter_query:
+                filter_query["$and"].append({"is_active": is_active})
+            else:
+                filter_query["is_active"] = is_active
+        if is_verified is not None:
+            if "$and" in filter_query:
+                filter_query["$and"].append({"is_verified": is_verified})
+            else:
+                filter_query["is_verified"] = is_verified
+        
+        # Get total count
+        total_count = self.users_collection.count_documents(filter_query)
+        
+        # Get paginated results
+        cursor = self.users_collection.find(filter_query)\
+            .sort(sort_by, sort_order)\
+            .skip(offset)\
+            .limit(limit)
+        
+        users = [self._document_to_user(doc) for doc in cursor]
+        
+        return users, total_count
+    
+    def delete_user(self, user_id: str, hard_delete: bool = False) -> bool:
+        """
+        Delete a user account (Admin only).
+        
+        Args:
+            user_id: User's ID to delete
+            hard_delete: If True, permanently remove; if False, soft delete (deactivate)
+        
+        Returns:
+            True if user was deleted successfully
+        
+        Raises:
+            UserNotFoundError: If user not found
+        """
+        try:
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if not user_doc:
+                raise UserNotFoundError(f"User {user_id} not found")
+            
+            if hard_delete:
+                # Permanently delete user
+                result = self.users_collection.delete_one({"_id": ObjectId(user_id)})
+                return result.deleted_count > 0
+            else:
+                # Soft delete - deactivate the account
+                result = self.users_collection.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {
+                        "$set": {
+                            "is_active": False,
+                            "deleted_at": datetime.utcnow(),
+                            "deleted": True
+                        }
+                    }
+                )
+                return result.modified_count > 0
+        except UserNotFoundError:
+            raise
+        except Exception as e:
+            return False
+    
+    def admin_reset_password(self, user_id: str, new_password_hash: str) -> bool:
+        """
+        Admin-initiated password reset for a user.
+        
+        Args:
+            user_id: User's ID
+            new_password_hash: New hashed password
+        
+        Returns:
+            True if password was updated successfully
+        
+        Raises:
+            UserNotFoundError: If user not found
+        """
+        try:
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if not user_doc:
+                raise UserNotFoundError(f"User {user_id} not found")
+            
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$set": {
+                        "password_hash": new_password_hash,
+                        "password_updated_at": datetime.utcnow(),
+                        "password_reset_by_admin": True,
+                        "force_password_change": True  # Optional: force user to change on next login
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except UserNotFoundError:
+            raise
+        except Exception:
+            return False
+    
+    def update_user_status(self, user_id: str, is_active: bool) -> bool:
+        """
+        Enable or disable a user account (Admin only).
+        
+        Args:
+            user_id: User's ID
+            is_active: New active status
+        
+        Returns:
+            True if status was updated successfully
+        
+        Raises:
+            UserNotFoundError: If user not found
+        """
+        try:
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if not user_doc:
+                raise UserNotFoundError(f"User {user_id} not found")
+            
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$set": {
+                        "is_active": is_active,
+                        "status_updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except UserNotFoundError:
+            raise
+        except Exception:
+            return False
+    
+    def update_user_roles(self, user_id: str, roles: List[str]) -> bool:
+        """
+        Update a user's roles (Admin only).
+        
+        Args:
+            user_id: User's ID
+            roles: New list of role names
+        
+        Returns:
+            True if roles were updated successfully
+        
+        Raises:
+            UserNotFoundError: If user not found
+        """
+        try:
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if not user_doc:
+                raise UserNotFoundError(f"User {user_id} not found")
+            
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$set": {
+                        "roles": roles,
+                        "roles_updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except UserNotFoundError:
+            raise
+        except Exception:
+            return False
+    
+    def get_user_activity_summary(self, user_id: str) -> Dict[str, Any]:
+        """
+        Get activity summary for a user (Admin only).
+        
+        Args:
+            user_id: User's ID
+        
+        Returns:
+            Dict with activity summary
+        """
+        from .analysis_repository import AnalysisResultRepository
+        
+        try:
+            user = self.get_by_id(user_id)
+            if not user:
+                return {}
+            
+            # Get analysis count for this user
+            analysis_count = self.db.analysis_results.count_documents({"user_id": user_id})
+            
+            # Get last analysis date
+            last_analysis = self.db.analysis_results.find_one(
+                {"user_id": user_id},
+                sort=[("created_at", -1)]
+            )
+            last_analysis_date = last_analysis.get("created_at") if last_analysis else None
+            
+            return {
+                "user_id": user_id,
+                "email": user.email,
+                "username": user.username,
+                "total_analyses": analysis_count,
+                "last_analysis_at": last_analysis_date,
+                "created_at": user.created_at,
+                "last_login": user.last_login,
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "roles": user.roles,
+            }
+        except Exception:
+            return {}
+    
     def _document_to_user(self, doc: Dict[str, Any]) -> User:
         """Convert MongoDB document to User entity."""
         return User(
