@@ -86,6 +86,9 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [refreshUser]);
 
+  // Get access token from localStorage
+  const accessToken = localStorage.getItem('access_token');
+
   const value = {
     user,
     isLoggedIn,
@@ -96,6 +99,7 @@ export function AuthProvider({ children }) {
     logout,
     hasRole,
     refreshUser,
+    accessToken,
   };
 
   return (

@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react';
-import { getChatHistory } from '../api/client';
+import { useState, useEffect, useRef } from 'react';
+import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail } from '../api/analysis';
+import { anchorAnalysis, verifyAnalysis } from '../api/blockchain';
 import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
-import { detectScamRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
+import { validateMessage, CONSTRAINTS } from '../utils/validation';
+
+const ANALYSIS_STEPS = [
+  'Analyzing message...',
+  'Running classifier...',
+  'Generating summary...',
+];
 
 function Detection() {
   const navigate = useNavigate();
@@ -19,6 +25,15 @@ function Detection() {
   const [chatHistory, setChatHistory] = useState([]);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
+  const [analysisStep, setAnalysisStep] = useState(0);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [graphScamWidth, setGraphScamWidth] = useState(0);
+  const [graphLegitWidth, setGraphLegitWidth] = useState(0);
+  const [isAnchoring, setIsAnchoring] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
+  const progressIntervalRef = useRef(null);
+  const stepIntervalRef = useRef(null);
 
   useEffect(() => {
     async function fetchHistory() {
@@ -35,6 +50,39 @@ function Detection() {
     }
     fetchHistory();
   }, []);
+
+  // Analyzing animation: step labels + simulated progress
+  useEffect(() => {
+    if (!isDetecting) {
+      setAnalysisStep(0);
+      setAnalysisProgress(0);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      if (stepIntervalRef.current) clearInterval(stepIntervalRef.current);
+      return;
+    }
+    setAnalysisStep(0);
+    setAnalysisProgress(0);
+
+    const STEP_MS = 1400;
+    const PROGRESS_MS = 120;
+    const MAX_PROGRESS = 92;
+
+    stepIntervalRef.current = setInterval(() => {
+      setAnalysisStep((prev) => (prev + 1) % ANALYSIS_STEPS.length);
+    }, STEP_MS);
+
+    progressIntervalRef.current = setInterval(() => {
+      setAnalysisProgress((prev) => {
+        if (prev >= MAX_PROGRESS) return prev;
+        return prev + 2;
+      });
+    }, PROGRESS_MS);
+
+    return () => {
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      if (stepIntervalRef.current) clearInterval(stepIntervalRef.current);
+    };
+  }, [isDetecting]);
 
   // Handle click on a chat history item
   const handleChatClick = async (chat) => {
@@ -55,16 +103,16 @@ function Detection() {
   const handleTextChange = (e) => {
     const newText = e.target.value;
     setText(newText);
-    
+
     // Clear previous errors when user types
     setValidationError(null);
     setRateLimitError(null);
-    
+
     // Validate on change for immediate feedback
     if (newText.length > CONSTRAINTS.message.maxLength) {
       setValidationError(`Message exceeds ${CONSTRAINTS.message.maxLength} character limit`);
     }
-    
+
     // Auto-expand when text grows
     if (newText.length > 50 && !isExpanded) {
       setIsExpanded(true);
@@ -75,7 +123,7 @@ function Detection() {
 
   const handleDetect = async () => {
     if (!text.trim() || isDetecting) return;
-    
+
     // Client-side validation
     const validation = validateMessage(text);
     if (!validation.valid) {
@@ -87,14 +135,14 @@ function Detection() {
     setDetectionResult(null);
     setValidationError(null);
     setRateLimitError(null);
-    
+
     try {
       const result = await detectScamRequest(text);
       console.log('[DETECTION RESULT]', result);
       setDetectionResult(result);
     } catch (error) {
       console.error('[DETECTION ERROR]', error);
-      
+
       // Handle rate limiting gracefully
       if (error.isRateLimited) {
         setRateLimitError(`Too many requests. Please wait ${error.retryAfter} and try again.`);
@@ -114,11 +162,27 @@ function Detection() {
     setIsExpanded(false);
     setValidationError(null);
     setRateLimitError(null);
+    setGraphScamWidth(0);
+    setGraphLegitWidth(0);
   };
+
+  // Animate graph bar from 0 to result values when result appears
+  useEffect(() => {
+    if (!detectionResult) return;
+    setGraphScamWidth(0);
+    setGraphLegitWidth(0);
+    const t = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setGraphScamWidth(detectionResult.scam_score ?? 0);
+        setGraphLegitWidth(detectionResult.legit_score ?? 0);
+      });
+    });
+    return () => cancelAnimationFrame(t);
+  }, [detectionResult]);
 
   const handleAnchor = async () => {
     if (!detectionResult?.ref_id || isAnchoring) return;
-    
+
     setIsAnchoring(true);
     try {
       const result = await anchorAnalysis(detectionResult.ref_id);
@@ -141,7 +205,7 @@ function Detection() {
 
   const handleVerify = async () => {
     if (!detectionResult?.ref_id || isVerifying) return;
-    
+
     setIsVerifying(true);
     setVerificationResult(null);
     try {
@@ -248,7 +312,7 @@ function Detection() {
           )}
         </header>
 
-        <main className="detect__content">
+        <main className={`detect__content ${detectionResult ? 'detect__content--results' : ''}`}>
           {!detectionResult ? (
             <>
               <h1 className="detect__title">Welcome to VerfAI fraud detection</h1>
@@ -268,7 +332,7 @@ function Detection() {
                 </div>
               )}
 
-              <div 
+              <div
                 className={`detect__inputRow ${isFocused ? 'detect__inputRow--focused' : ''} ${isExpanded ? 'detect__inputRow--expanded' : ''}`}
               >
                 <button className="detect__plus" type="button" aria-label="Upload">
@@ -284,7 +348,7 @@ function Detection() {
                   rows={1}
                   maxLength={CONSTRAINTS.message.maxLength}
                 />
-                <button 
+                <button
                   className={`detect__cta ${text.trim() && !validationError ? 'detect__cta--active' : ''}`}
                   type="button"
                   disabled={!text.trim() || isDetecting || validationError}
@@ -293,7 +357,28 @@ function Detection() {
                   {isDetecting ? 'Analyzing...' : 'Detect'}
                 </button>
               </div>
-              
+
+              {/* Analyzing progress animation */}
+              {isDetecting && (
+                <div className="detect__analyzing" role="status" aria-live="polite">
+                  <div className="detect__analyzing-step">
+                    {ANALYSIS_STEPS[analysisStep]}
+                  </div>
+                  <div className="detect__analyzing-bar">
+                    <div
+                      className="detect__analyzing-fill"
+                      style={{ width: `${analysisProgress}%` }}
+                    />
+                    <div className="detect__analyzing-shine" aria-hidden="true" />
+                  </div>
+                  <div className="detect__analyzing-dots">
+                    <span className="detect__analyzing-dot" />
+                    <span className="detect__analyzing-dot" />
+                    <span className="detect__analyzing-dot" />
+                  </div>
+                </div>
+              )}
+
               {/* Character count */}
               {text.length > 0 && (
                 <div className={`detect__charCount ${text.length > CONSTRAINTS.message.maxLength * 0.9 ? 'detect__charCount--warning' : ''}`}>
@@ -302,83 +387,79 @@ function Detection() {
               )}
             </>
           ) : (
-            <div className="detect__results">
-              <div className="detect__resultsHeader">
+            <div className="detect__results" role="region" aria-label="Analysis results">
+              <div className="detect__resultsHeader detect__resultsHeader--animate">
                 <h2 className="detect__resultsTitle">Analysis Results</h2>
-                <button 
-                  className="detect__newAnalysis" 
+                <button
+                  className="detect__newAnalysis"
                   type="button"
                   onClick={handleNewAnalysis}
                 >
-                  PROTOTYPE ONLY | New Analysis
+                  New Analysis
                 </button>
               </div>
 
               <div className="detect__resultsGrid">
-                {/* Left Column: Summary & Original Message */}
-                <div className="detect__resultCard detect__resultCard--summary">
+                {/* Summary & Original Message */}
+                <div className="detect__resultCard detect__resultCard--summary detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Summary</h3>
                   <p className="detect__summary">{detectionResult.summary}</p>
-                  
-                  <h4 className="detect__cardSubtitle">Analyzed Message:</h4>
+                  <h4 className="detect__cardSubtitle">Analyzed Message</h4>
                   <div className="detect__originalMessage">
                     {detectionResult.message}
                   </div>
                 </div>
 
-                {/* Middle Column: Likelihood Graph */}
-                <div className="detect__resultCard detect__resultCard--graph">
+                {/* Likelihood Graph */}
+                <div className="detect__resultCard detect__resultCard--graph detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Scam Likelihood</h3>
                   <div className="detect__graph">
                     <div className="detect__graphBar">
-                      <div 
+                      <div
                         className="detect__graphFill detect__graphFill--scam"
-                        style={{ width: `${detectionResult.scam_score}%` }}
+                        style={{ width: `${graphScamWidth}%` }}
                       />
-                      <div 
+                      <div
                         className="detect__graphFill detect__graphFill--legit"
-                        style={{ width: `${detectionResult.legit_score}%` }}
+                        style={{ width: `${graphLegitWidth}%` }}
                       />
                     </div>
                     <div className="detect__graphLabels">
                       <div className="detect__graphLabel detect__graphLabel--scam">
                         <span className="detect__graphDot detect__graphDot--scam" />
-                        Scam: {detectionResult.scam_score.toFixed(1)}%
+                        Scam: {(detectionResult.scam_score ?? 0).toFixed(1)}%
                       </div>
                       <div className="detect__graphLabel detect__graphLabel--legit">
                         <span className="detect__graphDot detect__graphDot--legit" />
-                        Legit: {detectionResult.legit_score.toFixed(1)}%
+                        Legit: {(detectionResult.legit_score ?? 0).toFixed(1)}%
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="detect__verdict">
+                  <div className="detect__verdict detect__verdict--animate">
                     <span className={`detect__verdictLabel ${detectionResult.is_scam ? 'detect__verdictLabel--scam' : 'detect__verdictLabel--legit'}`}>
                       {detectionResult.label}
                     </span>
                   </div>
                 </div>
 
-                {/* Right Column: Percentages & Key Factors */}
-                <div className="detect__resultCard detect__resultCard--details">
+                {/* Details & Markers */}
+                <div className="detect__resultCard detect__resultCard--details detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Details</h3>
-                  
                   {detectionResult.is_scam && (
-                    <div className="detect__scamType">
-                      <div className="detect__detailLabel">Scam Type:</div>
+                    <div className="detect__scamType detect__scamType--animate">
+                      <div className="detect__detailLabel">Scam Type</div>
                       <div className="detect__detailValue">{detectionResult.scam_type}</div>
                       <div className="detect__confidence">
-                        Confidence: {detectionResult.type_confidence.toFixed(1)}%
+                        Confidence: {(detectionResult.type_confidence ?? 0).toFixed(1)}%
                       </div>
                     </div>
                   )}
-
                   {detectionResult.key_markers && detectionResult.key_markers.length > 0 && (
                     <div className="detect__markers">
-                      <h4 className="detect__markersTitle">Key Linguistic Markers:</h4>
+                      <h4 className="detect__markersTitle">Key Linguistic Markers</h4>
                       <ul className="detect__markersList">
                         {detectionResult.key_markers.map((marker, idx) => (
-                          <li key={idx} className="detect__markerItem">
+                          <li key={idx} className="detect__markerItem detect__markerItem--animate" style={{ animationDelay: `${0.35 + idx * 0.06}s` }}>
                             {marker}
                           </li>
                         ))}
