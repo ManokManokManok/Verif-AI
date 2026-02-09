@@ -6,7 +6,7 @@ Uses Gemma LLM to provide friendly, professional guidance.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 
 from ...domain.chat_entities import ChatConversation, MessageRole
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 # System prompt for general chatbot
-GENERAL_CHATBOT_SYSTEM_PROMPT = """You are Bimby, a friendly and professional scam prevention assistant created by Verif-AI. Your mission is to help people stay safe from scams, phishing, and fraud.
+GENERAL_CHATBOT_SYSTEM_PROMPT = """You are Verif-AI, a friendly and professional scam prevention assistant. Your mission is to help people stay safe from scams, phishing, and fraud.
 
 **Your Core Responsibilities:**
 
@@ -71,7 +71,8 @@ class GeneralChatbotUseCase:
     def send_message(
         self, 
         user_id: str, 
-        message: str
+        message: str,
+        conversation_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Process user message and generate response.
@@ -79,17 +80,31 @@ class GeneralChatbotUseCase:
         Args:
             user_id: User's MongoDB ID
             message: User's message text
+            conversation_id: Optional specific conversation ID (creates new if not provided)
             
         Returns:
             Dictionary with:
                 - response: Assistant's reply
                 - conversation_id: MongoDB ID of conversation
+                - title: Conversation title
                 - message_count: Total messages in conversation
+                - is_new_conversation: True if a new conversation was created
         """
         logger.info(f"[CHATBOT] User {user_id} sent message: {message[:100]}...")
         
-        # Get or create general conversation for this user
-        conversation = self.conversation_repo.get_general_conversation(user_id)
+        is_new_conversation = False
+        
+        # Get existing conversation or create new one
+        if conversation_id:
+            conversation = self.conversation_repo.get_by_id_for_user(conversation_id, user_id)
+            if not conversation:
+                # If specified conversation not found, create new one
+                conversation = self.conversation_repo.create_conversation(user_id)
+                is_new_conversation = True
+        else:
+            # No conversation_id provided - create a new conversation
+            conversation = self.conversation_repo.create_conversation(user_id)
+            is_new_conversation = True
         
         # Add user's message to conversation
         conversation.add_message(MessageRole.USER.value, message)
@@ -141,23 +156,43 @@ class GeneralChatbotUseCase:
         return {
             "response": assistant_reply,
             "conversation_id": conversation.id,
-            "message_count": len(conversation.messages)
+            "title": conversation.title,
+            "message_count": len(conversation.messages),
+            "is_new_conversation": is_new_conversation
         }
     
-    def get_conversation_history(self, user_id: str) -> Dict[str, Any]:
+    def get_conversation_history(
+        self, 
+        user_id: str, 
+        conversation_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
-        Get user's general conversation history.
+        Get a specific conversation's history.
         
         Args:
             user_id: User's MongoDB ID
+            conversation_id: Specific conversation ID (returns latest if not provided)
             
         Returns:
             Dictionary with conversation details and messages
         """
-        conversation = self.conversation_repo.get_general_conversation(user_id)
+        if conversation_id:
+            conversation = self.conversation_repo.get_by_id_for_user(conversation_id, user_id)
+        else:
+            conversation = self.conversation_repo.get_latest_conversation(user_id)
+        
+        if not conversation:
+            return {
+                "conversation_id": None,
+                "title": None,
+                "messages": [],
+                "created_at": None,
+                "updated_at": None
+            }
         
         return {
             "conversation_id": conversation.id,
+            "title": conversation.title,
             "messages": [
                 {
                     "role": msg.role,
@@ -171,9 +206,40 @@ class GeneralChatbotUseCase:
             "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None
         }
     
+    def get_user_conversations(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get list of all conversations for a user.
+        
+        Args:
+            user_id: User's MongoDB ID
+            limit: Maximum number of conversations to return
+            
+        Returns:
+            List of conversation summaries (id, title, message_count, dates)
+        """
+        conversations = self.conversation_repo.get_user_conversations(user_id, limit)
+        
+        return [
+            conversation.to_summary_dict()
+            for conversation in conversations
+        ]
+    
+    def delete_conversation(self, user_id: str, conversation_id: str) -> bool:
+        """
+        Delete a specific conversation.
+        
+        Args:
+            user_id: User's MongoDB ID
+            conversation_id: Conversation ID to delete
+            
+        Returns:
+            True if deleted successfully
+        """
+        return self.conversation_repo.delete_conversation(conversation_id, user_id)
+    
     def clear_conversation(self, user_id: str) -> bool:
         """
-        Clear user's general conversation (start fresh).
+        Clear user's most recent general conversation (delete it).
         
         Args:
             user_id: User's MongoDB ID
@@ -181,7 +247,7 @@ class GeneralChatbotUseCase:
         Returns:
             True if cleared successfully
         """
-        conversation = self.conversation_repo.get_general_conversation(user_id)
+        conversation = self.conversation_repo.get_latest_conversation(user_id)
         
         if conversation and conversation.id:
             return self.conversation_repo.delete_conversation(

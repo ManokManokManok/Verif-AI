@@ -248,8 +248,11 @@ def send_message(request: Request) -> Response:
             return Response(result, status=status.HTTP_200_OK)
         
         # For authenticated users: Save to database
+        # Get optional conversation_id to continue existing conversation
+        conversation_id = request.data.get('conversation_id')
+        
         chatbot = get_chatbot_use_case()
-        result = chatbot.send_message(user_id, message)
+        result = chatbot.send_message(user_id, message, conversation_id)
         result['is_authenticated'] = True
         
         return Response(result, status=status.HTTP_200_OK)
@@ -279,13 +282,17 @@ def send_message(request: Request) -> Response:
 @rate_limit('api_read')
 def get_history(request: Request) -> Response:
     """
-    Get user's general chatbot conversation history.
+    Get a specific conversation's history or the most recent one.
     
-    GET /api/chat/history
+    GET /api/chat/history?conversation_id=mongodb_id
+    
+    Query Parameters:
+        conversation_id (optional): Specific conversation ID to retrieve
     
     Response (Authenticated):
     {
         "conversation_id": "mongodb_id",
+        "title": "How do I spot phishing...",
         "messages": [...],
         "created_at": "2026-02-01T15:00:00Z",
         "updated_at": "2026-02-02T10:30:05Z",
@@ -334,8 +341,10 @@ def get_history(request: Request) -> Response:
             }, status=status.HTTP_200_OK)
         
         # For authenticated users: Get saved conversation
+        conversation_id = request.query_params.get('conversation_id')
+        
         chatbot = get_chatbot_use_case()
-        history = chatbot.get_conversation_history(user_id)
+        history = chatbot.get_conversation_history(user_id, conversation_id)
         history['is_authenticated'] = True
         
         return Response(history, status=status.HTTP_200_OK)
@@ -421,6 +430,161 @@ def clear_history(request: Request) -> Response:
         
     except Exception as e:
         logger.error(f"[CHATBOT] Error clearing history: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def _extract_user_id_from_jwt(request: Request):
+    """
+    Helper function to extract user_id from JWT token.
+    
+    Returns:
+        tuple: (user_id, is_authenticated) - user_id is None if not authenticated
+    """
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ', 1)[1]
+        try:
+            from ...infrastructure.jwt_service import JWTService
+            import os
+            secret_key = os.getenv('JWT_SECRET_KEY')
+            jwt_service = JWTService(secret_key, 900, 604800, None)
+            payload = jwt_service.verify_access_token(token)
+            user_id = payload.get('user_id')
+            return user_id, True
+        except Exception as jwt_error:
+            logger.warning(f"[CHATBOT] Invalid/expired token: {jwt_error}")
+    return None, False
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@rate_limit('api_read')
+def get_conversations(request: Request) -> Response:
+    """
+    Get list of all conversations for the authenticated user.
+    
+    GET /api/chat/conversations
+    
+    Query Parameters:
+        limit (optional): Maximum number of conversations to return (default: 50)
+    
+    Response (Authenticated):
+    {
+        "conversations": [
+            {
+                "id": "mongodb_id",
+                "title": "How do I spot phishing...",
+                "conversation_type": "general",
+                "message_count": 4,
+                "created_at": "2026-02-01T15:00:00Z",
+                "updated_at": "2026-02-02T10:30:05Z"
+            },
+            ...
+        ],
+        "total": 5,
+        "is_authenticated": true
+    }
+    
+    Response (Anonymous):
+    {
+        "conversations": [],
+        "is_authenticated": false,
+        "note": "Login to save and view conversation history"
+    }
+    """
+    try:
+        user_id, is_authenticated = _extract_user_id_from_jwt(request)
+        
+        if not is_authenticated:
+            return Response({
+                'conversations': [],
+                'is_authenticated': False,
+                'note': 'Login to save and view conversation history'
+            }, status=status.HTTP_200_OK)
+        
+        limit = int(request.query_params.get('limit', 50))
+        limit = min(limit, 100)  # Cap at 100
+        
+        chatbot = get_chatbot_use_case()
+        conversations = chatbot.get_user_conversations(user_id, limit)
+        
+        return Response({
+            'conversations': conversations,
+            'total': len(conversations),
+            'is_authenticated': True
+        }, status=status.HTTP_200_OK)
+        
+    except RuntimeError as e:
+        logger.error(f"[CHATBOT] Service not available: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'SERVICE_UNAVAILABLE',
+                'message': 'Service is currently unavailable'
+            }
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    
+    except Exception as e:
+        logger.error(f"[CHATBOT] Error fetching conversations: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+@rate_limit('api_write')
+def delete_conversation(request: Request, conversation_id: str) -> Response:
+    """
+    Delete a specific conversation.
+    
+    DELETE /api/chat/conversations/<conversation_id>
+    
+    Response:
+    {
+        "message": "Conversation deleted successfully"
+    }
+    
+    Security:
+    - Requires authentication
+    - Only the owner can delete their conversation
+    """
+    try:
+        user_id, is_authenticated = _extract_user_id_from_jwt(request)
+        
+        if not is_authenticated:
+            return Response({
+                'error': {
+                    'code': 'UNAUTHORIZED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        chatbot = get_chatbot_use_case()
+        success = chatbot.delete_conversation(user_id, conversation_id)
+        
+        if success:
+            logger.info(f"[CHATBOT] User {user_id} deleted conversation {conversation_id}")
+            return Response({
+                'message': 'Conversation deleted successfully'
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'error': {
+                    'code': 'NOT_FOUND',
+                    'message': 'Conversation not found or unauthorized'
+                }
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+    except Exception as e:
+        logger.error(f"[CHATBOT] Error deleting conversation: {str(e)}", exc_info=True)
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',

@@ -24,6 +24,7 @@ class ConversationRepository:
         "_id": ObjectId,
         "user_id": str,                    # User's MongoDB ID
         "conversation_type": str,           # "general" | "analysis_guided"
+        "title": str,                       # Conversation title (auto-generated from first message)
         "analysis_ref_id": str (optional),  # UUID of analysis (for guided)
         "messages": [
             {
@@ -92,10 +93,78 @@ class ConversationRepository:
         
         return self._document_to_entity(doc)
     
+    def get_by_id_for_user(self, conversation_id: str, user_id: str) -> Optional[ChatConversation]:
+        """Get conversation by ID with user ownership verification."""
+        try:
+            doc = self.collection.find_one({
+                "_id": ObjectId(conversation_id),
+                "user_id": user_id
+            })
+        except Exception:
+            return None
+        
+        if not doc:
+            return None
+        
+        return self._document_to_entity(doc)
+    
+    def create_conversation(self, user_id: str, title: Optional[str] = None) -> ChatConversation:
+        """
+        Create a new general conversation for a user.
+        
+        Args:
+            user_id: User's MongoDB ID
+            title: Optional title (will be auto-generated from first message if not provided)
+            
+        Returns:
+            Newly created ChatConversation
+        """
+        conversation = ChatConversation.create_general(user_id, title)
+        return self.save(conversation)
+    
+    def get_latest_conversation(self, user_id: str) -> Optional[ChatConversation]:
+        """
+        Get user's most recent general conversation.
+        
+        Args:
+            user_id: User's MongoDB ID
+            
+        Returns:
+            Most recent ChatConversation or None
+        """
+        doc = self.collection.find_one(
+            {"user_id": user_id, "conversation_type": "general"},
+            sort=[("updated_at", -1)]
+        )
+        
+        if doc:
+            return self._document_to_entity(doc)
+        
+        return None
+    
+    def get_or_create_conversation(self, user_id: str, conversation_id: Optional[str] = None) -> ChatConversation:
+        """
+        Get existing conversation or create a new one.
+        
+        Args:
+            user_id: User's MongoDB ID
+            conversation_id: Optional specific conversation ID to retrieve
+            
+        Returns:
+            ChatConversation (existing or newly created)
+        """
+        if conversation_id:
+            conversation = self.get_by_id_for_user(conversation_id, user_id)
+            if conversation:
+                return conversation
+        
+        # If no conversation_id provided or not found, create a new one
+        return self.create_conversation(user_id)
+    
     def get_general_conversation(self, user_id: str) -> Optional[ChatConversation]:
         """
-        Get user's general conversation.
-        Creates one if it doesn't exist.
+        Get user's most recent general conversation.
+        Creates one if none exist.
         
         Args:
             user_id: User's MongoDB ID
@@ -103,10 +172,10 @@ class ConversationRepository:
         Returns:
             ChatConversation for general guidance
         """
-        doc = self.collection.find_one({
-            "user_id": user_id,
-            "conversation_type": "general"
-        })
+        doc = self.collection.find_one(
+            {"user_id": user_id, "conversation_type": "general"},
+            sort=[("updated_at", -1)]
+        )
         
         if doc:
             return self._document_to_entity(doc)
@@ -189,6 +258,7 @@ class ConversationRepository:
         doc = {
             "user_id": conversation.user_id,
             "conversation_type": conversation.conversation_type,
+            "title": conversation.title,
             "messages": [
                 {
                     "role": msg.role,
@@ -222,6 +292,7 @@ class ConversationRepository:
             conversation_type=doc["conversation_type"],
             messages=messages,
             id=str(doc["_id"]),
+            title=doc.get("title", "Untitled Conversation"),
             analysis_ref_id=doc.get("analysis_ref_id"),
             created_at=doc.get("created_at"),
             updated_at=doc.get("updated_at")
