@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail } from '../api/analysis';
 import { anchorAnalysis, verifyAnalysis } from '../api/blockchain';
+import { getAnalysisConversation } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -15,7 +16,7 @@ const ANALYSIS_STEPS = [
 
 function Detection() {
   const navigate = useNavigate();
-  const { isLoggedIn, isAdmin, logout, user } = useAuth();
+  const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -32,6 +33,7 @@ function Detection() {
   const [isAnchoring, setIsAnchoring] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState(null);
+  const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
   const progressIntervalRef = useRef(null);
   const stepIntervalRef = useRef(null);
 
@@ -220,6 +222,32 @@ function Detection() {
     }
   };
 
+  const handleAskAIGuidance = async () => {
+    if (!detectionResult?.ref_id || !isLoggedIn || isOpeningGuidance) return;
+
+    setIsOpeningGuidance(true);
+    try {
+      // Get or create the analysis-guided conversation
+      const conversation = await getAnalysisConversation(detectionResult.ref_id, accessToken);
+      console.log('[GUIDANCE CONVERSATION]', conversation);
+      
+      // Navigate to chatbot page with conversation ID and analysis context
+      navigate('/chatbot', {
+        state: {
+          conversationId: conversation.conversation_id,
+          conversationType: 'analysis_guided',
+          analysisContext: conversation.analysis_context,
+          isNew: conversation.is_new
+        }
+      });
+    } catch (error) {
+      console.error('[GUIDANCE ERROR]', error);
+      alert(`Error opening guidance: ${error.message || 'Failed to open AI guidance'}`);
+    } finally {
+      setIsOpeningGuidance(false);
+    }
+  };
+
   return (
     <div className="detect">
       <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
@@ -390,13 +418,17 @@ function Detection() {
             <div className="detect__results" role="region" aria-label="Analysis results">
               <div className="detect__resultsHeader detect__resultsHeader--animate">
                 <h2 className="detect__resultsTitle">Analysis Results</h2>
-                <button
-                  className="detect__newAnalysis"
-                  type="button"
-                  onClick={handleNewAnalysis}
-                >
-                  New Analysis
-                </button>
+                {isLoggedIn && (
+                  <button
+                    className="detect__newAnalysis"
+                    type="button"
+                    onClick={handleAskAIGuidance}
+                    disabled={isOpeningGuidance}
+                    title="Get personalized guidance based on this analysis"
+                  >
+                    {isOpeningGuidance ? 'Opening...' : 'Ask AI for Guidance'}
+                  </button>
+                )}
               </div>
 
               <div className="detect__resultsGrid">
