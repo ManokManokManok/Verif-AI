@@ -1,16 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { sendChatMessage, getConversations, getChatHistory, deleteConversation } from '../api/chatbot';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { 
+  sendChatMessage, 
+  getConversations, 
+  getChatHistory, 
+  deleteConversation,
+  sendAnalysisGuidedMessage,
+  getAnalysisGuidedHistory
+} from '../api/chatbot';
 import { useAuth } from '../context/AuthContext';
 
 function AIChatbot() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
   const [text, setText] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('New Conversation');
+  const [conversationType, setConversationType] = useState('general'); // 'general' or 'analysis_guided'
+  const [analysisContext, setAnalysisContext] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
@@ -24,6 +34,26 @@ function AIChatbot() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Handle navigation state for analysis-guided mode
+  useEffect(() => {
+    if (location.state) {
+      const { conversationId, conversationType: navType, analysisContext: navContext, isNew } = location.state;
+      
+      if (navType === 'analysis_guided' && conversationId) {
+        console.log('[CHATBOT] Opening analysis-guided conversation:', conversationId);
+        setConversationType('analysis_guided');
+        setAnalysisContext(navContext);
+        setCurrentConversationId(conversationId);
+        
+        // Load the conversation history
+        loadAnalysisGuidedConversation(conversationId);
+        
+        // Clear navigation state to prevent reloading on refresh
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state]);
 
   // Fetch conversations list when logged in
   useEffect(() => {
@@ -58,9 +88,31 @@ function AIChatbot() {
       setMessages(response.messages || []);
       setCurrentConversationId(conversationId);
       setCurrentTitle(response.title || 'Conversation');
+      setConversationType('general');
+      setAnalysisContext(null);
       setSidebarOpen(false);
     } catch (error) {
       console.error('Failed to load conversation:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load analysis-guided conversation
+  const loadAnalysisGuidedConversation = async (conversationId) => {
+    if (!accessToken) return;
+    
+    setIsLoading(true);
+    try {
+      const response = await getAnalysisGuidedHistory(conversationId, accessToken);
+      setMessages(response.messages || []);
+      setCurrentConversationId(conversationId);
+      setCurrentTitle(response.title || 'Analysis Guidance');
+      setConversationType('analysis_guided');
+      setAnalysisContext(response.analysis_context);
+      setSidebarOpen(false);
+    } catch (error) {
+      console.error('Failed to load analysis-guided conversation:', error);
     } finally {
       setIsLoading(false);
     }
@@ -71,6 +123,8 @@ function AIChatbot() {
     setMessages([]);
     setCurrentConversationId(null);
     setCurrentTitle('New Conversation');
+    setConversationType('general');
+    setAnalysisContext(null);
     setDisclaimer(null);
     setSidebarOpen(false);
   };
@@ -116,19 +170,31 @@ function AIChatbot() {
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(userMessage, accessToken, currentConversationId);
+      let response;
       
-      if (response.disclaimer) {
-        setDisclaimer(response.disclaimer);
-      }
+      // Use different API based on conversation type
+      if (conversationType === 'analysis_guided') {
+        // Analysis-guided conversation
+        if (!currentConversationId) {
+          throw new Error('Analysis conversation ID required');
+        }
+        response = await sendAnalysisGuidedMessage(currentConversationId, userMessage, accessToken);
+      } else {
+        // General conversation
+        response = await sendChatMessage(userMessage, accessToken, currentConversationId);
+        
+        if (response.disclaimer) {
+          setDisclaimer(response.disclaimer);
+        }
 
-      // Update conversation ID if this is a new conversation
-      if (response.is_new_conversation || !currentConversationId) {
-        setCurrentConversationId(response.conversation_id);
-        setCurrentTitle(response.title || userMessage.substring(0, 50));
-        // Refresh conversations list
-        if (isLoggedIn) {
-          fetchConversations();
+        // Update conversation ID if this is a new conversation
+        if (response.is_new_conversation || !currentConversationId) {
+          setCurrentConversationId(response.conversation_id);
+          setCurrentTitle(response.title || userMessage.substring(0, 50));
+          // Refresh conversations list
+          if (isLoggedIn) {
+            fetchConversations();
+          }
         }
       }
 
@@ -218,7 +284,14 @@ function AIChatbot() {
               conversations.map((conv) => (
                 <div
                   key={conv.id}
-                  onClick={() => loadConversation(conv.id)}
+                  onClick={() => {
+                    // Load analysis-guided conversations differently
+                    if (conv.conversation_type === 'analysis_guided') {
+                      loadAnalysisGuidedConversation(conv.id);
+                    } else {
+                      loadConversation(conv.id);
+                    }
+                  }}
                   style={{
                     padding: '10px 12px',
                     borderRadius: '8px',
@@ -428,20 +501,88 @@ function AIChatbot() {
             }}>
               {messages.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b', justifyContent: 'center', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <h2 style={{ fontSize: '24px', marginBottom: '8px', fontWeight: '600' }}>Welcome to VerifAI Guidance</h2>
-                  <p style={{ fontSize: '14px', marginBottom: '20px' }}>Ask me anything about scam prevention!</p>
-                  <div style={{ marginTop: '10px', fontSize: '13px' }}>
-                    <p style={{ marginBottom: '10px' }}> Try asking about:</p>
-                    <ul style={{ listStyle: 'none', padding: 0, marginTop: '10px' }}>
-                      <li>• Common phishing tactics</li>
-                      <li>• How to spot fake emails</li>
-                      <li>• What to do if you've been scammed</li>
-                      <li>• Romance scam red flags</li>
-                    </ul>
-                  </div>
+                  {conversationType === 'analysis_guided' && analysisContext ? (
+                    <>
+                      <h2 style={{ fontSize: '24px', marginBottom: '8px', fontWeight: '600' }}>Analysis Guidance</h2>
+                      <p style={{ fontSize: '14px', marginBottom: '20px' }}>Ask me about the analysis results and what to do next!</p>
+                    </>
+                  ) : (
+                    <>
+                      <h2 style={{ fontSize: '24px', marginBottom: '8px', fontWeight: '600' }}>Welcome to Verif-AI Guidance</h2>
+                      <p style={{ fontSize: '14px', marginBottom: '20px' }}>Ask me anything about scam prevention!</p>
+                      <div style={{ marginTop: '10px', fontSize: '13px' }}>
+                        <p style={{ marginBottom: '10px' }}> Try asking about:</p>
+                        <ul style={{ listStyle: 'none', padding: 0, marginTop: '10px' }}>
+                          <li>• Common phishing tactics</li>
+                          <li>• How to spot fake emails</li>
+                          <li>• What to do if you've been scammed</li>
+                          <li>• Romance scam red flags</li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
               
+              {/* Analysis Context Card - shown for analysis-guided conversations */}
+              {conversationType === 'analysis_guided' && analysisContext && (
+                <div style={{
+                  backgroundColor: analysisContext.is_scam ? '#fef2f2' : '#f0fdf4',
+                  border: `2px solid ${analysisContext.is_scam ? '#fca5a5' : '#86efac'}`,
+                  borderRadius: '12px',
+                  padding: '16px',
+                  marginBottom: '20px',
+                }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    marginBottom: '12px',
+                    gap: '8px'
+                  }}>
+                    <h3 style={{ 
+                      fontSize: '18px', 
+                      fontWeight: '700',
+                      color: analysisContext.is_scam ? '#991b1b' : '#166534',
+                      margin: 0
+                    }}>
+                      {analysisContext.is_scam ? 'High Likelihood' : 'Low Likelihood'}
+                    </h3>
+                  </div>
+                  
+                  {analysisContext.is_scam && analysisContext.scam_type && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <strong style={{ color: '#991b1b' }}>Type:</strong>{' '}
+                      <span style={{ color: '#7f1d1d' }}>{analysisContext.scam_type}</span>
+                    </div>
+                  )}
+                  
+                  <div style={{ marginBottom: '8px', fontSize: '14px', color: '#475569' }}>
+                    <strong>Confidence:</strong> Scam {analysisContext.scam_score?.toFixed(1)}% / Legitimate {analysisContext.legit_score?.toFixed(1)}%
+                  </div>
+                  
+                  {analysisContext.summary && (
+                    <div style={{ 
+                      marginTop: '12px',
+                      padding: '12px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.5)',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      color: '#334155'
+                    }}>
+                      <strong>Summary:</strong> {analysisContext.summary}
+                    </div>
+                  )}
+                  
+                  <div style={{ 
+                    marginTop: '12px',
+                    fontSize: '12px',
+                    fontStyle: 'italic',
+                    color: '#64748b'
+                  }}>
+                    Ask me anything about these results and what steps to take!
+                  </div>
+                </div>
+              )}
 
               {messages.map((msg, index) => {
   const isUser = msg.role === 'user';
