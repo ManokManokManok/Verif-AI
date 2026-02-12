@@ -8,7 +8,6 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { 
   StatCard, 
-  DateRangePicker,
   PeriodSelector,
   LoadingSpinner, 
   ErrorMessage,
@@ -20,10 +19,6 @@ import { getTopScamCategories } from '../../api/admin';
 
 export default function AnalysisStats({ onNotify }) {
   const [period, setPeriod] = useState('month');
-  const [dateRange, setDateRange] = useState({
-    start: null,
-    end: null,
-  });
   const [scamCategories, setScamCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
 
@@ -32,7 +27,7 @@ export default function AnalysisStats({ onNotify }) {
     loading, 
     error, 
     refresh 
-  } = useAnalysisStats(dateRange, period);
+  } = useAnalysisStats({ start: null, end: null }, period);
 
   // Load scam categories on mount and when period changes
   React.useEffect(() => {
@@ -44,7 +39,12 @@ export default function AnalysisStats({ onNotify }) {
     try {
       const response = await getTopScamCategories({ limit: 10, period });
       // API returns { success: true, data: [...categories] }
-      setScamCategories(response.success ? (response.data || []) : []);
+      // Add rank to each category
+      const categoriesWithRank = (response.success ? (response.data || []) : []).map((cat, idx) => ({
+        ...cat,
+        rank: idx + 1
+      }));
+      setScamCategories(categoriesWithRank);
     } catch (err) {
       console.error('Failed to load scam categories:', err);
     } finally {
@@ -99,7 +99,7 @@ export default function AnalysisStats({ onNotify }) {
 
   // Scam categories table columns
   const categoryColumns = [
-    { key: 'rank', label: '#', render: (_, row, idx) => idx + 1 },
+    { key: 'rank', label: '#' },
     { key: 'category', label: 'Category' },
     { 
       key: 'count', 
@@ -138,12 +138,6 @@ export default function AnalysisStats({ onNotify }) {
         <h2 className="admin-section__title">Analysis Statistics</h2>
         <div className="admin-section__actions">
           <PeriodSelector value={period} onChange={setPeriod} />
-          <DateRangePicker
-            startDate={dateRange.start}
-            endDate={dateRange.end}
-            onStartDateChange={(date) => setDateRange(prev => ({ ...prev, start: date }))}
-            onEndDateChange={(date) => setDateRange(prev => ({ ...prev, end: date }))}
-          />
           <button 
             className="admin-btn admin-btn--secondary admin-btn--sm"
             onClick={refresh}

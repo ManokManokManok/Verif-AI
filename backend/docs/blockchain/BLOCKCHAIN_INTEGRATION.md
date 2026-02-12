@@ -58,8 +58,8 @@ ganache --port 7545
 cd contracts
 npm install
 npm run deploy
-# Save the contract address from output
-```
+# Copy address to .env
+# CHAIN_CONTRACT_ADDRESS=0x...
 
 ### 3. Configure Backend
 

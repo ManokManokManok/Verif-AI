@@ -11,6 +11,15 @@ module.exports = {
   
   // Network configurations
   networks: {
+    // Ganache network (for npm scripts)
+    ganache: {
+      host: "127.0.0.1",
+      port: 7545,           // Ganache GUI default port (use 8545 for CLI)
+      network_id: 5777,     // Ganache default network_id
+      gas: 6721975,         // Gas limit
+      gasPrice: 20000000000 // 20 gwei
+    },
+    
     // Local Ganache development network
     development: {
       host: "127.0.0.1",

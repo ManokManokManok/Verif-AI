@@ -4,7 +4,7 @@
 
 /* Analytics Charts */
 .analytics-chart {
-  padding: 1rem;
+  padding: 1.5rem;
 }
 
 .website-analytics {
@@ -18,7 +18,7 @@
 
 
 .analytics-chart h4 {
-  margin: 0 0 1rem 0;
+  margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--admin-text-primary, #e5e7eb);
@@ -33,7 +33,7 @@
 .analytics-chart__bars {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .analytics-chart__bar-item {
@@ -75,11 +75,11 @@
 
 /* Device Breakdown */
 .analytics-devices {
-  padding: 1rem;
+  padding: 1.5rem;
 }
 
 .analytics-devices h4 {
-  margin: 0 0 1rem 0;
+  margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--admin-text-primary, #1a1a2e);
@@ -94,14 +94,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .analytics-devices__item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem;
+  padding: 0.75rem 1rem;
   background: var(--admin-bg-secondary, #f8f9fa);
   border-radius: 6px;
 }
@@ -134,11 +134,11 @@
 
 /* Hourly Pattern */
 .analytics-hourly {
-  padding: 1rem;
+  padding: 1.5rem;
 }
 
 .analytics-hourly h4 {
-  margin: 0 0 1rem 0;
+  margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--admin-text-primary, #1a1a2e);
@@ -147,9 +147,10 @@
 .analytics-hourly__chart {
   display: flex;
   align-items: flex-end;
-  height: 120px;
-  gap: 2px;
+  height: 140px;
+  gap: 3px;
   padding-top: 1rem;
+  padding-bottom: 2rem;
   border-bottom: 1px solid var(--admin-border, #e9ecef);
 }
 
@@ -183,11 +184,11 @@
 
 /* Recent Visits */
 .analytics-recent {
-  padding: 1rem;
+  padding: 1.5rem;
 }
 
 .analytics-recent h4 {
-  margin: 0 0 1rem 0;
+  margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--admin-text-primary, #1a1a2e);
@@ -202,8 +203,8 @@
 .analytics-recent__list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  max-height: 300px;
+  gap: 0.75rem;
+  max-height: 350px;
   overflow-y: auto;
 }
 
@@ -211,7 +212,7 @@
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 1rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.75rem 1rem;
   background: var(--admin-bg-secondary, #f8f9fa);
   border-radius: 6px;
   font-size: 0.85rem;

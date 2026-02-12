@@ -62,8 +62,8 @@
 
 .admin-section__actions {
   display: flex;
-  gap: 1rem;
-  align-items: center;
+  gap: 0.75rem;
+  align-items: flex-end;
 }
 
 /* Card Layout */

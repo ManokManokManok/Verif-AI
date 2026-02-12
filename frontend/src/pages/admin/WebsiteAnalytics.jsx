@@ -307,7 +307,7 @@ export default function WebsiteAnalytics({ onNotify }) {
       </div>
 
       {/* Charts Row */}
-      <div className="admin-grid admin-grid--2 text-gray-200">
+      <div className="admin-grid admin-grid--2 text-gray-200 admin-mt-4">
         <div className="admin-card text-gray-200">
           <BarChart 
             data={topPagesData}
@@ -321,7 +321,7 @@ export default function WebsiteAnalytics({ onNotify }) {
       </div>
 
       {/* Second Row */}
-      <div className="admin-grid admin-grid--2">
+      <div className="admin-grid admin-grid--2 admin-mt-4">
         <div className="admin-card">
           <HourlyPattern data={hourlyPattern} />
         </div>
@@ -335,7 +335,7 @@ export default function WebsiteAnalytics({ onNotify }) {
       </div>
 
       {/* Recent Visits */}
-      <div className="admin-card">
+      <div className="admin-card admin-mt-4">
         <RecentVisits data={recentVisits} />
       </div>
     </div>
