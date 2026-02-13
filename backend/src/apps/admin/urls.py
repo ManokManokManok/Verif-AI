@@ -7,7 +7,7 @@ All admin endpoints require authentication with admin role.
 from django.urls import path
 from . import views
 
-app_name = 'admin'
+app_name = 'admin_api'
 
 urlpatterns = [
     # Model Health - Tab 1
