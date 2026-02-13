@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import loginImage from '../../assets/image/login.png';
+import { isAdmin as checkIsAdmin } from '../api/client';
 
 /**
  * Format error message for display.
@@ -184,7 +185,12 @@ function Login() {
 
     try {
       await login({ email, password });
-      navigate('/detection');
+      // Redirect admins to admin panel, others to detection page
+      if (checkIsAdmin()) {
+        navigate('/admin');
+      } else {
+        navigate('/detection');
+      }
     } catch (err) {
       setError(err.message || 'Failed to log in');
     } finally {

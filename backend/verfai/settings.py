@@ -46,6 +46,11 @@ INSTALLED_APPS = [
     'src.apps.core',
     'src.apps.auth',
     'src.apps.chatbot',
+<<<<<<< HEAD
+=======
+    'src.apps.reports',
+    'src.apps.analytics',
+>>>>>>> origin/josh-admin-feat
 ]
 
 MIDDLEWARE = [
@@ -58,7 +63,11 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'src.interfaces.rest.middleware.AuthenticationMiddleware',
+    'src.infrastructure.middleware.analytics_middleware.AnalyticsMiddleware',
 ]
+
+# Analytics settings
+ANALYTICS_ENABLED = True
 
 ROOT_URLCONF = 'verfai.urls'
 
