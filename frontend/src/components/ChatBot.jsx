@@ -96,7 +96,11 @@ export default function ChatBot({ accessToken = null }) {
     <div className="chatbot-container" style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
+<<<<<<< HEAD
         <h2 style={styles.title}>🛡️ Verif-AI - Scam Prevention Assistant</h2>
+=======
+        <h2 style={styles.title}>🛡️ Bimby - Scam Prevention Assistant</h2>
+>>>>>>> origin/josh-admin-feat
         <button 
           onClick={handleClearChat}
           style={styles.clearButton}
@@ -126,7 +130,11 @@ export default function ChatBot({ accessToken = null }) {
       <div style={styles.messagesArea}>
         {messages.length === 0 && (
           <div style={styles.emptyState}>
+<<<<<<< HEAD
             <p>👋 Hi! I'm Verif-AI, your scam prevention assistant.</p>
+=======
+            <p>👋 Hi! I'm Bimby, your scam prevention assistant.</p>
+>>>>>>> origin/josh-admin-feat
             <p>Ask me about:</p>
             <ul style={styles.suggestedTopics}>
               <li>Common phishing tactics</li>
@@ -147,7 +155,11 @@ export default function ChatBot({ accessToken = null }) {
             }}
           >
             <div style={styles.messageHeader}>
+<<<<<<< HEAD
               <strong>{msg.role === 'user' ? '👤 You' : '🤖 Verif-AI'}</strong>
+=======
+              <strong>{msg.role === 'user' ? '👤 You' : '🤖 Bimby'}</strong>
+>>>>>>> origin/josh-admin-feat
               <span style={styles.timestamp}>
                 {new Date(msg.timestamp).toLocaleTimeString()}
               </span>
@@ -159,7 +171,11 @@ export default function ChatBot({ accessToken = null }) {
         {isLoading && (
           <div style={{ ...styles.message, ...styles.botMessage }}>
             <div style={styles.messageHeader}>
+<<<<<<< HEAD
               <strong>🤖 Verif-AI</strong>
+=======
+              <strong>🤖 Bimby</strong>
+>>>>>>> origin/josh-admin-feat
             </div>
             <div style={styles.messageContent}>
               <span style={styles.typing}>Thinking...</span>

@@ -6,7 +6,8 @@ import { getAnalysisConversation } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { validateMessage, CONSTRAINTS } from '../utils/validation';
+import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
+import { ReportModal } from '../components/reports';
 
 const ANALYSIS_STEPS = [
   'Analyzing message...',
@@ -34,6 +35,7 @@ function Detection() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState(null);
   const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const progressIntervalRef = useRef(null);
   const stepIntervalRef = useRef(null);
 
@@ -418,17 +420,36 @@ function Detection() {
             <div className="detect__results" role="region" aria-label="Analysis results">
               <div className="detect__resultsHeader detect__resultsHeader--animate">
                 <h2 className="detect__resultsTitle">Analysis Results</h2>
-                {isLoggedIn && (
-                  <button
-                    className="detect__newAnalysis"
+                <div className="detect__resultsActions">
+                  {isLoggedIn && (
+                    <>
+                      <button 
+                        className="detect__reportBtn" 
+                        type="button"
+                        onClick={() => setIsReportModalOpen(true)}
+                        title="Report an issue with this analysis"
+                      >
+                        🚩 Report Issue
+                      </button>
+                      <button
+                        className="detect__newAnalysis"
+                        type="button"
+                        onClick={handleAskAIGuidance}
+                        disabled={isOpeningGuidance}
+                        title="Get personalized guidance based on this analysis"
+                      >
+                        {isOpeningGuidance ? 'Opening...' : '💬 Ask AI for Guidance'}
+                      </button>
+                    </>
+                  )}
+                  <button 
+                    className="detect__newAnalysis" 
                     type="button"
-                    onClick={handleAskAIGuidance}
-                    disabled={isOpeningGuidance}
-                    title="Get personalized guidance based on this analysis"
+                    onClick={handleNewAnalysis}
                   >
-                    {isOpeningGuidance ? 'Opening...' : 'Ask AI for Guidance'}
+                    ✨ New Analysis
                   </button>
-                )}
+                </div>
               </div>
 
               <div className="detect__resultsGrid">
@@ -510,6 +531,14 @@ function Detection() {
           </div>
         </footer>
       </div>
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        analysisId={detectionResult?.id}
+        analysisRefId={detectionResult?.ref_id}
+      />
     </div>
   );
 }

@@ -55,6 +55,21 @@ class JWTService:
             refresh_token=refresh_token
         )
     
+    def verify_token(self, token: str) -> Optional[Dict]:
+        """
+        Verify and decode a token (alias for verify_access_token).
+        
+        Args:
+            token: JWT access token
+        
+        Returns:
+            Decoded token payload or None if invalid
+        """
+        try:
+            return self.verify_access_token(token)
+        except Exception:
+            return None
+    
     def verify_access_token(self, token: str) -> Dict:
         """
         Verify and decode an access token.

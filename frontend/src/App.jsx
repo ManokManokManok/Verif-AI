@@ -1,11 +1,48 @@
-import { Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
 import Detection from './pages/Detection.jsx';
 import AIChatbot from './pages/AIChatbot.jsx';
-import BlockchainPage from './pages/Blockchain.jsx';
+import { AdminDashboard } from './pages/admin';
+
+/**
+ * Protected Route Component
+ * 
+ * Wraps routes that require authentication and optionally admin role.
+ */
+function ProtectedRoute({ children, requireAdmin = false }) {
+  const { isLoggedIn, isAdmin, loading } = useAuth();
+
+  // Show loading state while checking auth
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh',
+        background: '#0f0f0f',
+        color: '#fff'
+      }}>
+        Loading...
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Redirect to home if admin is required but user is not admin
+  if (requireAdmin && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
 
 function App() {
   return (
@@ -16,7 +53,16 @@ function App() {
         <Route path="/chatbot" element={<AIChatbot />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/blockchain" element={<BlockchainPage />} />
+        {/* Redirect old /blockchain route to admin panel */}
+        <Route path="/blockchain" element={<Navigate to="/admin" replace />} />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute requireAdmin>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
       </Routes>
     </AuthProvider>
   );

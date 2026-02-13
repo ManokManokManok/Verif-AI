@@ -24,7 +24,10 @@ class ConversationRepository:
         "_id": ObjectId,
         "user_id": str,                    # User's MongoDB ID
         "conversation_type": str,           # "general" | "analysis_guided"
+<<<<<<< HEAD
         "title": str,                       # Conversation title (auto-generated from first message)
+=======
+>>>>>>> origin/josh-admin-feat
         "analysis_ref_id": str (optional),  # UUID of analysis (for guided)
         "messages": [
             {
@@ -93,6 +96,7 @@ class ConversationRepository:
         
         return self._document_to_entity(doc)
     
+<<<<<<< HEAD
     def get_by_id_for_user(self, conversation_id: str, user_id: str) -> Optional[ChatConversation]:
         """Get conversation by ID with user ownership verification."""
         try:
@@ -165,6 +169,12 @@ class ConversationRepository:
         """
         Get user's most recent general conversation.
         Creates one if none exist.
+=======
+    def get_general_conversation(self, user_id: str) -> Optional[ChatConversation]:
+        """
+        Get user's general conversation.
+        Creates one if it doesn't exist.
+>>>>>>> origin/josh-admin-feat
         
         Args:
             user_id: User's MongoDB ID
@@ -172,10 +182,17 @@ class ConversationRepository:
         Returns:
             ChatConversation for general guidance
         """
+<<<<<<< HEAD
         doc = self.collection.find_one(
             {"user_id": user_id, "conversation_type": "general"},
             sort=[("updated_at", -1)]
         )
+=======
+        doc = self.collection.find_one({
+            "user_id": user_id,
+            "conversation_type": "general"
+        })
+>>>>>>> origin/josh-admin-feat
         
         if doc:
             return self._document_to_entity(doc)
@@ -184,6 +201,7 @@ class ConversationRepository:
         conversation = ChatConversation.create_general(user_id)
         return self.save(conversation)
     
+<<<<<<< HEAD
     def get_by_analysis_ref_id(
         self,
         analysis_ref_id: str,
@@ -234,6 +252,8 @@ class ConversationRepository:
         )
         return self.save(conversation)
     
+=======
+>>>>>>> origin/josh-admin-feat
     def get_analysis_conversation(
         self, 
         user_id: str, 
@@ -308,7 +328,10 @@ class ConversationRepository:
         doc = {
             "user_id": conversation.user_id,
             "conversation_type": conversation.conversation_type,
+<<<<<<< HEAD
             "title": conversation.title,
+=======
+>>>>>>> origin/josh-admin-feat
             "messages": [
                 {
                     "role": msg.role,
@@ -342,7 +365,10 @@ class ConversationRepository:
             conversation_type=doc["conversation_type"],
             messages=messages,
             id=str(doc["_id"]),
+<<<<<<< HEAD
             title=doc.get("title", "Untitled Conversation"),
+=======
+>>>>>>> origin/josh-admin-feat
             analysis_ref_id=doc.get("analysis_ref_id"),
             created_at=doc.get("created_at"),
             updated_at=doc.get("updated_at")

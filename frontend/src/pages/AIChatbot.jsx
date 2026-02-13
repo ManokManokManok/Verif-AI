@@ -401,7 +401,7 @@ function AIChatbot() {
       </aside>
 
       <div className="detect__main" style={{ 
-        transition: 'margin-left 0.3s cubic-bezier(.4,0,.6,1)', 
+        transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', 
         marginLeft: sidebarOpen ? 320 : 72,
         display: 'flex',
         flexDirection: 'column',

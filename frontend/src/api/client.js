@@ -273,4 +273,43 @@ export function isAdmin() {
   return hasRole('admin');
 }
 
+/**
+ * API Client object with REST methods for convenience
+ * Provides axios-like interface: apiClient.get(), apiClient.post(), etc.
+ */
+const apiClient = {
+  async get(path, config = {}) {
+    const response = await authApiRequest(path, { method: 'GET', ...config });
+    return { data: response };
+  },
+  async post(path, data, config = {}) {
+    const response = await authApiRequest(path, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...config,
+    });
+    return { data: response };
+  },
+  async put(path, data, config = {}) {
+    const response = await authApiRequest(path, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      ...config,
+    });
+    return { data: response };
+  },
+  async patch(path, data, config = {}) {
+    const response = await authApiRequest(path, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+      ...config,
+    });
+    return { data: response };
+  },
+  async delete(path, config = {}) {
+    const response = await authApiRequest(path, { method: 'DELETE', ...config });
+    return { data: response };
+  },
+};
 
+export default apiClient;
