@@ -248,16 +248,11 @@ def send_message(request: Request) -> Response:
             return Response(result, status=status.HTTP_200_OK)
         
         # For authenticated users: Save to database
-<<<<<<< HEAD
         # Get optional conversation_id to continue existing conversation
         conversation_id = request.data.get('conversation_id')
         
         chatbot = get_chatbot_use_case()
         result = chatbot.send_message(user_id, message, conversation_id)
-=======
-        chatbot = get_chatbot_use_case()
-        result = chatbot.send_message(user_id, message)
->>>>>>> origin/josh-admin-feat
         result['is_authenticated'] = True
         
         return Response(result, status=status.HTTP_200_OK)
@@ -287,26 +282,17 @@ def send_message(request: Request) -> Response:
 @rate_limit('api_read')
 def get_history(request: Request) -> Response:
     """
-<<<<<<< HEAD
     Get a specific conversation's history or the most recent one.
     
     GET /api/chat/history?conversation_id=mongodb_id
     
     Query Parameters:
         conversation_id (optional): Specific conversation ID to retrieve
-=======
-    Get user's general chatbot conversation history.
-    
-    GET /api/chat/history
->>>>>>> origin/josh-admin-feat
     
     Response (Authenticated):
     {
         "conversation_id": "mongodb_id",
-<<<<<<< HEAD
         "title": "How do I spot phishing...",
-=======
->>>>>>> origin/josh-admin-feat
         "messages": [...],
         "created_at": "2026-02-01T15:00:00Z",
         "updated_at": "2026-02-02T10:30:05Z",
@@ -355,15 +341,10 @@ def get_history(request: Request) -> Response:
             }, status=status.HTTP_200_OK)
         
         # For authenticated users: Get saved conversation
-<<<<<<< HEAD
         conversation_id = request.query_params.get('conversation_id')
         
         chatbot = get_chatbot_use_case()
         history = chatbot.get_conversation_history(user_id, conversation_id)
-=======
-        chatbot = get_chatbot_use_case()
-        history = chatbot.get_conversation_history(user_id)
->>>>>>> origin/josh-admin-feat
         history['is_authenticated'] = True
         
         return Response(history, status=status.HTTP_200_OK)
@@ -455,7 +436,7 @@ def clear_history(request: Request) -> Response:
                 'message': 'An unexpected error occurred'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-<<<<<<< HEAD
+
 
 
 def _extract_user_id_from_jwt(request: Request):
@@ -941,5 +922,4 @@ def get_analysis_guided_history(request: Request, conversation_id: str) -> Respo
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-=======
->>>>>>> origin/josh-admin-feat
+
