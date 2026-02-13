@@ -46,11 +46,8 @@ INSTALLED_APPS = [
     'src.apps.core',
     'src.apps.auth',
     'src.apps.chatbot',
-<<<<<<< HEAD
-=======
     'src.apps.reports',
     'src.apps.analytics',
->>>>>>> origin/josh-admin-feat
 ]
 
 MIDDLEWARE = [
