@@ -47,11 +47,7 @@ class ChatConversation:
     """
     A chat conversation between user and the assistant.
     
-<<<<<<< HEAD
     For GENERAL conversations: Multiple per user, each with its own title
-=======
-    For GENERAL conversations: One per user, ongoing general guidance
->>>>>>> origin/josh-admin-feat
     For ANALYSIS_GUIDED: One per analysis, specific scam guidance
     """
     user_id: str  # MongoDB user ID
@@ -60,28 +56,18 @@ class ChatConversation:
     
     # Optional fields
     id: Optional[str] = None  # MongoDB ObjectId as string
-<<<<<<< HEAD
     title: Optional[str] = None  # Conversation title (auto-generated from first message)
-=======
->>>>>>> origin/josh-admin-feat
     analysis_ref_id: Optional[str] = None  # UUID of analysis (for guided mode)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
     
     @classmethod
-<<<<<<< HEAD
     def create_general(cls, user_id: str, title: Optional[str] = None) -> 'ChatConversation':
-=======
-    def create_general(cls, user_id: str) -> 'ChatConversation':
->>>>>>> origin/josh-admin-feat
         """Create a new general conversation for a user."""
         return cls(
             user_id=user_id,
             conversation_type=ConversationType.GENERAL.value,
-<<<<<<< HEAD
             title=title or "New Conversation",
-=======
->>>>>>> origin/josh-admin-feat
             messages=[],
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -91,21 +77,14 @@ class ChatConversation:
     def create_analysis_guided(
         cls, 
         user_id: str, 
-<<<<<<< HEAD
         analysis_ref_id: str,
         title: Optional[str] = None
-=======
-        analysis_ref_id: str
->>>>>>> origin/josh-admin-feat
     ) -> 'ChatConversation':
         """Create a new analysis-guided conversation."""
         return cls(
             user_id=user_id,
             conversation_type=ConversationType.ANALYSIS_GUIDED.value,
-<<<<<<< HEAD
             title=title or "Analysis Discussion",
-=======
->>>>>>> origin/josh-admin-feat
             analysis_ref_id=analysis_ref_id,
             messages=[],
             created_at=datetime.utcnow(),
@@ -121,7 +100,6 @@ class ChatConversation:
         )
         self.messages.append(message)
         self.updated_at = datetime.utcnow()
-<<<<<<< HEAD
         
         # Auto-generate title from first user message if not set
         if self.title in [None, "New Conversation", "Analysis Discussion"]:
@@ -138,8 +116,6 @@ class ChatConversation:
         if len(title) > 50:
             title = title[:47] + "..."
         return title if title else "New Conversation"
-=======
->>>>>>> origin/josh-admin-feat
     
     def get_message_history_for_llm(self) -> List[dict]:
         """
@@ -158,16 +134,12 @@ class ChatConversation:
             "id": self.id,
             "user_id": self.user_id,
             "conversation_type": self.conversation_type,
-<<<<<<< HEAD
             "title": self.title,
-=======
->>>>>>> origin/josh-admin-feat
             "analysis_ref_id": self.analysis_ref_id,
             "messages": [msg.to_dict() for msg in self.messages],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
-<<<<<<< HEAD
     
     def to_summary_dict(self) -> dict:
         """Convert to a summary dictionary (for listing conversations)."""
@@ -179,5 +151,3 @@ class ChatConversation:
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
-=======
->>>>>>> origin/josh-admin-feat

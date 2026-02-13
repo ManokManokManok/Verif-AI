@@ -2,7 +2,6 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-<<<<<<< HEAD
     # Send message to chatbot (creates new or continues existing conversation)
     path('message/', views.send_message, name='chatbot_send_message'),
     
@@ -20,10 +19,3 @@ urlpatterns = [
     path('analysis-guided/history/<str:conversation_id>/', views.get_analysis_guided_history, name='chatbot_get_analysis_guided_history'),  # GET - get analysis conversation history
     path('analysis-guided/<str:analysis_ref_id>/', views.get_analysis_conversation, name='chatbot_get_analysis_conversation'),  # GET - get or create analysis conversation
 ]
-
-=======
-    path('message/', views.send_message, name='chatbot_send_message'),
-    path('history/', views.get_history, name='chatbot_get_history'),
-    path('history/', views.clear_history, name='chatbot_clear_history'),  # DELETE method
-]
->>>>>>> origin/josh-admin-feat

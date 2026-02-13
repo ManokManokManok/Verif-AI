@@ -9,16 +9,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
  * Send a message to the chatbot
  * @param {string} message - User's message
  * @param {string} accessToken - JWT access token (optional for anonymous users)
-<<<<<<< HEAD
  * @param {string} conversationId - Optional conversation ID to continue existing conversation
  * @returns {Promise<object>} Response with bot's reply
  */
 export async function sendChatMessage(message, accessToken = null, conversationId = null) {
-=======
- * @returns {Promise<object>} Response with bot's reply
- */
-export async function sendChatMessage(message, accessToken = null) {
->>>>>>> origin/josh-admin-feat
   const headers = {
     'Content-Type': 'application/json',
   };
@@ -34,7 +28,6 @@ export async function sendChatMessage(message, accessToken = null) {
     headers['X-Session-ID'] = sessionId;
   }
 
-<<<<<<< HEAD
   const body = { message };
   if (conversationId) {
     body.conversation_id = conversationId;
@@ -44,12 +37,6 @@ export async function sendChatMessage(message, accessToken = null) {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-=======
-  const response = await fetch(`${API_BASE_URL}/chat/message/`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ message }),
->>>>>>> origin/josh-admin-feat
   });
 
   if (!response.ok) {
@@ -61,20 +48,12 @@ export async function sendChatMessage(message, accessToken = null) {
 }
 
 /**
-<<<<<<< HEAD
  * Get chat history for a specific conversation
  * @param {string} accessToken - JWT access token (optional)
  * @param {string} conversationId - Optional specific conversation ID
  * @returns {Promise<object>} Chat history
  */
 export async function getChatHistory(accessToken = null, conversationId = null) {
-=======
- * Get chat history
- * @param {string} accessToken - JWT access token (optional)
- * @returns {Promise<object>} Chat history
- */
-export async function getChatHistory(accessToken = null) {
->>>>>>> origin/josh-admin-feat
   const headers = {};
 
   if (accessToken) {
@@ -84,16 +63,12 @@ export async function getChatHistory(accessToken = null) {
     headers['X-Session-ID'] = sessionId;
   }
 
-<<<<<<< HEAD
   let url = `${API_BASE_URL}/api/chat/history/`;
   if (conversationId) {
     url += `?conversation_id=${conversationId}`;
   }
 
   const response = await fetch(url, {
-=======
-  const response = await fetch(`${API_BASE_URL}/api/chat/history/`, {
->>>>>>> origin/josh-admin-feat
     method: 'GET',
     headers,
   });
@@ -107,7 +82,6 @@ export async function getChatHistory(accessToken = null) {
 }
 
 /**
-<<<<<<< HEAD
  * Get all conversations for logged in user
  * @param {string} accessToken - JWT access token
  * @param {number} limit - Maximum number of conversations to return
@@ -164,8 +138,6 @@ export async function deleteConversation(conversationId, accessToken) {
 }
 
 /**
-=======
->>>>>>> origin/josh-admin-feat
  * Clear chat history (start fresh)
  * @param {string} accessToken - JWT access token (optional)
  * @returns {Promise<object>} Success message
@@ -215,7 +187,6 @@ function getOrCreateSessionId() {
 export function clearSessionId() {
   localStorage.removeItem('chatbot_session_id');
 }
-<<<<<<< HEAD
 
 
 // ============================================================
@@ -311,5 +282,3 @@ export async function getAnalysisGuidedHistory(conversationId, accessToken) {
 
   return await response.json();
 }
-=======
->>>>>>> origin/josh-admin-feat
