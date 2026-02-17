@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import loginImage from '../../assets/image/login.png';
-import { isAdmin as checkIsAdmin } from '../api/client';
+import { isAdmin as checkIsAdmin, sendMfaCodeRequest, verifyMfaCodeRequest } from '../api/client';
 
 /**
  * Format error message for display.
@@ -171,12 +171,17 @@ function GoogleIcon() {
 
 function Login() {
   const navigate = useNavigate();
-  const { login, isLoading: authLoading } = useAuth();
+  const { refreshUser } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // MFA state
+  const [mfaStep, setMfaStep] = useState(false);
+  const [mfaCode, setMfaCode] = useState(['', '', '', '', '', '']);
+  const codeRefs = useRef([]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -184,15 +189,80 @@ function Login() {
     setLoading(true);
 
     try {
-      await login({ email, password });
-      // Redirect admins to admin panel, others to detection page
+      // Step 1: Send MFA code (validates credentials on the backend)
+      await sendMfaCodeRequest({ email, password });
+      setMfaStep(true);
+    } catch (err) {
+      setError(err.message || 'Failed to log in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+    const code = mfaCode.join('');
+    if (code.length < 6) {
+      setError('Please enter the full 6-digit code');
+      return;
+    }
+    setLoading(true);
+
+    try {
+      await verifyMfaCodeRequest({ email, code });
+      // Refresh user state from stored data
+      refreshUser();
       if (checkIsAdmin()) {
         navigate('/admin');
       } else {
         navigate('/detection');
       }
     } catch (err) {
-      setError(err.message || 'Failed to log in');
+      setError(err.message || 'Invalid verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCodeChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const next = [...mfaCode];
+    next[index] = value.slice(-1);
+    setMfaCode(next);
+    // Auto-focus next input
+    if (value && index < 5) {
+      codeRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleCodeKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !mfaCode[index] && index > 0) {
+      codeRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleCodePaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+    const next = [...mfaCode];
+    for (let i = 0; i < 6; i++) {
+      next[i] = pasted[i] || '';
+    }
+    setMfaCode(next);
+    const focusIdx = Math.min(pasted.length, 5);
+    codeRefs.current[focusIdx]?.focus();
+  };
+
+  const handleResendCode = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await sendMfaCodeRequest({ email, password });
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Failed to resend code');
     } finally {
       setLoading(false);
     }
@@ -206,7 +276,7 @@ function Login() {
     <div className="auth auth--login">
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
-          <p className="auth__tagline">Know What's Real</p>
+          <p className="auth__tagline">Know What&apos;s Real</p>
           <p className="auth__brand">Verif-AI</p>
         </div>
         <img src={loginImage} alt="Login illustration" className="auth__image" />
@@ -223,103 +293,167 @@ function Login() {
           </button>
         </div>
 
-        <h1 className="auth__title">Log in</h1>
-        <p className="auth__subtitle">
-          If you don&apos;t have an account register
-          <br />
-          You can{' '}
-          <Link to="/signup" className="auth__link">
-            Register here !
-          </Link>
-        </p>
+        {!mfaStep ? (
+          <>
+            <h1 className="auth__title">Log in</h1>
+            <p className="auth__subtitle">
+              If you don&apos;t have an account register
+              <br />
+              You can{' '}
+              <Link to="/signup" className="auth__link">
+                Register here !
+              </Link>
+            </p>
 
-        <form
-          className="auth__form"
-          onSubmit={handleSubmit}
-        >
-          <label className="auth__field">
-            <span>Email</span>
-            <div className="auth__input-wrapper">
-              <input
-                type="email"
-                placeholder="Enter your email address"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <span className="auth__input-icon">
-                <EmailIcon />
-              </span>
-            </div>
-          </label>
+            <form
+              className="auth__form"
+              onSubmit={handleSubmit}
+            >
+              <label className="auth__field">
+                <span>Email</span>
+                <div className="auth__input-wrapper">
+                  <input
+                    type="email"
+                    placeholder="Enter your email address"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <span className="auth__input-icon">
+                    <EmailIcon />
+                  </span>
+                </div>
+              </label>
 
-          <label className="auth__field">
-            <span>Password</span>
-            <div className="auth__password-wrapper">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Enter your Password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <span className="auth__input-icon auth__input-icon--left">
-                <LockIcon />
-              </span>
-              <button
-                type="button"
-                className="auth__password-toggle"
-                onClick={() => setShowPassword((prev) => !prev)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                <span className="auth__password-icon">
-                  <EyeIcon slashed={!showPassword} />
-                </span>
-              </button>
-            </div>
-          </label>
+              <label className="auth__field">
+                <span>Password</span>
+                <div className="auth__password-wrapper">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter your Password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <span className="auth__input-icon auth__input-icon--left">
+                    <LockIcon />
+                  </span>
+                  <button
+                    type="button"
+                    className="auth__password-toggle"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    <span className="auth__password-icon">
+                      <EyeIcon slashed={!showPassword} />
+                    </span>
+                  </button>
+                </div>
+              </label>
 
-          <div className="auth__row auth__row--between">
-            <label className="auth__checkbox">
-              <input type="checkbox" />
-              <span>Remember me</span>
-            </label>
-            <button type="button" className="auth__link auth__link--button">
-              Forgot Password ?
-            </button>
-          </div>
+              <div className="auth__row auth__row--between">
+                <label className="auth__checkbox">
+                  <input type="checkbox" />
+                  <span>Remember me</span>
+                </label>
+                <Link to="/forgot-password" className="auth__link" style={{ fontSize: 12 }}>
+                  Forgot Password ?
+                </Link>
+              </div>
 
-          {error && (
-            <div className="auth__error-container">
-              {hasMultipleErrors ? (
-                <ul className="auth__error-list">
-                  {errorList.map((err, index) => (
-                    <li key={index} className="auth__error-item">{err}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="auth__error">{error}</p>
+              {error && (
+                <div className="auth__error-container">
+                  {hasMultipleErrors ? (
+                    <ul className="auth__error-list">
+                      {errorList.map((err, index) => (
+                        <li key={index} className="auth__error-item">{err}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="auth__error">{error}</p>
+                  )}
+                </div>
               )}
-            </div>
-          )}
 
-          <button type="submit" className="auth__primary">
-            <strong>{loading ? 'Logging in…' : 'Login'}</strong>
-          </button>
+              <button type="submit" className="auth__primary" disabled={loading}>
+                <strong>{loading ? 'Sending code…' : 'Login'}</strong>
+              </button>
 
-          <p className="auth__or">or continue with</p>
-          <div className="auth__socials">
-            <button type="button" className="auth__social">
-              <FacebookIcon />
-            </button>
-            <button type="button" className="auth__social">
-              <AppleIcon />
-            </button>
-            <button type="button" className="auth__social">
-              <GoogleIcon />
-            </button>
-          </div>
-        </form>
+              <p className="auth__or">or continue with</p>
+              <div className="auth__socials">
+                <button type="button" className="auth__social">
+                  <FacebookIcon />
+                </button>
+                <button type="button" className="auth__social">
+                  <AppleIcon />
+                </button>
+                <button type="button" className="auth__social">
+                  <GoogleIcon />
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <>
+            <h1 className="auth__title">Verification Code</h1>
+            <p className="auth__subtitle">
+              We&apos;ve sent a 6-digit code to <strong>{email}</strong>.
+              <br />
+              Enter it below to complete login.
+            </p>
+
+            <form className="auth__form" onSubmit={handleMfaSubmit}>
+              <div className="mfa-code-inputs" onPaste={handleCodePaste}>
+                {mfaCode.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => (codeRefs.current[i] = el)}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    className="mfa-code-input"
+                    value={digit}
+                    onChange={(e) => handleCodeChange(i, e.target.value)}
+                    onKeyDown={(e) => handleCodeKeyDown(i, e)}
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+
+              {error && (
+                <div className="auth__error-container">
+                  <p className="auth__error">{error}</p>
+                </div>
+              )}
+
+              <button type="submit" className="auth__primary" disabled={loading}>
+                <strong>{loading ? 'Verifying…' : 'Verify & Login'}</strong>
+              </button>
+
+              <p className="auth__subtitle" style={{ textAlign: 'center', marginTop: 8 }}>
+                Didn&apos;t receive the code?{' '}
+                <button
+                  type="button"
+                  className="auth__link auth__link--button"
+                  onClick={handleResendCode}
+                  disabled={loading}
+                >
+                  Resend Code
+                </button>
+              </p>
+
+              <p style={{ textAlign: 'center', marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="auth__link auth__link--button"
+                  onClick={() => { setMfaStep(false); setError(''); setMfaCode(['', '', '', '', '', '']); }}
+                >
+                  ← Back to Login
+                </button>
+              </p>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );

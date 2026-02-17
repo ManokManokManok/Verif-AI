@@ -14,4 +14,8 @@ urlpatterns = [
     path('reset-password/', views.reset_password, name='reset_password'),
     path('logout/', views.logout, name='logout'),
     path('refresh/', views.refresh_token, name='refresh_token'),
+
+    # MFA (Multi-Factor Authentication)
+    path('mfa/send/', views.send_mfa_code, name='mfa_send'),
+    path('mfa/verify/', views.verify_mfa_code, name='mfa_verify'),
 ]

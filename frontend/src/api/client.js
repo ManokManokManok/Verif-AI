@@ -30,6 +30,116 @@ const API_BASE =
 /** Request timeout: 2 minutes only */
 const REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 
+/** Flag to prevent multiple concurrent refresh attempts */
+let isRefreshing = false;
+/** Queue of requests waiting for token refresh */
+let refreshQueue = [];
+
+/**
+ * Decode a JWT payload without verification (for client-side expiry checks only).
+ * @param {string} token - JWT token string
+ * @returns {object|null} Decoded payload or null
+ */
+function decodeTokenPayload(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if a JWT token is expired or about to expire.
+ * @param {string} token - JWT token string
+ * @param {number} bufferSeconds - Consider token expired this many seconds early (default: 30)
+ * @returns {boolean} True if expired or will expire within buffer window
+ */
+export function isTokenExpired(token, bufferSeconds = 30) {
+  if (!token) return true;
+  const payload = decodeTokenPayload(token);
+  if (!payload || !payload.exp) return true;
+  const now = Math.floor(Date.now() / 1000);
+  return payload.exp - now <= bufferSeconds;
+}
+
+/**
+ * Attempt to refresh the access token using the stored refresh token.
+ * @returns {Promise<string|null>} New access token or null on failure
+ */
+async function refreshAccessToken() {
+  const refreshToken = window.localStorage.getItem('refresh_token');
+  if (!refreshToken || isTokenExpired(refreshToken, 0)) {
+    return null;
+  }
+
+  try {
+    const url = `${API_BASE}/auth/refresh/`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data?.tokens?.access_token) {
+      window.localStorage.setItem('access_token', data.tokens.access_token);
+      if (data.tokens.refresh_token) {
+        window.localStorage.setItem('refresh_token', data.tokens.refresh_token);
+      }
+      return data.tokens.access_token;
+    }
+    // Some backends return { access_token } directly
+    if (data?.access_token) {
+      window.localStorage.setItem('access_token', data.access_token);
+      if (data.refresh_token) {
+        window.localStorage.setItem('refresh_token', data.refresh_token);
+      }
+      return data.access_token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Handle token refresh with queuing to avoid multiple concurrent refresh calls.
+ * @returns {Promise<string|null>} New access token or null
+ */
+function handleTokenRefresh() {
+  if (isRefreshing) {
+    // Another refresh is in progress — queue this request
+    return new Promise((resolve) => {
+      refreshQueue.push(resolve);
+    });
+  }
+
+  isRefreshing = true;
+  return refreshAccessToken()
+    .then((newToken) => {
+      // Resolve all queued requests
+      refreshQueue.forEach((cb) => cb(newToken));
+      refreshQueue = [];
+      return newToken;
+    })
+    .finally(() => {
+      isRefreshing = false;
+    });
+}
+
+/**
+ * Dispatch a custom event to notify the app that the session has expired.
+ * AuthContext listens for this to show the re-login prompt.
+ */
+function dispatchSessionExpired() {
+  window.dispatchEvent(new CustomEvent('session-expired'));
+}
+
 /**
  * Get auth headers with access token.
  * Tokens are stored in localStorage (consider sessionStorage for higher security).
@@ -84,6 +194,15 @@ async function apiRequest(path, options = {}) {
   const data = isJson ? await response.json() : null;
 
   if (!response.ok) {
+    // Handle 401 Unauthorized — attempt token refresh
+    if (response.status === 401) {
+      const error = new Error(data?.message || 'Unauthorized');
+      error.status = 401;
+      error.payload = data;
+      error.isUnauthorized = true;
+      throw error;
+    }
+
     // Handle rate limiting gracefully
     if (response.status === 429) {
       const rateLimitInfo = handleRateLimitError({ status: 429, payload: data });
@@ -132,16 +251,52 @@ async function apiRequest(path, options = {}) {
 }
 
 /**
- * Make an authenticated API request
+ * Make an authenticated API request.
+ * Automatically handles token refresh on 401 responses.
  */
 export async function authApiRequest(path, options = {}) {
-  return apiRequest(path, {
-    ...options,
-    headers: {
-      ...getAuthHeaders(),
-      ...(options.headers || {}),
-    },
-  });
+  // Pre-check: if access token is about to expire, refresh proactively
+  const currentToken = window.localStorage.getItem('access_token');
+  if (currentToken && isTokenExpired(currentToken)) {
+    const newToken = await handleTokenRefresh();
+    if (!newToken) {
+      // Refresh failed — session is expired
+      dispatchSessionExpired();
+      const error = new Error('Session expired. Please log in again.');
+      error.status = 401;
+      error.isSessionExpired = true;
+      throw error;
+    }
+  }
+
+  try {
+    return await apiRequest(path, {
+      ...options,
+      headers: {
+        ...getAuthHeaders(),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (err) {
+    // If 401, attempt one token refresh and retry
+    if (err.status === 401 && !options._retried) {
+      const newToken = await handleTokenRefresh();
+      if (newToken) {
+        return apiRequest(path, {
+          ...options,
+          _retried: true,
+          headers: {
+            Authorization: `Bearer ${newToken}`,
+            ...(options.headers || {}),
+          },
+        });
+      }
+      // Refresh failed — notify user
+      dispatchSessionExpired();
+      err.isSessionExpired = true;
+    }
+    throw err;
+  }
 }
 
 export async function loginRequest({ email, password }) {
@@ -200,6 +355,87 @@ export async function signupRequest({ email, username, password }) {
       username: username.trim(),
       password 
     }),
+  });
+}
+
+/**
+ * Step 1 of MFA login: verify credentials and send MFA code to email.
+ */
+export async function sendMfaCodeRequest({ email, password }) {
+  const validation = validateLoginForm({ email, password });
+  if (!validation.valid) {
+    const error = new Error(Object.values(validation.errors).join(', '));
+    error.isValidationError = true;
+    error.validationErrors = validation.errors;
+    throw error;
+  }
+
+  return apiRequest('/auth/mfa/send/', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      password,
+    }),
+  });
+}
+
+/**
+ * Step 2 of MFA login: verify the 6-digit code and get tokens.
+ */
+export async function verifyMfaCodeRequest({ email, code }) {
+  const data = await apiRequest('/auth/mfa/verify/', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      code: code.trim(),
+    }),
+  });
+
+  // Store tokens and user info (same as loginRequest)
+  if (data?.tokens) {
+    window.localStorage.setItem('access_token', data.tokens.access_token);
+    window.localStorage.setItem('refresh_token', data.tokens.refresh_token);
+  }
+  if (data?.user) {
+    const safeUser = {
+      id: data.user.id,
+      email: data.user.email,
+      username: data.user.username,
+      roles: data.user.roles,
+    };
+    window.localStorage.setItem('user', JSON.stringify(safeUser));
+  }
+
+  return data;
+}
+
+/**
+ * Verify email using token from verification link.
+ */
+export async function verifyEmailRequest(token) {
+  return apiRequest('/auth/verify-email/', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+/**
+ * Request a password reset email.
+ */
+export async function requestPasswordResetRequest(email) {
+  return apiRequest('/auth/request-reset/', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  });
+}
+
+/**
+ * Reset password using token from reset link.
+ */
+export async function resetPasswordRequest({ token, new_password }) {
+  return apiRequest('/auth/reset-password/', {
+    method: 'POST',
+    body: JSON.stringify({ token, new_password }),
   });
 }
 

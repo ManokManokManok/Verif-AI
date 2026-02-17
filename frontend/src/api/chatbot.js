@@ -33,7 +33,7 @@ export async function sendChatMessage(message, accessToken = null, conversationI
     body.conversation_id = conversationId;
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/chat/message/`, {
+  const response = await fetch(`${API_BASE_URL}/chat/message/`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -96,7 +96,7 @@ export async function getConversations(accessToken, limit = 50) {
     'Authorization': `Bearer ${accessToken}`,
   };
 
-  const response = await fetch(`${API_BASE_URL}/api/chat/conversations/?limit=${limit}`, {
+  const response = await fetch(`${API_BASE_URL}/chat/conversations/?limit=${limit}`, {
     method: 'GET',
     headers,
   });
