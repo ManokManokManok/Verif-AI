@@ -173,3 +173,45 @@ class MockEmailService:
         print(f"MOCK: Reset token: {token}")
         print(f"MOCK: Reset link: http://localhost:8000/api/auth/reset-password?token={token}")
         return True
+
+
+class MFACodeGenerator:
+    """
+    Multi-Factor Authentication code generator.
+
+    Generates cryptographically secure 6-digit numeric codes
+    for email-based two-factor authentication.
+    """
+
+    @staticmethod
+    def generate_code(length: int = 6) -> str:
+        """
+        Generate a numeric MFA code.
+
+        Args:
+            length: Number of digits (default 6).
+
+        Returns:
+            Zero-padded numeric string, e.g. "042917".
+        """
+        return ''.join(secrets.choice(string.digits) for _ in range(length))
+
+    @staticmethod
+    def generate_code_with_expiry(
+        lifetime_minutes: int = 5,
+        length: int = 6,
+    ) -> tuple[str, 'datetime']:
+        """
+        Generate MFA code together with its expiration timestamp.
+
+        Args:
+            lifetime_minutes: Validity window in minutes (default 5).
+            length: Number of digits (default 6).
+
+        Returns:
+            Tuple of (code, expires_at_datetime).
+        """
+        from datetime import datetime, timedelta
+        code = MFACodeGenerator.generate_code(length)
+        expires_at = datetime.utcnow() + timedelta(minutes=lifetime_minutes)
+        return code, expires_at

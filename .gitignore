@@ -14,6 +14,7 @@
 # GitHub metadata / docs (ignore for this project)
 .github/
 plat_tech/
+ias/
 # =============================================================================
 # Environment & Secrets (NEVER commit these)
 # =============================================================================

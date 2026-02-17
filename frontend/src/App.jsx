@@ -5,7 +5,11 @@ import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
 import Detection from './pages/Detection.jsx';
 import AIChatbot from './pages/AIChatbot.jsx';
+import VerifyEmail from './pages/VerifyEmail.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import { AdminDashboard } from './pages/admin';
+import SessionExpiredModal from './components/auth/SessionExpiredModal';
 
 /**
  * Protected Route Component
@@ -47,12 +51,16 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 function App() {
   return (
     <AuthProvider>
+      <SessionExpiredModal />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/detection" element={<Detection />} />
         <Route path="/chatbot" element={<AIChatbot />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         {/* Redirect old /blockchain route to admin panel */}
         <Route path="/blockchain" element={<Navigate to="/admin" replace />} />
         <Route 

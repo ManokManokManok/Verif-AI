@@ -111,7 +111,7 @@ from ...use_cases.ai.scam_detection import ScamDetectionUseCase
 from ...use_cases.ai.llm_analysis import LLMAnalysisUseCase
 from ...domain.services import (
     BCryptPasswordHasher, EmailValidator, PasswordValidator,
-    TokenGenerator, MockEmailService
+    TokenGenerator,
 )
 from ...domain.analysis_entities import AnalysisResult
 from ...domain.scam_types import scam_types as SCAM_TYPES_MAP
@@ -119,9 +119,11 @@ from ...infrastructure.mongodb.connection import get_mongo_client, get_database_
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository, MongoDBTokenRepository
 from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
 from ...infrastructure.jwt_service import JWTService
-from ...infrastructure.token_blacklist_service import MockTokenBlacklistService
+from ...infrastructure.token_blacklist_service import MongoDBTokenBlacklistService
 from ...infrastructure.ai.loaders import load_multihead_model, load_gemma_model
 from ...infrastructure.rate_limiter import rate_limit, check_rate_limit
+from ...infrastructure.rate_limiter import get_client_ip as _get_client_ip
+from ...infrastructure.audit_logger import get_audit_logger, AuditEventType
 from ...infrastructure.validators import (
     get_login_validator, get_signup_validator, get_detect_scam_validator,
     get_email_only_validator, get_token_only_validator,
@@ -213,10 +215,17 @@ def get_jwt_service():
     access_lifetime = int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME', '900'))
     refresh_lifetime = int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME', '604800'))
     
-    # Initialize token blacklist service
-    token_blacklist_service = MockTokenBlacklistService()
+    # Initialize token blacklist service (MongoDB-backed)
+    token_blacklist_service = get_token_blacklist_service()
     
     return JWTService(secret_key, access_lifetime, refresh_lifetime, token_blacklist_service)
+
+
+def get_token_blacklist_service():
+    """Get token blacklist service instance (MongoDB-backed)."""
+    client = get_mongo_client()
+    db_name = get_database_name()
+    return MongoDBTokenBlacklistService(client, db_name)
 
 
 def get_token_repository():
@@ -234,8 +243,9 @@ def get_analysis_repository():
 
 
 def get_email_service():
-    """Get email service instance."""
-    return MockEmailService()
+    """Get email service instance (delegates to infrastructure layer)."""
+    from ...infrastructure.email_service import get_email_service as _factory
+    return _factory()
 
 
 def user_to_dict(user) -> Dict[str, Any]:
@@ -318,12 +328,46 @@ def signup(request: Request) -> Response:
         # Execute use case
         user = signup_usecase.execute(email, username, password)
         
+        # Audit: successful registration
+        get_audit_logger().log_event(
+            event_type=AuditEventType.USER_CREATED,
+            user_id=getattr(user, 'id', None),
+            email=email,
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
+
+        # Auto-send verification email after registration
+        try:
+            token_repo = get_token_repository()
+            email_service = get_email_service()
+            token_generator = TokenGenerator()
+
+            verification_usecase = EmailVerificationUseCase(
+                user_repository=user_repo,
+                token_repository=token_repo,
+                email_service=email_service,
+                token_generator=token_generator,
+            )
+            verification_usecase.send_verification_email(email)
+            logger.info(f"Verification email sent to {email}")
+        except Exception as verify_err:
+            # Log but don't fail signup if email sending fails
+            logger.warning(f"Could not send verification email to {email}: {verify_err}")
+
         return Response({
             'message': 'User registered successfully',
             'user': user_to_dict(user)
         }, status=status.HTTP_201_CREATED)
         
     except UserAlreadyExistsError as e:
+        get_audit_logger().log_event(
+            event_type=AuditEventType.VALIDATION_FAILED,
+            email=cleaned_data.get('email') if 'cleaned_data' in dir() else None,
+            ip_address=_get_client_ip(request),
+            result="failure",
+            error_message="Email already exists",
+        )
         return Response({
             'error': {
                 'code': 'EMAIL_ALREADY_EXISTS',
@@ -397,6 +441,15 @@ def login(request: Request) -> Response:
         # Execute use case
         auth_result = login_usecase.execute(email, password)
         
+        # Audit: successful login
+        get_audit_logger().log_event(
+            event_type=AuditEventType.LOGIN_SUCCESS,
+            user_id=getattr(auth_result.user, 'id', None),
+            email=email,
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
+
         return Response({
             'message': 'Login successful',
             'user': user_to_dict(auth_result.user),
@@ -404,6 +457,15 @@ def login(request: Request) -> Response:
         }, status=status.HTTP_200_OK)
         
     except InvalidCredentialsError as e:
+        # Audit: failed login
+        get_audit_logger().log_event(
+            event_type=AuditEventType.LOGIN_FAILED,
+            email=cleaned_data.get('email') if 'cleaned_data' in dir() else None,
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            result="failure",
+            error_message="Invalid credentials",
+        )
         return Response({
             'error': {
                 'code': 'INVALID_CREDENTIALS',
@@ -589,6 +651,13 @@ def send_verification_email(request: Request) -> Response:
         # Execute use case
         verification_usecase.send_verification_email(email)
         
+        # Audit: verification email sent
+        get_audit_logger().log_event(
+            event_type=AuditEventType.EMAIL_VERIFICATION_SENT,
+            email=email,
+            ip_address=_get_client_ip(request),
+        )
+
         return Response({
             'message': 'Verification email sent successfully'
         }, status=status.HTTP_200_OK)
@@ -658,6 +727,12 @@ def verify_email(request: Request) -> Response:
         # Execute use case
         verification_usecase.verify_email(token)
         
+        # Audit: email verified
+        get_audit_logger().log_event(
+            event_type=AuditEventType.EMAIL_VERIFIED,
+            ip_address=_get_client_ip(request),
+        )
+
         return Response({
             'message': 'Email verified successfully'
         }, status=status.HTTP_200_OK)
@@ -731,6 +806,13 @@ def request_password_reset(request: Request) -> Response:
         # Execute use case
         reset_usecase.request_password_reset(email)
         
+        # Audit: password reset requested
+        get_audit_logger().log_event(
+            event_type=AuditEventType.PASSWORD_RESET_REQUESTED,
+            email=email,
+            ip_address=_get_client_ip(request),
+        )
+
         return Response({
             'message': 'Password reset email sent successfully'
         }, status=status.HTTP_200_OK)
@@ -806,6 +888,12 @@ def reset_password(request: Request) -> Response:
         # Execute use case
         reset_usecase.reset_password(token, new_password)
         
+        # Audit: password reset completed
+        get_audit_logger().log_event(
+            event_type=AuditEventType.PASSWORD_RESET_COMPLETED,
+            ip_address=_get_client_ip(request),
+        )
+
         return Response({
             'message': 'Password reset successfully'
         }, status=status.HTTP_200_OK)
@@ -866,7 +954,7 @@ def logout(request: Request) -> Response:
         
         # Initialize use case
         jwt_service = get_jwt_service()
-        token_blacklist_service = MockTokenBlacklistService()
+        token_blacklist_service = get_token_blacklist_service()
         
         logout_usecase = LogoutUseCase(
             jwt_service=jwt_service,
@@ -876,6 +964,13 @@ def logout(request: Request) -> Response:
         # Execute use case
         logout_usecase.logout(access_token, refresh_token)
         
+        # Audit: successful logout
+        get_audit_logger().log_event(
+            event_type=AuditEventType.LOGOUT,
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
+
         return Response({
             'message': 'Logout successful'
         }, status=status.HTTP_200_OK)
@@ -924,7 +1019,7 @@ def refresh_token(request: Request) -> Response:
         # Initialize use case
         jwt_service = get_jwt_service()
         user_repo = get_user_repository()
-        token_blacklist_service = MockTokenBlacklistService()
+        token_blacklist_service = get_token_blacklist_service()
         
         refresh_usecase = RefreshTokenUseCase(
             jwt_service=jwt_service,
@@ -935,6 +1030,13 @@ def refresh_token(request: Request) -> Response:
         # Execute use case
         auth_result = refresh_usecase.refresh_token(refresh_token)
         
+        # Audit: successful token refresh
+        get_audit_logger().log_event(
+            event_type=AuditEventType.TOKEN_REFRESH,
+            user_id=getattr(auth_result.user, 'id', None),
+            ip_address=_get_client_ip(request),
+        )
+
         return Response({
             'message': 'Token refreshed successfully',
             'user': user_to_dict(auth_result.user),
@@ -942,6 +1044,13 @@ def refresh_token(request: Request) -> Response:
         }, status=status.HTTP_200_OK)
         
     except InvalidTokenError as e:
+        # Audit: failed token refresh
+        get_audit_logger().log_event(
+            event_type=AuditEventType.TOKEN_REFRESH_FAILED,
+            ip_address=_get_client_ip(request),
+            result="failure",
+            error_message="Invalid refresh token",
+        )
         return Response({
             'error': {
                 'code': 'INVALID_TOKEN',
@@ -1185,5 +1294,262 @@ def detect_scam(request: Request) -> Response:
             'error': {
                 'code': 'DETECTION_ERROR',
                 'message': f'Error during scam detection: {str(e)}'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =========================================================================
+# MFA (Multi-Factor Authentication) Endpoints
+# =========================================================================
+
+def get_mfa_repository():
+    """Get MFA code repository instance."""
+    from ...infrastructure.mongodb.mfa_repository import MFACodeRepository
+    client = get_mongo_client()
+    db_name = get_database_name()
+    return MFACodeRepository(client, db_name)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('mfa_send')
+def send_mfa_code(request: Request) -> Response:
+    """
+    Authenticate user credentials and send a 6-digit MFA code to their email.
+
+    POST /api/auth/mfa/send/
+    Body: {"email": "...", "password": "..."}
+
+    Returns 200 with expires_in_seconds on success.
+    Returns 401 for invalid credentials (generic message to prevent enumeration).
+
+    Security:
+    - Rate limited (mfa_send: 3 per 5 min)
+    - Schema-based input validation
+    - Credentials verified before code is sent
+    """
+    from ...infrastructure.validators import get_mfa_send_validator, sanitize_for_logging
+    from ...domain.services import MFACodeGenerator
+    from ...infrastructure.email_service import get_email_service as _get_email_svc
+
+    audit = get_audit_logger()
+    ip = _get_client_ip(request)
+    ua = request.META.get('HTTP_USER_AGENT', '')
+
+    try:
+        # --- validate input ---
+        validator = get_mfa_send_validator()
+        is_valid, errors, cleaned = validator.validate(request.data)
+        if not is_valid:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors,
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        email = cleaned['email']
+        password = cleaned['password']
+
+        # --- authenticate (same logic as normal login) ---
+        user_repo = get_user_repository()
+        password_hasher = BCryptPasswordHasher()
+
+        user = user_repo.get_by_email(email)
+        if not user or not password_hasher.verify_password(password, user.password_hash):
+            audit.log_event(
+                event_type=AuditEventType.LOGIN_FAILED,
+                email=email,
+                ip_address=ip,
+                user_agent=ua,
+                result="failure",
+                error_message="Invalid credentials (MFA send)",
+            )
+            return Response({
+                'error': {
+                    'code': 'INVALID_CREDENTIALS',
+                    'message': 'Invalid email or password',
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        # --- reject unverified emails ---
+        if not getattr(user, 'is_verified', False):
+            return Response({
+                'error': {
+                    'code': 'EMAIL_NOT_VERIFIED',
+                    'message': 'Please verify your email address before logging in. Check your inbox for the verification link.',
+                }
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # --- generate & store MFA code ---
+        code, expires_at = MFACodeGenerator.generate_code_with_expiry(5)
+        mfa_repo = get_mfa_repository()
+        stored = mfa_repo.create_mfa_code(
+            user_id=user.user_id if hasattr(user, 'user_id') else user.id,
+            code=code,
+            expires_at=expires_at,
+            ip_address=ip,
+        )
+        if not stored:
+            logger.error(f"[MFA] Failed to store code for {email}")
+            return Response({
+                'error': {
+                    'code': 'INTERNAL_ERROR',
+                    'message': 'Failed to generate MFA code. Please try again.',
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # --- send code via email ---
+        email_svc = _get_email_svc()
+        sent = email_svc.send_mfa_code_email(email, code)
+        if not sent:
+            logger.error(f"[MFA] Failed to send code email to {email}")
+            return Response({
+                'error': {
+                    'code': 'EMAIL_ERROR',
+                    'message': 'Failed to send verification code. Please try again.',
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        audit.log_event(
+            event_type=AuditEventType.MFA_CODE_SENT,
+            user_id=user.user_id if hasattr(user, 'user_id') else user.id,
+            email=email,
+            ip_address=ip,
+            user_agent=ua,
+        )
+
+        return Response({
+            'message': 'Verification code sent to your email',
+            'expires_in_seconds': 300,
+        }, status=status.HTTP_200_OK)
+
+    except Exception as exc:
+        logger.error(f"[MFA_SEND] Unexpected error: {exc}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred',
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('mfa_verify')
+def verify_mfa_code(request: Request) -> Response:
+    """
+    Verify MFA code and issue JWT tokens on success.
+
+    POST /api/auth/mfa/verify/
+    Body: {"email": "...", "code": "123456"}
+
+    Returns 200 with access_token, refresh_token, and user on success.
+    Returns 401 on invalid/expired code.
+
+    Security:
+    - Rate limited (mfa_verify: 5 per 5 min)
+    - Schema-based input validation
+    - Max 3 attempts per code
+    """
+    from ...infrastructure.validators import get_mfa_verify_validator
+
+    audit = get_audit_logger()
+    ip = _get_client_ip(request)
+    ua = request.META.get('HTTP_USER_AGENT', '')
+
+    try:
+        # --- validate input ---
+        validator = get_mfa_verify_validator()
+        is_valid, errors, cleaned = validator.validate(request.data)
+        if not is_valid:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors,
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        email = cleaned['email']
+        code = cleaned['code']
+
+        # --- look up user ---
+        user_repo = get_user_repository()
+        user = user_repo.get_by_email(email)
+        if not user:
+            # Generic message to prevent enumeration
+            return Response({
+                'error': {
+                    'code': 'INVALID_CODE',
+                    'message': 'Invalid or expired code',
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        user_id = user.user_id if hasattr(user, 'user_id') else user.id
+
+        # --- verify MFA code ---
+        mfa_repo = get_mfa_repository()
+        is_valid_code, error_msg = mfa_repo.verify_mfa_code(user_id, code)
+
+        if not is_valid_code:
+            audit.log_event(
+                event_type=AuditEventType.MFA_CODE_FAILED,
+                user_id=user_id,
+                email=email,
+                ip_address=ip,
+                user_agent=ua,
+                result="failure",
+                error_message=error_msg,
+            )
+            return Response({
+                'error': {
+                    'code': 'INVALID_CODE',
+                    'message': error_msg or 'Invalid or expired code',
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        # --- issue tokens (same as normal login) ---
+        jwt_service = get_jwt_service()
+
+        roles = []
+        permissions = []
+        if hasattr(user, 'roles') and user.roles:
+            for role in user.roles:
+                if hasattr(role, 'name'):
+                    roles.append(role.name)
+                else:
+                    roles.append(str(role))
+                if hasattr(role, 'permissions'):
+                    permissions.extend(role.permissions)
+
+        tokens = jwt_service.generate_tokens(
+            user_id=user_id,
+            email=user.email,
+            roles=roles,
+            permissions=list(set(permissions)),
+        )
+
+        audit.log_event(
+            event_type=AuditEventType.MFA_CODE_VERIFIED,
+            user_id=user_id,
+            email=email,
+            ip_address=ip,
+            user_agent=ua,
+        )
+
+        return Response({
+            'message': 'MFA verification successful',
+            'user': user_to_dict(user),
+            'tokens': tokens_to_dict(tokens),
+        }, status=status.HTTP_200_OK)
+
+    except Exception as exc:
+        logger.error(f"[MFA_VERIFY] Unexpected error: {exc}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred',
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -16,6 +16,8 @@ from typing import Optional
 import logging
 
 from ...infrastructure.rate_limiter import rate_limit
+from ...infrastructure.rate_limiter import get_client_ip as _get_client_ip
+from ...infrastructure.audit_logger import get_audit_logger, AuditEventType
 from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
 from ...infrastructure.mongodb.admin_repository import AdminRepository
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository
@@ -738,6 +740,13 @@ def delete_user(request: Request, user_id: str) -> Response:
         )
         
         if result.success:
+            # Audit: user deleted
+            get_audit_logger().log_event(
+                event_type=AuditEventType.USER_DELETED,
+                user_id=user_id,
+                ip_address=_get_client_ip(request),
+                metadata={'admin_user_id': admin_user_id, 'hard_delete': hard_delete},
+            )
             return Response({
                 'success': True,
                 'message': result.message
@@ -926,6 +935,13 @@ def update_user_roles(request: Request, user_id: str) -> Response:
         )
         
         if result.success:
+            # Audit: role updated
+            get_audit_logger().log_event(
+                event_type=AuditEventType.ROLE_ASSIGNED,
+                user_id=user_id,
+                ip_address=_get_client_ip(request),
+                metadata={'admin_user_id': admin_user_id, 'new_roles': roles},
+            )
             return Response({
                 'success': True,
                 'message': result.message

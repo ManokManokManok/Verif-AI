@@ -159,6 +159,7 @@ function Signup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+  const [registered, setRegistered] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -174,7 +175,7 @@ function Signup() {
 
     try {
       await signupRequest({ email, username, password });
-      navigate('/login');
+      setRegistered(true);
     } catch (err) {
       // Store structured validation errors if available
       if (err.isValidationError && err.validationErrors) {
@@ -211,6 +212,28 @@ function Signup() {
           </button>
         </div>
 
+        {registered ? (
+          <div style={{ textAlign: 'center', marginTop: 32 }}>
+            <div className="verify-icon verify-icon--success">✓</div>
+            <h1 className="auth__title" style={{ marginTop: 20 }}>Check Your Email</h1>
+            <p className="auth__subtitle" style={{ marginTop: 12, lineHeight: 1.6 }}>
+              We&apos;ve sent a verification link to <strong>{email}</strong>.
+              <br />
+              Please click the link in your email to verify your account before logging in.
+            </p>
+            <button
+              className="auth__primary"
+              style={{ marginTop: 28 }}
+              onClick={() => navigate('/login')}
+            >
+              <strong>Go to Login</strong>
+            </button>
+            <p className="auth__subtitle" style={{ marginTop: 16, fontSize: 12 }}>
+              Didn&apos;t receive the email? Check your spam folder.
+            </p>
+          </div>
+        ) : (
+        <>
         <h1 className="auth__title">Sign up</h1>
         <p className="auth__subtitle">
           If you already have an account register
@@ -329,6 +352,8 @@ function Signup() {
             <strong>{loading ? 'Registering…' : 'Register'}</strong>
           </button>
         </form>
+        </>
+        )}
       </div>
     </div>
   );
