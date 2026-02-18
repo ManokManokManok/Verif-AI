@@ -11,7 +11,7 @@
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
 - [Key Features](#key-features)
@@ -31,7 +31,7 @@
 
 **Verif-AI** is an intelligent scam detection platform that combines advanced machine learning models with blockchain technology to identify and verify potentially fraudulent messages, emails, and communications. The platform provides real-time analysis with tamper-proof verification through blockchain anchoring.
 
-### 🎯 Mission
+### Mission
 
 Protect users from increasingly sophisticated scam attempts by providing accessible, AI-powered detection tools with transparent, verifiable results.
 
@@ -39,13 +39,13 @@ Protect users from increasingly sophisticated scam attempts by providing accessi
 
 ## Key Features
 
-### 🤖 AI-Powered Detection
+### AI-Powered Detection
 - **Advanced NLP Models**: Multi-model ensemble for high-accuracy scam detection
 - **Pattern Recognition**: Identifies 15+ scam categories (phishing, urgency tactics, money requests, etc.)
 - **Confidence Scoring**: Transparent confidence metrics (0.0-1.0) for each analysis
 - **Real-time Analysis**: Sub-second response times for message classification
 
-### 🔐 Enterprise-Grade Security
+### Enterprise-Grade Security
 - **BCrypt Password Hashing**: 12-round BCrypt for secure credential storage
 - **JWT Authentication**: Industry-standard token-based auth with refresh tokens
 - **Multi-Factor Authentication (MFA)**: Email-based 2FA for enhanced security
@@ -54,13 +54,13 @@ Protect users from increasingly sophisticated scam attempts by providing accessi
 - **Rate Limiting**: Intelligent rate limiting per endpoint category
 - **Input Validation**: Schema-based validation with XSS protection
 
-### ⛓️ Blockchain Verification
+### Blockchain Verification
 - **Tamper-Proof Records**: Ethereum smart contract for immutable analysis storage
 - **Privacy-First**: Only metadata on-chain (payload hash, classification, confidence)
 - **Verifiable Results**: Cryptographic verification of analysis integrity
 - **Chain Metadata**: Transaction hashes and block confirmations
 
-### 👥 Admin Dashboard
+### Admin Dashboard
 - **User Management**: View, activate/deactivate, and manage user accounts
 - **Role Management**: Assign and modify user roles and permissions
 - **System Monitoring**: Real-time model health and performance metrics
@@ -243,7 +243,7 @@ verif-ai/
 
 ## Core Features
 
-### 🔐 Authentication & Authorization
+### Authentication & Authorization
 
 **Endpoints**:
 - `POST /api/auth/register/` - User registration with email verification
@@ -263,7 +263,7 @@ verif-ai/
 - Rate limiting per endpoint
 - Comprehensive audit logging
 
-### 🕵️ Scam Detection
+### Scam Detection
 
 **Endpoint**: `POST /api/detect/`
 
@@ -296,7 +296,7 @@ verif-ai/
 - Pattern detection and explanation
 - Rate limits: 30/min (authenticated), 10/min (anonymous)
 
-### ⛓️ Blockchain Integration
+### Blockchain Integration
 
 **Endpoints**:
 - `POST /api/blockchain/anchor/` - Anchor analysis to blockchain
@@ -313,10 +313,10 @@ verif-ai/
 7. Verification compares on-chain vs off-chain data
 
 **Privacy**:
-- ✅ Stored on-chain: Payload hash, classification, confidence, timestamp
-- ❌ Never on-chain: Message content, emails, phone numbers, PII
+- Stored on-chain: Payload hash, classification, confidence, timestamp
+- Never on-chain: Message content, emails, phone numbers, PII
 
-### 👨‍💼 Admin Dashboard
+### Admin Dashboard
 
 **Endpoints** (require admin role):
 - `GET /api/admin/model-health/` - Model health metrics
@@ -382,12 +382,12 @@ python -m pytest tests/test_blockchain_*.py # Run blockchain tests
 - **Pull Requests**: Target `main`, require review before merge
 
 **Rules**:
-1. ❌ **NEVER push directly to `main`**
-2. ✅ Create feature branch for all changes
-3. ✅ Test your code before pushing
-4. ✅ Ensure code is "mergeable" (no conflicts)
-5. ✅ Submit PR and request review
-6. ✅ Address review feedback promptly
+1. **NEVER push directly to `main`**
+2. Create feature branch for all changes
+3. Test your code before pushing
+4. Ensure code is "mergeable" (no conflicts)
+5. Submit PR and request review
+6. Address review feedback promptly
 
 **Key Branches**:
 - `main` - Production-ready code
@@ -538,7 +538,7 @@ CORS_ALLOWED_ORIGINS=https://yourdomain.com
 
 ## Documentation
 
-### 📚 Complete Documentation
+### Complete Documentation
 
 All documentation is located in [backend/docs/](backend/docs/):
 
@@ -558,7 +558,7 @@ All documentation is located in [backend/docs/](backend/docs/):
 **Blockchain**:
 - [BLOCKCHAIN_INTEGRATION.md](backend/docs/blockchain/BLOCKCHAIN_INTEGRATION.md) - Blockchain features
 
-### 🔗 Quick Links
+### Quick Links
 
 - [API Reference](backend/docs/API_REFERENCE.md) - All endpoints with examples
 - [Security Guide](backend/docs/SECURITY.md) - Security features and best practices
@@ -627,10 +627,10 @@ All documentation is located in [backend/docs/](backend/docs/):
 
 If you discover a security vulnerability:
 
-1. ❌ **DO NOT** open a public issue
-2. ✉️ Email the maintainer directly
-3. 📝 Include reproduction steps and impact assessment
-4. ⏱️ Allow 48 hours for initial response
+1. **DO NOT** open a public issue
+2. Email the maintainer directly
+3. Include reproduction steps and impact assessment
+4. Allow 48 hours for initial response
 
 See [SECURITY.md](backend/docs/SECURITY.md) for full security documentation.
 
@@ -644,10 +644,10 @@ See [SECURITY.md](backend/docs/SECURITY.md) for full security documentation.
 
 ## Support
 
-- 📖 Documentation: [backend/docs/](backend/docs/)
-- 🐛 Issues: [GitHub Issues](https://github.com/your-org/verif-ai/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/your-org/verif-ai/discussions)
+- Documentation: [backend/docs/](backend/docs/)
+- Issues: [GitHub Issues](https://github.com/your-org/verif-ai/issues)
+- Discussions: [GitHub Discussions](https://github.com/your-org/verif-ai/discussions)
 
 ---
 
-**Built with ❤️ by the Verif-AI Team**
+**Built by the Verif-AI Team**
