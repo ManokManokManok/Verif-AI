@@ -714,3 +714,23 @@ def get_check_permission_validator() -> RequestValidator:
         'resource', FieldType.STRING, required=False,
         min_length=1, max_length=100, pattern=r'^[a-z_]+$'
     )
+
+
+def get_mfa_send_validator() -> RequestValidator:
+    """Get validator for MFA code send endpoint."""
+    return RequestValidator().add_field(
+        'email', FieldType.EMAIL, required=True, lowercase=True
+    ).add_field(
+        'password', FieldType.STRING, required=True,
+        min_length=1, max_length=128, sanitize=False
+    )
+
+
+def get_mfa_verify_validator() -> RequestValidator:
+    """Get validator for MFA code verify endpoint."""
+    return RequestValidator().add_field(
+        'email', FieldType.EMAIL, required=True, lowercase=True
+    ).add_field(
+        'code', FieldType.STRING, required=True,
+        min_length=6, max_length=6, pattern=r'^\d{6}$'
+    )

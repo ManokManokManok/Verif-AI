@@ -96,6 +96,16 @@ class RateLimiter:
                 'window': int(os.getenv('RATE_LIMIT_TOKEN_REFRESH_WINDOW', '60')),
                 'block': int(os.getenv('RATE_LIMIT_TOKEN_REFRESH_BLOCK', '300')),
             },
+            'mfa_send': {
+                'requests': int(os.getenv('RATE_LIMIT_MFA_SEND_REQUESTS', '3')),
+                'window': int(os.getenv('RATE_LIMIT_MFA_SEND_WINDOW', '300')),
+                'block': int(os.getenv('RATE_LIMIT_MFA_SEND_BLOCK', '600')),
+            },
+            'mfa_verify': {
+                'requests': int(os.getenv('RATE_LIMIT_MFA_VERIFY_REQUESTS', '5')),
+                'window': int(os.getenv('RATE_LIMIT_MFA_VERIFY_WINDOW', '300')),
+                'block': int(os.getenv('RATE_LIMIT_MFA_VERIFY_BLOCK', '900')),
+            },
             'default': {
                 'requests': int(os.getenv('RATE_LIMIT_DEFAULT_REQUESTS', '60')),
                 'window': int(os.getenv('RATE_LIMIT_DEFAULT_WINDOW', '60')),

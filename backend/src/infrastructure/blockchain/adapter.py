@@ -4,8 +4,6 @@ Blockchain Adapter
 Main service for interacting with the Ethereum blockchain.
 Provides create_record and verify_record operations.
 
-This is a STUB implementation for Phase 0.
-Full implementation will be added in Phase 3.
 """
 
 import logging

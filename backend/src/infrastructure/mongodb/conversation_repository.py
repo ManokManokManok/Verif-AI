@@ -184,6 +184,56 @@ class ConversationRepository:
         conversation = ChatConversation.create_general(user_id)
         return self.save(conversation)
     
+    def get_by_analysis_ref_id(
+        self,
+        analysis_ref_id: str,
+        user_id: str
+    ) -> Optional[ChatConversation]:
+        """
+        Find existing conversation for a specific analysis.
+        
+        Args:
+            analysis_ref_id: UUID of the analysis
+            user_id: User's MongoDB ID
+            
+        Returns:
+            ChatConversation if found, None otherwise
+        """
+        doc = self.collection.find_one({
+            "user_id": user_id,
+            "conversation_type": "analysis_guided",
+            "analysis_ref_id": analysis_ref_id
+        })
+        
+        if doc:
+            return self._document_to_entity(doc)
+        
+        return None
+    
+    def create_analysis_guided_conversation(
+        self,
+        user_id: str,
+        analysis_ref_id: str,
+        title: Optional[str] = None
+    ) -> ChatConversation:
+        """
+        Create a new analysis-guided conversation.
+        
+        Args:
+            user_id: User's MongoDB ID
+            analysis_ref_id: UUID of the analysis
+            title: Optional title
+            
+        Returns:
+            Newly created ChatConversation
+        """
+        conversation = ChatConversation.create_analysis_guided(
+            user_id=user_id,
+            analysis_ref_id=analysis_ref_id,
+            title=title
+        )
+        return self.save(conversation)
+    
     def get_analysis_conversation(
         self, 
         user_id: str, 

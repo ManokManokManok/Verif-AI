@@ -19,21 +19,33 @@ class Command(BaseCommand):
                     "view_profile",
                     "update_profile",
                     "analyze_content",
-                    "view_history"
+                    "view_history",
+                    "submit_report"  # Users can submit reports
                 ],
                 "description": "Standard user with basic permissions"
             },
             {
                 "name": "admin",
                 "permissions": [
+                    # Basic user permissions
                     "view_profile",
                     "update_profile",
                     "analyze_content",
                     "view_history",
+                    "submit_report",
+                    # User management permissions
                     "manage_users",
                     "delete_users",
                     "view_all_users",
                     "manage_roles",
+                    "reset_user_password",
+                    # Admin dashboard permissions
+                    "view_model_health",
+                    "view_analysis_stats",
+                    "view_user_stats",
+                    "manage_user_reports",
+                    "view_system_logs",
+                    # System permissions
                     "view_analytics",
                     "manage_system"
                 ],
@@ -42,12 +54,18 @@ class Command(BaseCommand):
             {
                 "name": "moderator",
                 "permissions": [
+                    # Basic user permissions
                     "view_profile",
                     "update_profile",
                     "analyze_content",
                     "view_history",
+                    "submit_report",
+                    # Limited admin permissions
                     "view_all_users",
-                    "view_analytics"
+                    "view_analytics",
+                    "view_analysis_stats",
+                    "view_user_stats",
+                    "manage_user_reports"  # Can handle user reports
                 ],
                 "description": "Moderator with elevated permissions for content review"
             }
