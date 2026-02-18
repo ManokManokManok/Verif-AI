@@ -1,0 +1,43 @@
+/**
+ * Admin Theme - CSS Variables
+ * 
+ * Centralized design system for admin components.
+ * Matches user-side design with blue accent (#3b82f6).
+ */
+
+:root {
+  /* Primary colors - matching user-side blue theme */
+  --admin-primary: #3b82f6;
+  --admin-primary-light: #60a5fa;
+  --admin-primary-dark: #2563eb;
+  
+  /* Status colors */
+  --admin-success: #22c55e;
+  --admin-warning: #f59e0b;
+  --admin-danger: #ef4444;
+  --admin-info: #3b82f6;
+  
+  /* Backgrounds - matching user-side dark theme */
+  --admin-bg-dark: #050b16;
+  --admin-bg-card: #1f2937;
+  --admin-bg-hover: #374151;
+  --admin-bg-secondary: #111827;
+  
+  /* Borders */
+  --admin-border: #374151;
+  --admin-border-light: #4b5563;
+  
+  /* Text colors - matching user-side palette */
+  --admin-text: #f9fafb;
+  --admin-text-secondary: #e5e7eb;
+  --admin-text-muted: #9ca3af;
+  --admin-text-dim: #6b7280;
+  
+  /* Effects */
+  --admin-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --admin-radius: 12px;
+  --admin-radius-sm: 8px;
+  
+  /* Transitions */
+  --admin-transition: all 0.2s ease;
+}

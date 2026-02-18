@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 import { ReportModal } from '../components/reports';
+import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 
 const ANALYSIS_STEPS = [
   'Analyzing message...',
@@ -36,6 +37,7 @@ function Detection() {
   const [verificationResult, setVerificationResult] = useState(null);
   const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const progressIntervalRef = useRef(null);
   const stepIntervalRef = useRef(null);
 
@@ -99,9 +101,18 @@ function Detection() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
     await logout();
     navigate('/');
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const handleTextChange = (e) => {
@@ -538,6 +549,13 @@ function Detection() {
         onClose={() => setIsReportModalOpen(false)}
         analysisId={detectionResult?.id}
         analysisRefId={detectionResult?.ref_id}
+      />
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
       />
     </div>
   );

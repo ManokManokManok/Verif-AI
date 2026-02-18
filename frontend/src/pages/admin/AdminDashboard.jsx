@@ -1,11 +1,11 @@
 /**
  * Admin Dashboard Page
  * 
- * Main container with tab navigation for all admin sections.
+ * Main container for all admin sections with modular sidebar navigation.
  */
 
 import React, { useState } from 'react';
-import { TabNavigation, Alert } from '../../components/admin';
+import { Alert, AdminSidebar } from '../../components/admin';
 import { useAuth } from '../../context/AuthContext';
 import ModelHealth from './ModelHealth';
 import AnalysisStats from './AnalysisStats';
@@ -14,20 +14,20 @@ import UserManagement from './UserManagement';
 import WebsiteAnalytics from './WebsiteAnalytics';
 import BlockchainVerification from './BlockchainVerification';
 import './AdminDashboard.css';
-import './WebsiteAnalytics.css';
 
-const ADMIN_TABS = [
-  { id: 'model-health', label: 'Model Health' },
-  { id: 'analysis-stats', label: 'Analysis Statistics' },
-  { id: 'user-stats', label: 'User Statistics' },
-  { id: 'user-management', label: 'User Management' },
-  { id: 'website-analytics', label: 'Website Analytics' },
-  { id: 'blockchain', label: 'Blockchain' },
-];
+const SECTION_LABELS = {
+  'model-health': 'Model Health',
+  'analysis-stats': 'Analysis Stats',
+  'user-stats': 'User Stats',
+  'user-management': 'User Management',
+  'website-analytics': 'Website Analytics',
+  'blockchain': 'Blockchain',
+};
 
 export default function AdminDashboard() {
   const { user, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState('model-health');
+  const [activeSection, setActiveSection] = useState('model-health');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notification, setNotification] = useState(null);
 
   // Show notification and auto-dismiss after 5 seconds
@@ -50,9 +50,9 @@ export default function AdminDashboard() {
     );
   }
 
-  // Render active tab content
-  const renderTabContent = () => {
-    switch (activeTab) {
+  // Render active section content
+  const renderSectionContent = () => {
+    switch (activeSection) {
       case 'model-health':
         return <ModelHealth onNotify={showNotification} />;
       case 'analysis-stats':
@@ -72,37 +72,53 @@ export default function AdminDashboard() {
 
   return (
     <div className="admin-dashboard">
-      <div className="admin-dashboard__container">
-        {/* Header */}
-        <header className="admin-dashboard__header">
-          <div className="admin-dashboard__title-section">
-            <h1 className="admin-dashboard__title">Admin Dashboard</h1>
-            <p className="admin-dashboard__subtitle">
-              Welcome back, {user?.username || 'Admin'}
-            </p>
-          </div>
-        </header>
+      {/* Sidebar Navigation Component */}
+      <AdminSidebar
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-        {/* Notification */}
-        {notification && (
-          <Alert
-            type={notification.type}
-            message={notification.message}
-            onClose={() => setNotification(null)}
-          />
-        )}
+      {/* Main Content Area */}
+      <div className="admin-dashboard__main">
+        <div className="admin-dashboard__container">
+          {/* Mobile Menu Button */}
+          <button
+            className="admin-dashboard__mobile-menu"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open Menu"
+          >
+            ☰
+          </button>
 
-        {/* Tab Navigation */}
-        <TabNavigation
-          tabs={ADMIN_TABS}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
+          {/* Header */}
+          <header className="admin-dashboard__header">
+            <div className="admin-dashboard__title-section">
+              <h1 className="admin-dashboard__title">
+                {SECTION_LABELS[activeSection] || 'Admin Dashboard'}
+              </h1>
+              <p className="admin-dashboard__subtitle">
+                Welcome back, {user?.username || 'Admin'}
+              </p>
+            </div>
+          </header>
 
-        {/* Tab Content */}
-        <main className="admin-dashboard__content">
-          {renderTabContent()}
-        </main>
+          {/* Notification */}
+          {notification && (
+            <Alert
+              type={notification.type}
+              message={notification.message}
+              onClose={() => setNotification(null)}
+            />
+          )}
+
+          {/* Section Content */}
+          <main className="admin-dashboard__content">
+            {renderSectionContent()}
+          </main>
+        </div>
       </div>
     </div>
   );
