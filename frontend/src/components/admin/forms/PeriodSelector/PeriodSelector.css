@@ -1,0 +1,34 @@
+/**
+ * PeriodSelector Component Styles
+ */
+
+.period-selector {
+  padding: 0.75rem 2.5rem 0.75rem 1rem;
+  background: var(--admin-bg-hover, #374151);
+  border: 1px solid var(--admin-border, #374151);
+  border-radius: var(--admin-radius-sm, 8px);
+  color: var(--admin-text, #f9fafb);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%239ca3af' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+}
+
+.period-selector:focus {
+  outline: none;
+  border-color: var(--admin-primary, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.period-selector:hover {
+  border-color: var(--admin-border-light, #4b5563);
+}
+
+.period-selector option {
+  background: var(--admin-bg-card, #1f2937);
+  color: var(--admin-text, #f9fafb);
+}

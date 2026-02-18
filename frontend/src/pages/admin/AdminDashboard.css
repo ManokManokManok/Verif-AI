@@ -1,16 +1,66 @@
 /**
- * Admin Dashboard Styles
+ * Admin Dashboard Page Styles
+ * Sidebar styles moved to components/admin/layout/AdminSidebar/AdminSidebar.css
  */
 
 .admin-dashboard {
   min-height: 100vh;
-  background: var(--admin-bg-dark, #0f0f0f);
-  padding: 2rem;
+  display: flex;
+  background: var(--admin-bg-dark, #050b16);
 }
 
+/* ============================================
+   MAIN CONTENT AREA
+   ============================================ */
+
+.admin-dashboard__main {
+  flex: 1;
+  margin-left: 72px;
+  transition: margin-left 0.3s ease-in-out;
+}
+
+.admin-sidebar--open ~ .admin-dashboard__main {
+  margin-left: 280px;
+}
+
+/* ============================================
+   MOBILE MENU BUTTON
+   ============================================ */
+.admin-dashboard__mobile-menu {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: white;
+  font-size: 24px;
+  border: none;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  cursor: pointer;
+  z-index: 98;
+  transition: all 0.2s ease;
+}
+
+.admin-dashboard__mobile-menu:hover {
+  background: #2563eb;
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+}
+
+.admin-dashboard__mobile-menu:active {
+  transform: scale(0.95);
+}
+
+/* ============================================
+   DASHBOARD CONTAINER
+   ============================================ */
 .admin-dashboard__container {
   max-width: 1400px;
   margin: 0 auto;
+  padding: 2rem;
 }
 
 .admin-dashboard__header {
@@ -27,13 +77,13 @@
 .admin-dashboard__title {
   font-size: 2rem;
   font-weight: 700;
-  color: var(--admin-text, #ffffff);
+  color: var(--admin-text, #f9fafb);
   margin: 0 0 0.5rem;
 }
 
 .admin-dashboard__subtitle {
   font-size: 0.875rem;
-  color: var(--admin-text-muted, #a0a0a0);
+  color: var(--admin-text-muted, #9ca3af);
   margin: 0;
 }
 
@@ -56,7 +106,7 @@
 .admin-section__title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--admin-text, #ffffff);
+  color: var(--admin-text, #f9fafb);
   margin: 0;
 }
 
@@ -68,8 +118,8 @@
 
 /* Card Layout */
 .admin-card {
-  background: var(--admin-bg-card, #1a1a1a);
-  border: 1px solid var(--admin-border, #333333);
+  background: var(--admin-bg-card, #1f2937);
+  border: 1px solid var(--admin-border, #374151);
   border-radius: var(--admin-radius, 12px);
   padding: 1.5rem;
 }
@@ -80,13 +130,13 @@
   align-items: center;
   margin-bottom: 1rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid var(--admin-border, #333333);
+  border-bottom: 1px solid var(--admin-border, #374151);
 }
 
 .admin-card__title {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--admin-text, #ffffff);
+  color: var(--admin-text, #f9fafb);
   margin: 0;
 }
 
@@ -106,22 +156,22 @@
 }
 
 .admin-btn--primary {
-  background: var(--admin-primary, #855ad1);
+  background: var(--admin-primary, #3b82f6);
   color: white;
 }
 
 .admin-btn--primary:hover:not(:disabled) {
-  background: var(--admin-primary-dark, #6b47b0);
+  background: var(--admin-primary-dark, #2563eb);
 }
 
 .admin-btn--secondary {
-  background: var(--admin-bg-hover, #252525);
-  color: var(--admin-text, #ffffff);
-  border: 1px solid var(--admin-border, #333333);
+  background: var(--admin-bg-card, #1f2937);
+  color: var(--admin-text, #f9fafb);
+  border: 1px solid var(--admin-border, #374151);
 }
 
 .admin-btn--secondary:hover:not(:disabled) {
-  background: var(--admin-border, #333333);
+  background: var(--admin-bg-hover, #374151);
 }
 
 .admin-btn--danger {
@@ -135,12 +185,12 @@
 
 .admin-btn--ghost {
   background: transparent;
-  color: var(--admin-text-muted, #a0a0a0);
+  color: var(--admin-text-muted, #9ca3af);
 }
 
 .admin-btn--ghost:hover:not(:disabled) {
-  color: var(--admin-text, #ffffff);
-  background: var(--admin-bg-hover, #252525);
+  color: var(--admin-text, #f9fafb);
+  background: var(--admin-bg-hover, #374151);
 }
 
 .admin-btn--sm {
@@ -162,7 +212,7 @@
   display: block;
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--admin-text-muted, #a0a0a0);
+  color: var(--admin-text-muted, #9ca3af);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
@@ -171,21 +221,44 @@
 .admin-form-input {
   width: 100%;
   padding: 0.75rem 1rem;
-  background: var(--admin-bg-dark, #0f0f0f);
-  border: 1px solid var(--admin-border, #333333);
+  background: var(--admin-bg-dark, #050b16);
+  border: 1px solid var(--admin-border, #374151);
   border-radius: var(--admin-radius-sm, 8px);
-  color: var(--admin-text, #ffffff);
+  color: var(--admin-text, #f9fafb);
   font-size: 0.875rem;
 }
 
 .admin-form-input:focus {
   outline: none;
-  border-color: var(--admin-primary, #855ad1);
+  border-color: var(--admin-primary, #3b82f6);
 }
 
-/* Responsive */
+/* ============================================
+   RESPONSIVE - MOBILE
+   ============================================ */
+
 @media (max-width: 768px) {
-  .admin-dashboard {
+  .admin-dashboard__main {
+    margin-left: 0;
+  }
+
+  .admin-sidebar--open ~ .admin-dashboard__main {
+    margin-left: 0;
+  }
+
+  /* Show mobile menu button only on mobile */
+  .admin-dashboard__mobile-menu {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Hide mobile menu when sidebar is open */
+  .admin-sidebar--open ~ .admin-dashboard__main .admin-dashboard__mobile-menu {
+    display: none !important;
+  }
+
+  .admin-dashboard__container {
     padding: 1rem;
   }
 
@@ -204,6 +277,10 @@
     align-items: flex-start;
   }
 }
+
+/* ============================================
+   ANALYSIS STATS STYLES
+   ============================================ */
 
 /* Analysis Stats Breakdown */
 .analysis-stats__breakdown {
@@ -237,7 +314,7 @@
 
 .analysis-stats__breakdown-bar {
   height: 8px;
-  background: var(--admin-bg-dark, #0f0f0f);
+  background: var(--admin-bg-dark, #050b16);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -288,7 +365,7 @@
 .analysis-stats__chart-bar {
   width: 100%;
   max-width: 24px;
-  background: var(--admin-primary, #855ad1);
+  background: var(--admin-primary, #3b82f6);
   border-radius: 4px 4px 0 0;
   position: relative;
   min-height: 4px;
@@ -299,7 +376,7 @@
 }
 
 .analysis-stats__chart-bar:hover {
-  background: var(--admin-primary-dark, #6b47b0);
+  background: var(--admin-primary-dark, #2563eb);
 }
 
 .analysis-stats__chart-bar-scam {
@@ -313,7 +390,7 @@
 
 .analysis-stats__chart-label {
   font-size: 0.625rem;
-  color: var(--admin-text-muted, #a0a0a0);
+  color: var(--admin-text-muted, #9ca3af);
   margin-top: 0.5rem;
 }
 
@@ -323,7 +400,7 @@
   gap: 1.5rem;
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--admin-border, #333333);
+  border-top: 1px solid var(--admin-border, #374151);
 }
 
 .analysis-stats__legend-item {
@@ -331,7 +408,7 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.75rem;
-  color: var(--admin-text-muted, #a0a0a0);
+  color: var(--admin-text-muted, #9ca3af);
 }
 
 .analysis-stats__legend-color {
@@ -341,7 +418,7 @@
 }
 
 .analysis-stats__legend-color--total {
-  background: var(--admin-primary, #855ad1);
+  background: var(--admin-primary, #3b82f6);
 }
 
 .analysis-stats__legend-color--scam {
@@ -354,7 +431,7 @@
   align-items: center;
   justify-content: center;
   padding: 3rem 1rem;
-  color: var(--admin-text-muted, #a0a0a0);
+  color: var(--admin-text-muted, #9ca3af);
   text-align: center;
 }
 
