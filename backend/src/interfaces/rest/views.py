@@ -725,11 +725,17 @@ def verify_email(request: Request) -> Response:
         )
         
         # Execute use case
-        verification_usecase.verify_email(token)
+        user_id = verification_usecase.verify_email(token)
+        
+        # Get user email for audit log
+        user = user_repo.get_by_id(user_id)
+        email = getattr(user, 'email', None)
         
         # Audit: email verified
         get_audit_logger().log_event(
             event_type=AuditEventType.EMAIL_VERIFIED,
+            user_id=user_id,
+            email=email,
             ip_address=_get_client_ip(request),
         )
 
@@ -886,11 +892,17 @@ def reset_password(request: Request) -> Response:
         )
         
         # Execute use case
-        reset_usecase.reset_password(token, new_password)
+        user_id = reset_usecase.reset_password(token, new_password)
+        
+        # Get user email for audit log
+        user = user_repo.get_by_id(user_id)
+        email = getattr(user, 'email', None)
         
         # Audit: password reset completed
         get_audit_logger().log_event(
             event_type=AuditEventType.PASSWORD_RESET_COMPLETED,
+            user_id=user_id,
+            email=email,
             ip_address=_get_client_ip(request),
         )
 
@@ -956,6 +968,17 @@ def logout(request: Request) -> Response:
         jwt_service = get_jwt_service()
         token_blacklist_service = get_token_blacklist_service()
         
+        # Decode token to get user info for audit logging (before blacklisting)
+        user_id = None
+        email = None
+        try:
+            token_payload = jwt_service.verify_access_token(access_token)
+            user_id = token_payload.get('user_id')
+            email = token_payload.get('email')
+        except Exception:
+            # If token is invalid, still proceed with logout but without user info
+            pass
+        
         logout_usecase = LogoutUseCase(
             jwt_service=jwt_service,
             token_blacklist_service=token_blacklist_service
@@ -967,6 +990,8 @@ def logout(request: Request) -> Response:
         # Audit: successful logout
         get_audit_logger().log_event(
             event_type=AuditEventType.LOGOUT,
+            user_id=user_id,
+            email=email,
             ip_address=_get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
         )
@@ -1034,6 +1059,7 @@ def refresh_token(request: Request) -> Response:
         get_audit_logger().log_event(
             event_type=AuditEventType.TOKEN_REFRESH,
             user_id=getattr(auth_result.user, 'id', None),
+            email=getattr(auth_result.user, 'email', None),
             ip_address=_get_client_ip(request),
         )
 

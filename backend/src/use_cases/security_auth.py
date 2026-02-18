@@ -65,7 +65,7 @@ class EmailVerificationUseCase:
         # Send email
         return self.email_service.send_verification_email(email, token)
     
-    def verify_email(self, token: str) -> bool:
+    def verify_email(self, token: str) -> str:
         """
         Verify user's email using token.
         
@@ -73,7 +73,7 @@ class EmailVerificationUseCase:
             token: Email verification token
         
         Returns:
-            True if email was verified successfully
+            user_id: ID of the user whose email was verified
         
         Raises:
             InvalidTokenError: If token is invalid or expired
@@ -83,7 +83,8 @@ class EmailVerificationUseCase:
             raise InvalidTokenError("Invalid or expired verification token")
         
         # Mark user as verified
-        return self.token_repository.update_user_verification(user_id)
+        self.token_repository.update_user_verification(user_id)
+        return user_id
 
 
 class PasswordResetUseCase:
@@ -130,7 +131,7 @@ class PasswordResetUseCase:
         # Send email
         return self.email_service.send_password_reset_email(email, token)
     
-    def reset_password(self, token: str, new_password: str) -> bool:
+    def reset_password(self, token: str, new_password: str) -> str:
         """
         Reset user's password using token.
         
@@ -139,7 +140,7 @@ class PasswordResetUseCase:
             new_password: New password
         
         Returns:
-            True if password was reset successfully
+            user_id: ID of the user whose password was reset
         
         Raises:
             InvalidTokenError: If token is invalid or expired
@@ -150,7 +151,7 @@ class PasswordResetUseCase:
         if not is_valid:
             raise ValueError("Password validation failed: " + "; ".join(errors))
         
-        # Verify token and get user ID
+        #Verify token and get user ID
         user_id = self.token_repository.verify_password_reset_token(token)
         if not user_id:
             raise InvalidTokenError("Invalid or expired reset token")
@@ -159,7 +160,8 @@ class PasswordResetUseCase:
         password_hash = self.password_hasher.hash_password(new_password)
         
         # Update password
-        return self.token_repository.update_user_password(user_id, password_hash)
+        self.token_repository.update_user_password(user_id, password_hash)
+        return user_id
 
 
 class LogoutUseCase:

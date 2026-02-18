@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination } from 'swiper/modules';
 import { useAuth } from '../context/AuthContext';
+import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 
 import 'swiper/css';
 import 'swiper/css/pagination';
@@ -72,13 +73,25 @@ function Landing() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [textAnimClass, setTextAnimClass] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const textRef = useRef(null);
 
-  // Handle logout
-  const handleLogout = async () => {
-    await logout();
+  // Handle logout button click - show confirmation modal
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  // Handle logout confirmation
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
     setShowUserMenu(false);
+    await logout();
     navigate('/');
+  };
+
+  // Handle logout cancellation
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   // Handle admin button click
@@ -163,7 +176,7 @@ function Landing() {
                   type="button"
                   onClick={() => { navigate('/detection'); setShowUserMenu(false); }}
                 >
-                  Dashboard
+                  Home
                 </button>
                 {isAdmin && (
                   <button
@@ -299,6 +312,13 @@ function Landing() {
           </p>
         </div>
       </footer>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
     </div>
   );
 }

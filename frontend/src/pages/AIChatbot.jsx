@@ -9,6 +9,7 @@ import {
   getAnalysisGuidedHistory
 } from '../api/chatbot';
 import { useAuth } from '../context/AuthContext';
+import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 
 function AIChatbot() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ function AIChatbot() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [disclaimer, setDisclaimer] = useState(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -148,9 +150,18 @@ function AIChatbot() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
     await logout();
     navigate('/');
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const handleSendMessage = async (e) => {
@@ -439,7 +450,7 @@ function AIChatbot() {
               <button
                 className="nav__login"
                 type="button"
-                onClick={async () => { await logout(); navigate('/'); }}
+                onClick={handleLogout}
               >
                 Logout
               </button>
@@ -711,6 +722,13 @@ function AIChatbot() {
           </div>
         </footer>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
     </div>
   );
 }

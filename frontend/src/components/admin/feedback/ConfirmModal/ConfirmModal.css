@@ -1,0 +1,118 @@
+/**
+ * ConfirmModal Component Styles
+ */
+
+.confirm-modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.confirm-modal {
+  background: var(--admin-bg-card, #1f2937);
+  border: 1px solid var(--admin-border, #374151);
+  border-radius: var(--admin-radius, 12px);
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.confirm-modal__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--admin-text, #f9fafb);
+  margin: 0 0 1rem;
+}
+
+.confirm-modal__message {
+  font-size: 0.875rem;
+  color: var(--admin-text-secondary, #e5e7eb);
+  line-height: 1.6;
+  margin: 0 0 2rem;
+}
+
+.confirm-modal__actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.confirm-modal__btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--admin-radius-sm, 8px);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid;
+}
+
+.confirm-modal__btn--cancel {
+  background: transparent;
+  border-color: var(--admin-border, #374151);
+  color: var(--admin-text-secondary, #e5e7eb);
+}
+
+.confirm-modal__btn--cancel:hover {
+  background: var(--admin-bg-hover, #374151);
+}
+
+.confirm-modal__btn--danger {
+  background: var(--admin-danger, #ef4444);
+  border-color: var(--admin-danger, #ef4444);
+  color: white;
+}
+
+.confirm-modal__btn--danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.confirm-modal__btn--warning {
+  background: var(--admin-warning, #f59e0b);
+  border-color: var(--admin-warning, #f59e0b);
+  color: white;
+}
+
+.confirm-modal__btn--warning:hover {
+  background: #d97706;
+  border-color: #d97706;
+}
+
+.confirm-modal__btn--info {
+  background: var(--admin-info, #3b82f6);
+  border-color: var(--admin-info, #3b82f6);
+  color: white;
+}
+
+.confirm-modal__btn--info:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
