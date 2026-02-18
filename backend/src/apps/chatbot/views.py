@@ -438,6 +438,7 @@ def clear_history(request: Request) -> Response:
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 def _extract_user_id_from_jwt(request: Request):
     """
     Helper function to extract user_id from JWT token.
@@ -591,3 +592,334 @@ def delete_conversation(request: Request, conversation_id: str) -> Response:
                 'message': 'An unexpected error occurred'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ============================================================
+# ANALYSIS-GUIDED CHATBOT ENDPOINTS
+# ============================================================
+
+def get_analysis_guided_use_case():
+    """Get analysis-guided chatbot use case instance."""
+    from ...use_cases.chatbot.analysis_guided_chatbot import AnalysisGuidedChatbotUseCase
+    from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
+    
+    llm = load_gemma_model()
+    
+    if llm is None:
+        raise RuntimeError("Gemma LLM not loaded. Chatbot is unavailable.")
+    
+    client = get_mongo_client()
+    db_name = get_database_name()
+    conversation_repo = ConversationRepository(client, db_name)
+    analysis_repo = AnalysisResultRepository(client, db_name)
+    
+    return AnalysisGuidedChatbotUseCase(llm, conversation_repo, analysis_repo)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@rate_limit('api_read')
+def get_analysis_conversation(request: Request, analysis_ref_id: str) -> Response:
+    """
+    Get or create conversation for a specific analysis.
+    
+    GET /api/chatbot/analysis-guided/<analysis_ref_id>/
+    
+    Response:
+    {
+        "conversation_id": "mongodb_id",
+        "title": "Guidance: Banking Phishing Scam",
+        "is_new": false,
+        "analysis_context": {
+            "ref_id": "uuid",
+            "is_scam": true,
+            "scam_type": "Banking Access Payment Scam",
+            "scam_score": 95.3,
+            ...
+        },
+        "messages": [...]
+    }
+    
+    Security:
+    - Requires authentication
+    - Rate limited (api_read: 60 requests per minute)
+    """
+    try:
+        # Extract user_id from JWT
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                from ...infrastructure.jwt_service import JWTService
+                import os
+                secret_key = os.getenv('JWT_SECRET_KEY')
+                jwt_service = JWTService(secret_key, 900, 604800, None)
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[GUIDED CHATBOT] Invalid/expired token: {jwt_error}")
+                return Response({
+                    'error': {
+                        'code': 'UNAUTHORIZED',
+                        'message': 'Authentication required'
+                    }
+                }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'UNAUTHORIZED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        logger.info(f"[GUIDED CHATBOT] Getting conversation for analysis {analysis_ref_id}")
+        
+        chatbot = get_analysis_guided_use_case()
+        result = chatbot.get_or_create_conversation(user_id, analysis_ref_id)
+        
+        return Response(result, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        logger.error(f"[GUIDED CHATBOT] Validation error: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'VALIDATION_ERROR',
+                'message': str(e)
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    except RuntimeError as e:
+        logger.error(f"[GUIDED CHATBOT] LLM not available: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'SERVICE_UNAVAILABLE',
+                'message': 'Chatbot is currently unavailable. Please try again later.'
+            }
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    
+    except Exception as e:
+        logger.error(f"[GUIDED CHATBOT] Error getting conversation: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('api_write')
+def send_analysis_guided_message(request: Request) -> Response:
+    """
+    Send a message in an analysis-guided conversation.
+    
+    POST /api/chatbot/analysis-guided/message
+    
+    Request body:
+    {
+        "conversation_id": "mongodb_id",
+        "message": "What should I do next?"
+    }
+    
+    Response:
+    {
+        "response": "Based on the analysis showing this is a banking scam...",
+        "conversation_id": "mongodb_id",
+        "title": "Guidance: Banking Phishing Scam",
+        "message_count": 4
+    }
+    
+    Security:
+    - Requires authentication
+    - Rate limited (api_write: 30 requests per minute)
+    - Input validation and length limits
+    """
+    try:
+        # Extract user_id from JWT
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                from ...infrastructure.jwt_service import JWTService
+                import os
+                secret_key = os.getenv('JWT_SECRET_KEY')
+                jwt_service = JWTService(secret_key, 900, 604800, None)
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[GUIDED CHATBOT] Invalid/expired token: {jwt_error}")
+                return Response({
+                    'error': {
+                        'code': 'UNAUTHORIZED',
+                        'message': 'Authentication required'
+                    }
+                }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'UNAUTHORIZED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Validate request data
+        conversation_id = request.data.get('conversation_id', '').strip()
+        message = request.data.get('message', '').strip()
+        
+        if not conversation_id:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Conversation ID is required',
+                    'details': {'conversation_id': 'This field is required'}
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not message:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Message is required',
+                    'details': {'message': 'This field is required'}
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if len(message) > 2000:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Message is too long',
+                    'details': {'message': 'Maximum 2000 characters allowed'}
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"[GUIDED CHATBOT] User {user_id} sending message in conversation {conversation_id}")
+        
+        chatbot = get_analysis_guided_use_case()
+        result = chatbot.send_message(user_id, conversation_id, message)
+        
+        return Response(result, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        logger.error(f"[GUIDED CHATBOT] Validation error: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'VALIDATION_ERROR',
+                'message': str(e)
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    except RuntimeError as e:
+        logger.error(f"[GUIDED CHATBOT] LLM not available: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'SERVICE_UNAVAILABLE',
+                'message': 'Chatbot is currently unavailable. Please try again later.'
+            }
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    
+    except Exception as e:
+        logger.error(f"[GUIDED CHATBOT] Error processing message: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@rate_limit('api_read')
+def get_analysis_guided_history(request: Request, conversation_id: str) -> Response:
+    """
+    Get full history of an analysis-guided conversation.
+    
+    GET /api/chatbot/analysis-guided/history/<conversation_id>/
+    
+    Response:
+    {
+        "conversation_id": "mongodb_id",
+        "title": "Guidance: Banking Phishing Scam",
+        "conversation_type": "analysis_guided",
+        "analysis_ref_id": "uuid",
+        "analysis_context": {...},
+        "messages": [...],
+        "created_at": "...",
+        "updated_at": "..."
+    }
+    
+    Security:
+    - Requires authentication
+    - Rate limited (api_read: 60 requests per minute)
+    """
+    try:
+        # Extract user_id from JWT
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                from ...infrastructure.jwt_service import JWTService
+                import os
+                secret_key = os.getenv('JWT_SECRET_KEY')
+                jwt_service = JWTService(secret_key, 900, 604800, None)
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[GUIDED CHATBOT] Invalid/expired token: {jwt_error}")
+                return Response({
+                    'error': {
+                        'code': 'UNAUTHORIZED',
+                        'message': 'Authentication required'
+                    }
+                }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'UNAUTHORIZED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        logger.info(f"[GUIDED CHATBOT] Getting history for conversation {conversation_id}")
+        
+        chatbot = get_analysis_guided_use_case()
+        result = chatbot.get_conversation_history(user_id, conversation_id)
+        
+        return Response(result, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        logger.error(f"[GUIDED CHATBOT] Validation error: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'NOT_FOUND',
+                'message': 'Conversation not found'
+            }
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    except RuntimeError as e:
+        logger.error(f"[GUIDED CHATBOT] LLM not available: {str(e)}")
+        return Response({
+            'error': {
+                'code': 'SERVICE_UNAVAILABLE',
+                'message': 'Chatbot is currently unavailable. Please try again later.'
+            }
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    
+    except Exception as e:
+        logger.error(f"[GUIDED CHATBOT] Error getting history: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

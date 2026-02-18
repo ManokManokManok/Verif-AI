@@ -78,3 +78,23 @@ urllib3==2.6.3
 web3==7.14.0
 websockets==15.0.1
 yarl==1.22.0
+Django>=4.2,<6.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+python-dotenv>=1.0.0
+pymongo>=4.6.0
+dnspython>=2.4.2
+huggingface_hub>=0.23.0
+safetensors>=0.4.2
+# Optional heavy deps (install when working on models)
+# transformers>=4.44.0
+# torch>=2.2.0
+# llama-cpp-python>=0.2.80
+PyJWT>=2.8.0
+bcrypt>=4.0.0
+redis>=4.5.0
+psutil>=5.9.0
+sendgrid>=6.10.0
+
+# Optional: System monitoring dependencies
+# nvidia-ml-py>=12.535.0  # For GPU metrics (requires NVIDIA driver)

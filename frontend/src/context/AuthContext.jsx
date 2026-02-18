@@ -1,11 +1,12 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { 
   loginRequest, 
   logoutRequest, 
   getStoredUser, 
   isLoggedIn as checkIsLoggedIn,
   isAdmin as checkIsAdmin,
-  hasRole as checkHasRole
+  hasRole as checkHasRole,
+  isTokenExpired
 } from '../api/client';
 
 // Create context
@@ -19,9 +20,12 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => getStoredUser());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const sessionExpiredHandled = useRef(false);
 
-  // Check if logged in
-  const isLoggedIn = Boolean(user && checkIsLoggedIn());
+  // Check if logged in (also verify token is not expired client-side)
+  const accessToken = window.localStorage.getItem('access_token');
+  const isLoggedIn = Boolean(user && checkIsLoggedIn() && !isTokenExpired(accessToken, 0));
 
   // Check if admin
   const isAdmin = isLoggedIn && checkIsAdmin();
@@ -39,6 +43,8 @@ export function AuthProvider({ children }) {
     try {
       const data = await loginRequest({ email, password });
       setUser(data.user);
+      setSessionExpired(false);
+      sessionExpiredHandled.current = false;
       return data;
     } catch (err) {
       setError(err.message || 'Login failed');
@@ -86,8 +92,47 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [refreshUser]);
 
+  // Listen for session-expired events dispatched by the API client
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      if (sessionExpiredHandled.current) return;
+      sessionExpiredHandled.current = true;
+      setSessionExpired(true);
+      // Clear auth state
+      window.localStorage.removeItem('access_token');
+      window.localStorage.removeItem('refresh_token');
+      window.localStorage.removeItem('user');
+      setUser(null);
+    };
+
+    window.addEventListener('session-expired', handleSessionExpired);
+    return () => window.removeEventListener('session-expired', handleSessionExpired);
+  }, []);
+
+  // Periodically check token expiry while the user is on the app (every 60s)
+  useEffect(() => {
+    if (!user) return;
+
+    const checkTokenExpiry = () => {
+      const token = window.localStorage.getItem('access_token');
+      if (token && isTokenExpired(token, 0)) {
+        // Token expired — trigger session expired flow
+        window.dispatchEvent(new CustomEvent('session-expired'));
+      }
+    };
+
+    const intervalId = setInterval(checkTokenExpiry, 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, [user]);
+
+  // Reset sessionExpired flag on successful login
+  const dismissSessionExpired = useCallback(() => {
+    setSessionExpired(false);
+    sessionExpiredHandled.current = false;
+  }, []);
+
   // Get access token from localStorage
-  const accessToken = localStorage.getItem('access_token');
+  const accessTokenValue = localStorage.getItem('access_token');
 
   const value = {
     user,
@@ -99,7 +144,9 @@ export function AuthProvider({ children }) {
     logout,
     hasRole,
     refreshUser,
-    accessToken,
+    accessToken: accessTokenValue,
+    sessionExpired,
+    dismissSessionExpired,
   };
 
   return (

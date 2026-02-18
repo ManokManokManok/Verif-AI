@@ -33,7 +33,7 @@ export async function sendChatMessage(message, accessToken = null, conversationI
     body.conversation_id = conversationId;
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/chat/message/`, {
+  const response = await fetch(`${API_BASE_URL}/chat/message/`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -96,7 +96,7 @@ export async function getConversations(accessToken, limit = 50) {
     'Authorization': `Bearer ${accessToken}`,
   };
 
-  const response = await fetch(`${API_BASE_URL}/api/chat/conversations/?limit=${limit}`, {
+  const response = await fetch(`${API_BASE_URL}/chat/conversations/?limit=${limit}`, {
     method: 'GET',
     headers,
   });
@@ -186,4 +186,99 @@ function getOrCreateSessionId() {
  */
 export function clearSessionId() {
   localStorage.removeItem('chatbot_session_id');
+}
+
+
+// ============================================================
+// ANALYSIS-GUIDED CHATBOT API
+// ============================================================
+
+/**
+ * Get or create analysis-guided conversation for a specific analysis
+ * @param {string} analysisRefId - UUID of the analysis result
+ * @param {string} accessToken - JWT access token (required)
+ * @returns {Promise<object>} Conversation data with analysis context
+ */
+export async function getAnalysisConversation(analysisRefId, accessToken) {
+  if (!accessToken) {
+    throw new Error('Authentication required for analysis-guided conversations');
+  }
+
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+  };
+
+  const response = await fetch(`${API_BASE_URL}/api/chat/analysis-guided/${analysisRefId}/`, {
+    method: 'GET',
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || 'Failed to get analysis conversation');
+  }
+
+  return await response.json();
+}
+
+/**
+ * Send a message in an analysis-guided conversation
+ * @param {string} conversationId - Conversation MongoDB ID
+ * @param {string} message - User's message
+ * @param {string} accessToken - JWT access token (required)
+ * @returns {Promise<object>} Response with bot's guidance
+ */
+export async function sendAnalysisGuidedMessage(conversationId, message, accessToken) {
+  if (!accessToken) {
+    throw new Error('Authentication required for analysis-guided conversations');
+  }
+
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  const response = await fetch(`${API_BASE_URL}/api/chat/analysis-guided/message/`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      message,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || 'Failed to send analysis-guided message');
+  }
+
+  return await response.json();
+}
+
+/**
+ * Get full history of an analysis-guided conversation
+ * @param {string} conversationId - Conversation MongoDB ID
+ * @param {string} accessToken - JWT access token (required)
+ * @returns {Promise<object>} Full conversation with analysis context
+ */
+export async function getAnalysisGuidedHistory(conversationId, accessToken) {
+  if (!accessToken) {
+    throw new Error('Authentication required for analysis-guided conversations');
+  }
+
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+  };
+
+  const response = await fetch(`${API_BASE_URL}/api/chat/analysis-guided/history/${conversationId}/`, {
+    method: 'GET',
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || 'Failed to get analysis-guided history');
+  }
+
+  return await response.json();
 }

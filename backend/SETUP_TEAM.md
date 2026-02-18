@@ -69,10 +69,34 @@ python backend\manage.py check_mongo
 ```
 Expected output: `{ "ok": true, "ping": { "ok": 1 } }`
 
+## Security Notes
+
+### MongoDB TLS
+- **Remote/Atlas connections**: TLS is enforced automatically by `connection.py`.
+  No extra steps needed — if your `MONGODB_URI` points to a remote host or uses
+  `mongodb+srv://`, the driver will add `tls=true` at connect time.
+- **Local development**: TLS is skipped for `localhost` / `127.0.0.1` connections.
+- To **force** TLS even locally, add to `.env`:
+  ```
+  MONGODB_REQUIRE_TLS=true
+  ```
+
+### Audit Logging
+All security-sensitive actions (login, logout, signup, password resets, role
+changes) are automatically logged to:
+1. **File** — `backend/logs/security.log` (rotates at 10 MB, keeps 5 backups)
+2. **MongoDB** — `audit_logs` collection in the app database
+
+Query audit logs in the Mongo shell:
+```js
+db.audit_logs.find({ event_type: "auth.login.failed" }).sort({ timestamp: -1 }).limit(10)
+```
+
 ## Project Layout (for reference)
 - `backend/src/domain` — entities/business rules
 - `backend/src/use_cases` — application logic
 - `backend/src/infrastructure/mongodb` — DB connection and repos
+- `backend/src/infrastructure/audit_logger.py` — centralised audit logging
 - `backend/src/interfaces/rest` — web/API adapters
 - `backend/src/apps/core` — core Django app (health, commands)
 

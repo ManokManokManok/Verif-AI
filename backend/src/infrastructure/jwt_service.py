@@ -8,7 +8,7 @@ from .token_blacklist_service import TokenBlacklistService
 class JWTService:
     def __init__(self, secret_key: str, access_token_lifetime: int = 900, refresh_token_lifetime: int = 604800, token_blacklist_service: Optional[TokenBlacklistService] = None):
         self.secret_key = secret_key
-        self.access_token_lifetime = access_token_lifetime  # 15 minutes default
+        self.access_token_lifetime = access_token_lifetime  # 24 hours default
         self.refresh_token_lifetime = refresh_token_lifetime  # 7 days default
         self.algorithm = 'HS256'
         self.token_blacklist_service = token_blacklist_service
@@ -54,6 +54,21 @@ class JWTService:
             access_token=access_token,
             refresh_token=refresh_token
         )
+    
+    def verify_token(self, token: str) -> Optional[Dict]:
+        """
+        Verify and decode a token (alias for verify_access_token).
+        
+        Args:
+            token: JWT access token
+        
+        Returns:
+            Decoded token payload or None if invalid
+        """
+        try:
+            return self.verify_access_token(token)
+        except Exception:
+            return None
     
     def verify_access_token(self, token: str) -> Dict:
         """
