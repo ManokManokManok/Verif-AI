@@ -1,0 +1,75 @@
+/**
+ * MetricGauge Component Styles
+ */
+
+.metric-gauge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.metric-gauge--small { width: 100px; height: 100px; }
+.metric-gauge--medium { width: 140px; height: 140px; }
+.metric-gauge--large { width: 180px; height: 180px; }
+
+.metric-gauge__svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(0deg);
+}
+
+.metric-gauge__background {
+  stroke: var(--admin-border, #374151);
+}
+
+.metric-gauge__progress {
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.metric-gauge--normal .metric-gauge__progress {
+  stroke: var(--admin-success, #22c55e);
+}
+
+.metric-gauge--warning .metric-gauge__progress {
+  stroke: var(--admin-warning, #f59e0b);
+}
+
+.metric-gauge--danger .metric-gauge__progress {
+  stroke: var(--admin-danger, #ef4444);
+}
+
+.metric-gauge__content {
+  position: absolute;
+  text-align: center;
+}
+
+.metric-gauge__value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--admin-text, #f9fafb);
+}
+
+.metric-gauge--small .metric-gauge__value { font-size: 1rem; }
+.metric-gauge--large .metric-gauge__value { font-size: 2rem; }
+
+.metric-gauge__label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--admin-text-muted, #9ca3af);
+  margin-top: 0.25rem;
+}
+
+.metric-gauge--loading .metric-gauge__skeleton {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--admin-border, #374151);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}

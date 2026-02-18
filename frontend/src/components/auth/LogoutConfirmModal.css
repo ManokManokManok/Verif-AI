@@ -1,0 +1,145 @@
+/* Logout Confirmation Modal Styles */
+
+.logout-modal__overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.logout-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 450px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.logout-modal__title {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  color: #1a202c;
+  font-weight: 600;
+}
+
+.logout-modal__message {
+  margin: 0 0 1.5rem;
+  color: #4a5568;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.logout-modal__actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.logout-modal__btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.logout-modal__btn--cancel {
+  background: #e2e8f0;
+  color: #4a5568;
+}
+
+.logout-modal__btn--cancel:hover {
+  background: #cbd5e0;
+}
+
+.logout-modal__btn--confirm {
+  background: #e53e3e;
+  color: white;
+}
+
+.logout-modal__btn--confirm:hover {
+  background: #c53030;
+}
+
+.logout-modal__btn:active {
+  transform: scale(0.98);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .logout-modal {
+    background: #2d3748;
+  }
+
+  .logout-modal__title {
+    color: #f7fafc;
+  }
+
+  .logout-modal__message {
+    color: #e2e8f0;
+  }
+
+  .logout-modal__btn--cancel {
+    background: #4a5568;
+    color: #e2e8f0;
+  }
+
+  .logout-modal__btn--cancel:hover {
+    background: #718096;
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .logout-modal {
+    padding: 1.5rem;
+  }
+
+  .logout-modal__title {
+    font-size: 1.25rem;
+  }
+
+  .logout-modal__message {
+    font-size: 0.95rem;
+  }
+
+  .logout-modal__actions {
+    flex-direction: column-reverse;
+  }
+
+  .logout-modal__btn {
+    width: 100%;
+  }
+}

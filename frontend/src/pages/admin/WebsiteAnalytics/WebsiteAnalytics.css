@@ -1,5 +1,6 @@
 /**
  * Website Analytics Styles
+ * Updated to match user-side design system
  */
 
 /* Analytics Charts */
@@ -8,9 +9,9 @@
 }
 
 .website-analytics {
-  --admin-text-primary: #e5e7eb;
-  --admin-text-secondary: #9ca3af;
-  --admin-text-tertiary: #6b7280;
+  --admin-text-primary: #f9fafb;
+  --admin-text-secondary: #e5e7eb;
+  --admin-text-tertiary: #9ca3af;
 
   --admin-bg-secondary: #1f2937;
   --admin-bg-tertiary: #111827;
@@ -21,7 +22,7 @@
   margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--admin-text-primary, #e5e7eb);
+  color: var(--admin-text-primary, #f9fafb);
 }
 
 .analytics-chart--empty {
@@ -45,7 +46,7 @@
 
 .analytics-chart__label {
   font-size: 0.8rem;
-  color: var(--admin-text-secondary, #6c757d);
+  color: var(--admin-text-muted, #9ca3af);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -60,7 +61,7 @@
 
 .analytics-chart__bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--admin-primary, #4361ee), var(--admin-primary-light, #7209b7));
+  background: linear-gradient(90deg, var(--admin-primary, #3b82f6), var(--admin-primary-light, #60a5fa));
   border-radius: 4px;
   min-width: 4px;
   transition: width 0.3s ease;
@@ -69,7 +70,7 @@
 .analytics-chart__value {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--admin-text-primary, #e5e7eb);
+  color: var(--admin-text-primary, #f9fafb);
   min-width: 50px;
 }
 
@@ -82,7 +83,7 @@
   margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--admin-text-primary, #1a1a2e);
+  color: var(--admin-text-primary, #f9fafb);
 }
 
 .analytics-devices__content {
@@ -102,7 +103,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background: var(--admin-bg-secondary, #f8f9fa);
+  background: var(--admin-bg-secondary, #1f2937);
   border-radius: 6px;
 }
 
@@ -116,18 +117,18 @@
 .analytics-devices__label {
   flex: 1;
   font-size: 0.85rem;
-  color: var(--admin-text-primary, #1a1a2e);
+  color: var(--admin-text-primary, #f9fafb);
 }
 
 .analytics-devices__value {
   font-weight: 600;
   font-size: 0.9rem;
-  color: var(--admin-text-primary, #1a1a2e);
+  color: var(--admin-text-primary, #f9fafb);
 }
 
 .analytics-devices__percentage {
   font-size: 0.8rem;
-  color: var(--admin-text-secondary, #6c757d);
+  color: var(--admin-text-muted, #9ca3af);
   min-width: 50px;
   text-align: right;
 }
@@ -141,7 +142,7 @@
   margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--admin-text-primary, #1a1a2e);
+  color: var(--admin-text-primary, #f9fafb);
 }
 
 .analytics-hourly__chart {
@@ -151,7 +152,7 @@
   gap: 3px;
   padding-top: 1rem;
   padding-bottom: 2rem;
-  border-bottom: 1px solid var(--admin-border, #e9ecef);
+  border-bottom: 1px solid var(--admin-border, #374151);
 }
 
 .analytics-hourly__bar-wrapper {
@@ -165,7 +166,7 @@
 
 .analytics-hourly__bar {
   width: 100%;
-  background: linear-gradient(180deg, var(--admin-primary, #4361ee), var(--admin-primary-light, #7209b7));
+  background: linear-gradient(180deg, var(--admin-primary, #3b82f6), var(--admin-primary-light, #60a5fa));
   border-radius: 2px 2px 0 0;
   transition: height 0.3s ease;
   cursor: pointer;
@@ -179,7 +180,7 @@
   position: absolute;
   bottom: -20px;
   font-size: 0.65rem;
-  color: var(--admin-text-secondary, #6c757d);
+  color: var(--admin-text-muted, #9ca3af);
 }
 
 /* Recent Visits */
@@ -191,12 +192,12 @@
   margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--admin-text-primary, #1a1a2e);
+  color: var(--admin-text-primary, #f9fafb);
 }
 
 .analytics-recent__empty {
   text-align: center;
-  color: var(--admin-text-secondary, #6c757d);
+  color: var(--admin-text-muted, #9ca3af);
   padding: 1rem;
 }
 
@@ -213,14 +214,14 @@
   grid-template-columns: 1fr auto auto;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: var(--admin-bg-secondary, #f8f9fa);
+  background: var(--admin-bg-secondary, #1f2937);
   border-radius: 6px;
   font-size: 0.85rem;
   align-items: center;
 }
 
 .analytics-recent__path {
-  color: var(--admin-text-primary, #1a1a2e);
+  color: var(--admin-text-primary, #f9fafb);
   font-family: monospace;
   white-space: nowrap;
   overflow: hidden;
@@ -229,15 +230,15 @@
 
 .analytics-recent__device {
   text-transform: capitalize;
-  color: var(--admin-text-secondary, #6c757d);
+  color: var(--admin-text-muted, #9ca3af);
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
-  background: var(--admin-bg-tertiary, #e9ecef);
+  background: var(--admin-bg-tertiary, #111827);
   border-radius: 4px;
 }
 
 .analytics-recent__time {
-  color: var(--admin-text-tertiary, #adb5bd);
+  color: var(--admin-text-dim, #6b7280);
   font-size: 0.75rem;
   min-width: 60px;
   text-align: right;

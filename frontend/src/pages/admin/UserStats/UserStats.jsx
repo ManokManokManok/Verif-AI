@@ -14,8 +14,11 @@ import {
   LoadingSpinner, 
   ErrorMessage,
   ConfirmModal,
-} from '../../components/admin';
-import { useUserStats, useUserReports } from '../../hooks/useAdminData';
+} from '../../../components/admin';
+import { useUserStats, useUserReports } from '../../../hooks/useAdminData';
+import RoleDistributionCard from './components/RoleDistributionCard';
+import { getPercentage, getRoleColor } from './utils';
+import './UserStats.css';
 
 export default function UserStats({ onNotify }) {
   const [period, setPeriod] = useState('month');
@@ -258,33 +261,12 @@ export default function UserStats({ onNotify }) {
       </div>
 
       {/* User Role Distribution */}
-      <div className="admin-card admin-mt-4">
-        <div className="admin-card__header">
-          <h3 className="admin-card__title">User Role Distribution</h3>
-        </div>
-        <div className="user-stats__roles">
-          {userStats.role_distribution ? (
-            Object.entries(userStats.role_distribution).map(([role, count]) => (
-              <div key={role} className="user-stats__role-item">
-                <div className="user-stats__role-header">
-                  <span className="user-stats__role-name">{formatRole(role)}</span>
-                  <span className="user-stats__role-count">{count.toLocaleString()}</span>
-                </div>
-                <div className="user-stats__role-bar">
-                  <div 
-                    className="user-stats__role-fill"
-                    style={{ 
-                      width: `${getPercentage(count, userStats.total_users)}%`,
-                      background: getRoleColor(role)
-                    }}
-                  />
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="user-stats__no-data">No role distribution data available</p>
-          )}
-        </div>
+      <div className="admin-mt-4">
+        <RoleDistributionCard 
+          roleDistribution={userStats.role_distribution}
+          totalUsers={userStats.total_users}
+          getRoleColor={getRoleColor}
+        />
       </div>
 
       {/* Confirmation Modal */}
@@ -304,109 +286,6 @@ export default function UserStats({ onNotify }) {
           setSelectedReport(null);
         }}
       />
-
-      <style>{`
-        .admin-section__loading {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 400px;
-          color: var(--admin-text-muted);
-        }
-
-        .user-stats__report-filters {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .user-stats__badge {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-width: 20px;
-          height: 20px;
-          padding: 0 6px;
-          background: var(--admin-danger);
-          color: white;
-          border-radius: 10px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          margin-left: 0.5rem;
-        }
-
-        .user-stats__actions {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .user-stats__truncate {
-          display: block;
-          max-width: 200px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .user-stats__resolved-text {
-          font-size: 0.75rem;
-          color: var(--admin-text-muted);
-        }
-
-        .user-stats__roles {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          padding: 1rem 0;
-        }
-
-        .user-stats__role-item {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .user-stats__role-header {
-          display: flex;
-          justify-content: space-between;
-        }
-
-        .user-stats__role-name {
-          font-size: 0.875rem;
-          color: var(--admin-text);
-          font-weight: 500;
-        }
-
-        .user-stats__role-count {
-          font-size: 0.875rem;
-          color: var(--admin-text-muted);
-        }
-
-        .user-stats__role-bar {
-          height: 8px;
-          background: var(--admin-border);
-          border-radius: 4px;
-          overflow: hidden;
-        }
-
-        .user-stats__role-fill {
-          height: 100%;
-          border-radius: 4px;
-          transition: width 0.3s ease;
-        }
-
-        .user-stats__no-data {
-          color: var(--admin-text-muted);
-          text-align: center;
-          padding: 2rem;
-        }
-
-        code {
-          font-family: monospace;
-          font-size: 0.875rem;
-          color: var(--admin-primary);
-        }
-      `}</style>
     </div>
   );
 }
@@ -414,26 +293,3 @@ export default function UserStats({ onNotify }) {
 UserStats.propTypes = {
   onNotify: PropTypes.func,
 };
-
-// Helper functions
-function getPercentage(value, total) {
-  if (!total || total === 0) return '0';
-  return ((value || 0) / total * 100).toFixed(1);
-}
-
-function formatRole(role) {
-  return role.split('_').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ');
-}
-
-function getRoleColor(role) {
-  const colors = {
-    admin: 'var(--admin-danger)',
-    moderator: 'var(--admin-warning)',
-    analyst: 'var(--admin-info)',
-    premium_user: 'var(--admin-primary)',
-    user: 'var(--admin-success)',
-  };
-  return colors[role] || 'var(--admin-text-muted)';
-}
