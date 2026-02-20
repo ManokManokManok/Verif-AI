@@ -24,10 +24,10 @@ function ForgotPassword() {
   };
 
   return (
-    <div className="auth" style={{ gridTemplateColumns: '1fr' }}>
-      <div className="auth__panel auth__panel--right" style={{ alignItems: 'center' }}>
-        <div style={{ maxWidth: 440, width: '100%' }}>
-          <h1 className="auth__title" style={{ marginTop: 0 }}>Forgot Password</h1>
+    <div className="auth auth--single page-enter">
+      <div className="auth__panel auth__panel--right auth__panel--single">
+        <div className="auth__single-card">
+          <h1 className="auth__title auth__title--compact">Forgot Password</h1>
 
           {!sent ? (
             <>
@@ -59,18 +59,18 @@ function ForgotPassword() {
               </form>
             </>
           ) : (
-            <div style={{ textAlign: 'center', marginTop: 24 }}>
+            <div className="auth__single-center auth__single-center--spaced">
               <div className="verify-icon verify-icon--success">✓</div>
-              <p className="auth__subtitle" style={{ marginTop: 16 }}>
+              <p className="auth__subtitle auth__subtitle--spaced">
                 If an account exists for <strong>{email}</strong>, you&apos;ll receive a password reset email shortly.
               </p>
-              <p className="auth__subtitle" style={{ marginTop: 8 }}>
+              <p className="auth__subtitle auth__subtitle--tight">
                 Check your inbox and click the link to reset your password.
               </p>
             </div>
           )}
 
-          <p style={{ marginTop: 24, fontSize: 13 }}>
+          <p className="auth__single-footer-link">
             <Link to="/login" className="auth__link">← Back to Login</Link>
           </p>
         </div>

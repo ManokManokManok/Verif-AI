@@ -192,7 +192,7 @@ function Signup() {
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--signup">
+    <div className="auth auth--signup page-enter">
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
           <p className="auth__tagline">Keeping you Safe</p>

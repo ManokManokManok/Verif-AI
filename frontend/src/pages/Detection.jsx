@@ -262,7 +262,7 @@ function Detection() {
   };
 
   return (
-    <div className="detect">
+    <div className="detect page-enter">
       <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
         <button
           className="detect__sidebtn detect__sidebtn--menu"
