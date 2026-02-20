@@ -9,12 +9,14 @@ import {
   getAnalysisGuidedHistory
 } from '../api/chatbot';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 
 function AIChatbot() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [text, setText] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
@@ -27,15 +29,37 @@ function AIChatbot() {
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [disclaimer, setDisclaimer] = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(() => localStorage.getItem('chatbot-autoscroll') !== 'false');
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('chatbot-sound') !== 'false');
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, autoScroll]);
+
+  // Save settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('chatbot-autoscroll', autoScroll);
+  }, [autoScroll]);
+
+  useEffect(() => {
+    localStorage.setItem('chatbot-sound', soundEnabled);
+  }, [soundEnabled]);
+
+  const handleSettingsClick = () => {
+    setShowSettingsModal(true);
+  };
+
+  const closeSettingsModal = () => {
+    setShowSettingsModal(false);
+  };
 
   // Handle navigation state for analysis-guided mode
   useEffect(() => {
@@ -331,7 +355,13 @@ function AIChatbot() {
         )}
         
         <div className="detect__spacer" />
-        <button className="detect__sidebtn" type="button" aria-label="Settings">
+        <button 
+          className="detect__sidebtn" 
+          type="button" 
+          aria-label="Settings"
+          onClick={handleSettingsClick}
+          title="Settings"
+        >
           ⚙
         </button>
       </aside>
@@ -564,6 +594,115 @@ function AIChatbot() {
         onConfirm={confirmLogout}
         onCancel={cancelLogout}
       />
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="chatbot__settings-overlay" onClick={closeSettingsModal}>
+          <div className="chatbot__settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="chatbot__settings-header">
+              <h2 className="chatbot__settings-title">Settings</h2>
+              <button 
+                className="chatbot__settings-close" 
+                onClick={closeSettingsModal}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="chatbot__settings-content">
+              {/* Theme Setting */}
+              <div className="chatbot__settings-item">
+                <div className="chatbot__settings-item-header">
+                  <div className="chatbot__settings-item-icon">{theme === 'dark' ? '🌙' : '☀️'}</div>
+                  <div className="chatbot__settings-item-info">
+                    <div className="chatbot__settings-item-label">Theme</div>
+                    <div className="chatbot__settings-item-desc">
+                      {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  className={`chatbot__settings-toggle${theme === 'light' ? ' chatbot__settings-toggle--active' : ''}`}
+                  onClick={toggleTheme}
+                  aria-label="Toggle theme"
+                >
+                  <div className="chatbot__settings-toggle-slider"></div>
+                </button>
+              </div>
+
+              {/* Auto-scroll Setting */}
+              <div className="chatbot__settings-item">
+                <div className="chatbot__settings-item-header">
+                  <div className="chatbot__settings-item-icon">📜</div>
+                  <div className="chatbot__settings-item-info">
+                    <div className="chatbot__settings-item-label">Auto-scroll</div>
+                    <div className="chatbot__settings-item-desc">
+                      Automatically scroll to new messages
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  className={`chatbot__settings-toggle${autoScroll ? ' chatbot__settings-toggle--active' : ''}`}
+                  onClick={() => setAutoScroll(prev => !prev)}
+                  aria-label="Toggle auto-scroll"
+                >
+                  <div className="chatbot__settings-toggle-slider"></div>
+                </button>
+              </div>
+
+              {/* Sound Setting */}
+              <div className="chatbot__settings-item">
+                <div className="chatbot__settings-item-header">
+                  <div className="chatbot__settings-item-icon">{soundEnabled ? '🔔' : '🔕'}</div>
+                  <div className="chatbot__settings-item-info">
+                    <div className="chatbot__settings-item-label">Sound Effects</div>
+                    <div className="chatbot__settings-item-desc">
+                      Play sound on new messages
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  className={`chatbot__settings-toggle${soundEnabled ? ' chatbot__settings-toggle--active' : ''}`}
+                  onClick={() => setSoundEnabled(prev => !prev)}
+                  aria-label="Toggle sound"
+                >
+                  <div className="chatbot__settings-toggle-slider"></div>
+                </button>
+              </div>
+
+              {/* User Info */}
+              {isLoggedIn && (
+                <div className="chatbot__settings-section">
+                  <div className="chatbot__settings-section-title">Account</div>
+                  <div className="chatbot__settings-user-info">
+                    <div className="chatbot__settings-user-avatar">
+                      {(user?.username || user?.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="chatbot__settings-user-details">
+                      <div className="chatbot__settings-user-name">
+                        {user?.username || user?.email}
+                      </div>
+                      <div className="chatbot__settings-user-email">
+                        {user?.email}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="chatbot__settings-footer">
+              <button 
+                className="chatbot__settings-btn chatbot__settings-btn--primary"
+                onClick={closeSettingsModal}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

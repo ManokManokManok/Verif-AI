@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import loginImage from '../../assets/image/login.png';
 import { isAdmin as checkIsAdmin, sendMfaCodeRequest, verifyMfaCodeRequest } from '../api/client';
 
@@ -172,11 +173,13 @@ function GoogleIcon() {
 function Login() {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   // MFA state
   const [mfaStep, setMfaStep] = useState(false);
@@ -274,6 +277,16 @@ function Login() {
 
   return (
     <div className="auth auth--login page-enter">
+      {/* Theme Toggle Button */}
+      <button 
+        className="auth__theme-toggle" 
+        onClick={toggleTheme}
+        aria-label="Toggle theme"
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {theme === 'dark' ? '☀️' : '🌙'}
+      </button>
+
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
           <p className="auth__tagline">Know What&apos;s Real</p>
@@ -353,7 +366,11 @@ function Login() {
 
               <div className="auth__row auth__row--between">
                 <label className="auth__checkbox">
-                  <input type="checkbox" />
+                  <input 
+                    type="checkbox" 
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
                   <span>Remember me</span>
                 </label>
                 <Link to="/forgot-password" className="auth__link" style={{ fontSize: 12 }}>
@@ -375,8 +392,18 @@ function Login() {
                 </div>
               )}
 
-              <button type="submit" className="auth__primary" disabled={loading}>
-                <strong>{loading ? 'Sending code…' : 'Login'}</strong>
+              <button type="submit" className="auth__submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <span className="auth__submit-spinner"></span>
+                    <span>Sending code…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Login</span>
+                    <span className="auth__submit-arrow">→</span>
+                  </>
+                )}
               </button>
 
               <p className="auth__or">or continue with</p>
@@ -403,21 +430,23 @@ function Login() {
             </p>
 
             <form className="auth__form" onSubmit={handleMfaSubmit}>
-              <div className="mfa-code-inputs" onPaste={handleCodePaste}>
-                {mfaCode.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => (codeRefs.current[i] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    className="mfa-code-input"
-                    value={digit}
-                    onChange={(e) => handleCodeChange(i, e.target.value)}
-                    onKeyDown={(e) => handleCodeKeyDown(i, e)}
-                    autoFocus={i === 0}
-                  />
-                ))}
+              <div className="mfa-code-container">
+                <div className="mfa-code-inputs" onPaste={handleCodePaste}>
+                  {mfaCode.map((digit, i) => (
+                    <input
+                      key={i}
+                      ref={(el) => (codeRefs.current[i] = el)}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      className="mfa-code-input"
+                      value={digit}
+                      onChange={(e) => handleCodeChange(i, e.target.value)}
+                      onKeyDown={(e) => handleCodeKeyDown(i, e)}
+                      autoFocus={i === 0}
+                    />
+                  ))}
+                </div>
               </div>
 
               {error && (
@@ -426,8 +455,18 @@ function Login() {
                 </div>
               )}
 
-              <button type="submit" className="auth__primary" disabled={loading}>
-                <strong>{loading ? 'Verifying…' : 'Verify & Login'}</strong>
+              <button type="submit" className="auth__submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <span className="auth__submit-spinner"></span>
+                    <span>Verifying…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Verify & Login</span>
+                    <span className="auth__submit-arrow">→</span>
+                  </>
+                )}
               </button>
 
               <p className="auth__subtitle" style={{ textAlign: 'center', marginTop: 8 }}>
