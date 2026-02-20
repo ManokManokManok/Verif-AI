@@ -273,7 +273,7 @@ function Login() {
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--login">
+    <div className="auth auth--login page-enter">
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
           <p className="auth__tagline">Know What&apos;s Real</p>

@@ -72,7 +72,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="admin-dashboard">
+    <div className="admin-dashboard page-enter">
       {/* Sidebar Navigation Component */}
       <AdminSidebar
         isOpen={sidebarOpen}

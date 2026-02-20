@@ -41,14 +41,14 @@ function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="auth" style={{ gridTemplateColumns: '1fr' }}>
-        <div className="auth__panel auth__panel--right" style={{ alignItems: 'center' }}>
-          <div style={{ maxWidth: 440, width: '100%', textAlign: 'center' }}>
-            <h1 className="auth__title" style={{ marginTop: 0 }}>Invalid Link</h1>
-            <p className="auth__error" style={{ marginTop: 16, fontSize: 14 }}>
+      <div className="auth auth--single page-enter">
+        <div className="auth__panel auth__panel--right auth__panel--single">
+          <div className="auth__single-card auth__single-card--center">
+            <h1 className="auth__title auth__title--compact">Invalid Link</h1>
+            <p className="auth__error auth__error--single">
               No reset token provided. Please request a new reset link.
             </p>
-            <Link to="/forgot-password" className="auth__link" style={{ display: 'inline-block', marginTop: 24 }}>
+            <Link to="/forgot-password" className="auth__link auth__link--inline">
               Request New Link
             </Link>
           </div>
@@ -58,10 +58,10 @@ function ResetPassword() {
   }
 
   return (
-    <div className="auth" style={{ gridTemplateColumns: '1fr' }}>
-      <div className="auth__panel auth__panel--right" style={{ alignItems: 'center' }}>
-        <div style={{ maxWidth: 440, width: '100%' }}>
-          <h1 className="auth__title" style={{ marginTop: 0 }}>Reset Password</h1>
+    <div className="auth auth--single page-enter">
+      <div className="auth__panel auth__panel--right auth__panel--single">
+        <div className="auth__single-card">
+          <h1 className="auth__title auth__title--compact">Reset Password</h1>
 
           {!success ? (
             <>
@@ -104,14 +104,13 @@ function ResetPassword() {
               </form>
             </>
           ) : (
-            <div style={{ textAlign: 'center', marginTop: 24 }}>
+            <div className="auth__single-center auth__single-center--spaced">
               <div className="verify-icon verify-icon--success">✓</div>
-              <p className="auth__subtitle" style={{ marginTop: 16 }}>
+              <p className="auth__subtitle auth__subtitle--spaced">
                 Your password has been reset successfully!
               </p>
               <button
                 className="auth__primary"
-                style={{ marginTop: 24 }}
                 onClick={() => navigate('/login')}
               >
                 <strong>Go to Login</strong>
