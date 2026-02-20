@@ -169,6 +169,27 @@ function GoogleIcon() {
   );
 }
 
+function AlertIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 9v4m0 4h.01M10.615 3.892 2.39 18.098c-.456.789.113 1.777 1.016 1.902h16.39c.902-.125 1.471-1.113 1.015-1.902L12.585 3.892a1.127 1.127 0 0 0-1.97 0Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function Login() {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
@@ -362,16 +383,31 @@ function Login() {
               </div>
 
               {error && (
-                <div className="auth__error-container">
-                  {hasMultipleErrors ? (
-                    <ul className="auth__error-list">
-                      {errorList.map((err, index) => (
-                        <li key={index} className="auth__error-item">{err}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="auth__error">{error}</p>
-                  )}
+                <div
+                  className="auth__error-banner"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  <span className="auth__error-icon"><AlertIcon /></span>
+                  <div className="auth__error-body">
+                    {hasMultipleErrors ? (
+                      <ul className="auth__error-list">
+                        {errorList.map((err, index) => (
+                          <li key={index} className="auth__error-item">{err}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="auth__error-text">{error}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="auth__error-dismiss"
+                    onClick={() => setError('')}
+                    aria-label="Dismiss error"
+                  >
+                    ×
+                  </button>
                 </div>
               )}
 
@@ -421,8 +457,23 @@ function Login() {
               </div>
 
               {error && (
-                <div className="auth__error-container">
-                  <p className="auth__error">{error}</p>
+                <div
+                  className="auth__error-banner"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  <span className="auth__error-icon"><AlertIcon /></span>
+                  <div className="auth__error-body">
+                    <p className="auth__error-text">{error}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="auth__error-dismiss"
+                    onClick={() => setError('')}
+                    aria-label="Dismiss error"
+                  >
+                    ×
+                  </button>
                 </div>
               )}
 

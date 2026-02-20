@@ -16,7 +16,9 @@ import {
   ConfirmModal,
 } from '../../../components/admin';
 import { useUserStats, useUserReports } from '../../../hooks/useAdminData';
+import { getReportDetails } from '../../../api/admin';
 import RoleDistributionCard from './components/RoleDistributionCard';
+import ReportDetailsModal from './components/ReportDetailsModal';
 import { getPercentage, getRoleColor } from './utils';
 import './UserStats.css';
 
@@ -26,6 +28,9 @@ export default function UserStats({ onNotify }) {
   const [selectedReport, setSelectedReport] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalAction, setModalAction] = useState(null);
+  const [viewReportModal, setViewReportModal] = useState(false);
+  const [selectedReportDetails, setSelectedReportDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   const { 
     data: stats, 
@@ -63,6 +68,26 @@ export default function UserStats({ onNotify }) {
     setIsModalOpen(true);
   };
 
+  // Handle viewing report details
+  const handleViewReport = async (report) => {
+    setLoadingDetails(true);
+    setViewReportModal(true);
+    try {
+      const response = await getReportDetails(report.id || report.report_id);
+      if (response.success) {
+        setSelectedReportDetails(response.data);
+      } else {
+        onNotify?.('error', 'Failed to load report details');
+        setViewReportModal(false);
+      }
+    } catch (err) {
+      onNotify?.('error', `Error loading report: ${err.message}`);
+      setViewReportModal(false);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
   // Report table columns
   const reportColumns = [
     { 
@@ -83,13 +108,6 @@ export default function UserStats({ onNotify }) {
       )
     },
     { 
-      key: 'reason', 
-      label: 'Reason',
-      render: (value) => (
-        <span className="user-stats__truncate">{value}</span>
-      )
-    },
-    { 
       key: 'status', 
       label: 'Status',
       render: (value) => <StatusBadge status={value} />
@@ -104,6 +122,13 @@ export default function UserStats({ onNotify }) {
       label: 'Actions',
       render: (_, row) => (
         <div className="user-stats__actions">
+          <button
+            className="admin-btn admin-btn--sm admin-btn--secondary"
+            onClick={() => handleViewReport(row)}
+            title="View report details"
+          >
+            View
+          </button>
           {row.status === 'pending' && (
             <>
               <button
@@ -284,6 +309,27 @@ export default function UserStats({ onNotify }) {
         onCancel={() => {
           setIsModalOpen(false);
           setSelectedReport(null);
+        }}
+      />
+
+      {/* Report Details Modal */}
+      <ReportDetailsModal
+        isOpen={viewReportModal}
+        report={selectedReportDetails}
+        loading={loadingDetails}
+        onClose={() => {
+          setViewReportModal(false);
+          setSelectedReportDetails(null);
+        }}
+        onResolve={(report) => {
+          setViewReportModal(false);
+          setSelectedReportDetails(null);
+          openModal(report, 'resolve');
+        }}
+        onDismiss={(report) => {
+          setViewReportModal(false);
+          setSelectedReportDetails(null);
+          openModal(report, 'dismiss');
         }}
       />
     </div>

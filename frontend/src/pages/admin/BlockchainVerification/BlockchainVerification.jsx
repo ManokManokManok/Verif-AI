@@ -23,6 +23,7 @@ import {
 } from '../../../api/blockchain';
 import BlockchainStatsCard from './components/BlockchainStatsCard';
 import BlockchainFilters from './components/BlockchainFilters';
+import AnalysisDetailsModal from './components/AnalysisDetailsModal';
 import './BlockchainVerification.css';
 
 /**
@@ -48,7 +49,13 @@ export default function BlockchainVerification({ onNotify }) {
   // Filters
   const [filter, setFilter] = useState('all');
   const [classificationFilter, setClassificationFilter] = useState('all');
+  const [minConfidence, setMinConfidence] = useState(null);
+  const [scamOnly, setScamOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Details modal state
+  const [selectedAnalysis, setSelectedAnalysis] = useState(null);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
 
   // Fetch blockchain status
   const fetchStatus = useCallback(async () => {
@@ -74,6 +81,8 @@ export default function BlockchainVerification({ onNotify }) {
         limit,
         status: filter,
         classification: classificationFilter,
+        minConfidence,
+        scamOnly,
       });
       setAnalyses(response.analyses || []);
       setTotalFiltered(response.total || response.count || 0);
@@ -87,7 +96,7 @@ export default function BlockchainVerification({ onNotify }) {
     } finally {
       setAnalysesLoading(false);
     }
-  }, [page, filter, classificationFilter]);
+  }, [page, filter, classificationFilter, minConfidence, scamOnly]);
 
   // Initial fetch
   useEffect(() => {
@@ -122,6 +131,17 @@ export default function BlockchainVerification({ onNotify }) {
       throw err;
     }
   }, [onNotify, fetchAnalyses]);
+
+  // Handle card click - open details modal
+  const handleCardClick = useCallback((analysis) => {
+    setSelectedAnalysis(analysis);
+    setDetailsModalOpen(true);
+  }, []);
+
+  const closeDetailsModal = useCallback(() => {
+    setDetailsModalOpen(false);
+    setSelectedAnalysis(null);
+  }, []);
 
   // Compute stats
   const stats = useMemo(() => ({
@@ -192,6 +212,10 @@ export default function BlockchainVerification({ onNotify }) {
         classifications={classifications}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        minConfidence={minConfidence}
+        setMinConfidence={setMinConfidence}
+        scamOnly={scamOnly}
+        setScamOnly={setScamOnly}
         setPage={setPage}
       />
 
@@ -226,6 +250,7 @@ export default function BlockchainVerification({ onNotify }) {
                   onAnchor={handleAnchor}
                   isAdmin={true}
                   onRefresh={fetchAnalyses}
+                  onClick={handleCardClick}
                 />
               ))}
             </div>
@@ -255,6 +280,15 @@ export default function BlockchainVerification({ onNotify }) {
           </>
         )}
       </div>
+      {/* Analysis Details Modal */}
+      <AnalysisDetailsModal
+        isOpen={detailsModalOpen}
+        analysis={selectedAnalysis}
+        onClose={closeDetailsModal}
+        onVerify={handleVerify}
+        onAnchor={handleAnchor}
+        onRefresh={fetchAnalyses}
+      />
     </div>
   );
 }
