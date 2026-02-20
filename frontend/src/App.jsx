@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
@@ -50,9 +51,10 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 
 function App() {
   return (
-    <AuthProvider>
-      <SessionExpiredModal />
-      <Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <SessionExpiredModal />
+        <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/detection" element={<Detection />} />
         <Route path="/chatbot" element={<AIChatbot />} />
@@ -72,7 +74,8 @@ function App() {
           } 
         />
       </Routes>
-    </AuthProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
