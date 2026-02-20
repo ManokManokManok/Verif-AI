@@ -128,6 +128,17 @@ export async function getUserReports({ status, page = 1, limit = 50 } = {}) {
 }
 
 /**
+ * Get detailed information for a specific report
+ * @param {string} reportId - Report ID
+ * @returns {Promise<Object>} Report details
+ */
+export async function getReportDetails(reportId) {
+  return authApiRequest(`/admin/reports/${reportId}/detail/`, {
+    method: 'GET',
+  });
+}
+
+/**
  * Update a report's status
  * @param {string} reportId - Report ID
  * @param {Object} data - Update data
@@ -226,15 +237,15 @@ export async function resetUserPassword(userId, newPassword) {
 }
 
 /**
- * Enable or disable a user account
+ * Update user account status
  * @param {string} userId - User ID
- * @param {boolean} isActive - New active status
+ * @param {string} newStatus - New status ('active', 'inactive', 'suspended')
  * @returns {Promise<Object>} Update result
  */
-export async function updateUserStatus(userId, isActive) {
+export async function updateUserStatus(userId, newStatus) {
   return authApiRequest(`/admin/users/${userId}/status/`, {
     method: 'PATCH',
-    body: JSON.stringify({ is_active: isActive }),
+    body: JSON.stringify({ status: newStatus.toLowerCase() }),
   });
 }
 

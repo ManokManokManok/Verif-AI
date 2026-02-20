@@ -282,6 +282,61 @@ class GetUserReportsUseCase:
         return result.total_count if result.success else 0
 
 
+class GetReportByIdUseCase:
+    """
+    Use case for retrieving a single report by ID.
+    
+    Returns detailed report information for the admin detail view.
+    """
+    
+    def __init__(self, admin_repository: AdminRepository):
+        """
+        Initialize the use case.
+        
+        Args:
+            admin_repository: Repository for admin data operations
+        """
+        self._admin_repository = admin_repository
+    
+    def execute(self, report_id: str) -> ReportResult:
+        """
+        Execute the use case to retrieve a report by ID.
+        
+        Args:
+            report_id: ID of the report to retrieve
+            
+        Returns:
+            ReportResult containing the report or error
+        """
+        try:
+            if not report_id:
+                return ReportResult(
+                    report=None,
+                    success=False,
+                    error_message="Report ID is required"
+                )
+            
+            report = self._admin_repository.get_report_by_id(report_id)
+            
+            if not report:
+                return ReportResult(
+                    report=None,
+                    success=False,
+                    error_message=f"Report not found: {report_id}"
+                )
+            
+            return ReportResult(
+                report=report,
+                success=True
+            )
+        except Exception as e:
+            return ReportResult(
+                report=None,
+                success=False,
+                error_message=f"Failed to retrieve report: {str(e)}"
+            )
+
+
 class SubmitUserReportUseCase:
     """
     Use case for users to submit reports.

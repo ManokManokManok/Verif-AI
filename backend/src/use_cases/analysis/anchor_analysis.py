@@ -372,6 +372,8 @@ class ListAnalysesUseCase:
         page: int = 1,
         limit: int = 50,
         classification: Optional[int] = None,
+        min_confidence_bps: Optional[int] = None,
+        scam_only: bool = False,
         anchored_only: bool = False  # Deprecated, kept for backward compatibility
     ) -> Dict[str, Any]:
         """
@@ -382,6 +384,8 @@ class ListAnalysesUseCase:
             page: Page number (1-indexed)
             limit: Maximum number of results per page
             classification: Filter by scam_class (0-14, -1 for legit, None for all)
+            min_confidence_bps: Minimum confidence threshold (0-10000)
+            scam_only: If True, only show scam classifications (scam_class >= 0)
             anchored_only: Deprecated, use filter_mode='anchored' instead
             
         Returns:
@@ -394,6 +398,11 @@ class ListAnalysesUseCase:
                 - limit: int (page size)
                 - classifications: List of available classification options
         """
+        # Validate confidence threshold
+        if min_confidence_bps is not None:
+            if min_confidence_bps < 0 or min_confidence_bps > 10000:
+                min_confidence_bps = None  # Invalid, ignore
+        
         # Handle backward compatibility
         if anchored_only and filter_mode == 'all':
             filter_mode = 'anchored'
@@ -403,15 +412,25 @@ class ListAnalysesUseCase:
             filter_mode=filter_mode,
             page=page,
             limit=limit,
-            classification=classification
+            classification=classification,
+            min_confidence_bps=min_confidence_bps,
+            scam_only=scam_only
         )
         
-        # Get counts
-        total_anchored = self._repository.count_anchored(classification=classification)
-        total_all = self._repository.count_all(classification=classification)
+        # Get counts with filters applied
+        total_anchored = self._repository.count_anchored(
+            classification=classification,
+            min_confidence_bps=min_confidence_bps,
+            scam_only=scam_only
+        )
+        total_all = self._repository.count_all(
+            classification=classification,
+            min_confidence_bps=min_confidence_bps,
+            scam_only=scam_only
+        )
         total_pending = total_all - total_anchored
         
-        # Get global counts (without classification filter) for stats
+        # Get global counts (without filters) for overall stats
         global_total_all = self._repository.count_all()
         global_total_anchored = self._repository.count_anchored()
         
@@ -441,6 +460,8 @@ class ListAnalysesUseCase:
             'filters': {
                 'status': filter_mode,
                 'classification': classification,
+                'min_confidence_bps': min_confidence_bps,
+                'scam_only': scam_only,
                 'limit': limit
             },
             'classifications': classification_options

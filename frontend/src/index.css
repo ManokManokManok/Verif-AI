@@ -763,19 +763,68 @@ button {
   justify-content: center;
 }
 
-.auth__error {
-  color: #fca5a5;
-  font-size: 12px;
-  margin: 4px 0 0;
+/* ── Error banner (login / MFA) ── */
+@keyframes auth-error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Enhanced error display for multiple validation errors */
-.auth__error-container {
-  margin: 8px 0;
-  padding: 10px 14px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+.auth__error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-left: 3px solid #f87171;
   border-radius: 8px;
+  animation: auth-error-slide-in 0.25s ease-out;
+}
+
+.auth__error-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f87171;
+  margin-top: 1px;
+}
+
+.auth__error-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.auth__error-text {
+  color: #fca5a5;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.auth__error-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #f87171;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.auth__error-dismiss:hover,
+.auth__error-dismiss:focus-visible {
+  opacity: 1;
 }
 
 .auth__error-list {
@@ -786,13 +835,9 @@ button {
 
 .auth__error-item {
   color: #fca5a5;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
-  margin: 4px 0;
-}
-
-.auth__error-container .auth__error {
-  margin: 0;
+  margin: 3px 0;
 }
 
 .detect {
@@ -2486,6 +2531,11 @@ button {
 .blockchain__badge--not-anchored {
   background: rgba(107, 114, 128, 0.2);
   color: #9ca3af;
+}
+
+.blockchain__badge--anchored {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
 }
 
 .blockchain__badge--error {

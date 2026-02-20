@@ -196,7 +196,9 @@ async function apiRequest(path, options = {}) {
   if (!response.ok) {
     // Handle 401 Unauthorized — attempt token refresh
     if (response.status === 401) {
-      const error = new Error(data?.message || 'Unauthorized');
+      const error = new Error(
+        data?.error?.message || data?.message || 'Invalid email or password'
+      );
       error.status = 401;
       error.payload = data;
       error.isUnauthorized = true;
