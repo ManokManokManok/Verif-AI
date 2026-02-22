@@ -12,6 +12,7 @@ class User:
     roles: List[str]
     is_active: bool = True
     is_verified: bool = False
+    status: str = "active"  # 'active', 'inactive', 'suspended'
     created_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
 /**
  * VerificationBadge - Displays verification status with colored badge and icon
@@ -18,6 +18,11 @@ export function VerificationBadge({ status, className = '' }) {
       label: 'Not Verified',
       icon: '✗',
       bgClass: 'blockchain__badge--not-verified',
+    },
+    ANCHORED: {
+      label: 'Anchored',
+      icon: '⬡',
+      bgClass: 'blockchain__badge--anchored',
     },
     NOT_ANCHORED: {
       label: 'Not Anchored',
@@ -199,12 +204,12 @@ export function BlockchainStatusCard({ status, isLoading, error }) {
         </div>
         <div className="blockchain__status-item">
           <span className="blockchain__status-label">Block Number</span>
-          <span className="blockchain__status-value">{status.blockNumber || '-'}</span>
+          <span className="blockchain__status-value">{status.blockNumber || status.block_number || '-'}</span>
         </div>
         <div className="blockchain__status-item">
           <span className="blockchain__status-label">Contract</span>
           <span className="blockchain__status-value blockchain__status-value--mono">
-            {status.contractAddress ? `${status.contractAddress.slice(0, 10)}...${status.contractAddress.slice(-8)}` : '-'}
+            {(status.contractAddress || status.contract_address) ? `${(status.contractAddress || status.contract_address).slice(0, 10)}...${(status.contractAddress || status.contract_address).slice(-8)}` : '-'}
           </span>
         </div>
       </div>
@@ -222,9 +227,10 @@ export function BlockchainStatusCard({ status, isLoading, error }) {
  * @param {boolean} props.isAdmin - Whether user is admin
  * @param {Function} props.onRefresh - Callback to refresh data
  */
-export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, onRefresh }) {
+export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, onRefresh, onClick }) {
   const isAnchored = analysis.isAnchored || analysis.is_anchored;
   const refId = analysis.refId || analysis.ref_id || analysis.id;
+  const [verificationStatus, setVerificationStatus] = useState(null);
   
   // Format date - handle ISO string format from backend
   const createdAt = analysis.createdAt || analysis.created_at;
@@ -260,13 +266,31 @@ export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, on
     }
   }
 
+  // Wrap onVerify to capture the verification result and update badge
+  const handleVerifyWithStatus = useCallback(async (id) => {
+    const result = await onVerify(id);
+    if (result && result.status) {
+      setVerificationStatus(result.status);
+    }
+    return result;
+  }, [onVerify]);
+
+  // Determine the badge status to display
+  const badgeStatus = verificationStatus || (isAnchored ? 'ANCHORED' : 'NOT_ANCHORED');
+
   return (
-    <div className={`blockchain__analysis-card ${isAnchored ? 'blockchain__analysis-card--anchored' : ''}`}>
+    <div
+      className={`blockchain__analysis-card ${isAnchored ? 'blockchain__analysis-card--anchored' : ''} ${onClick ? 'blockchain__analysis-card--clickable' : ''}`}
+      onClick={onClick ? () => onClick(analysis) : undefined}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(analysis); } } : undefined}
+    >
       <div className="blockchain__analysis-header">
         <span className="blockchain__analysis-id" title={refId}>
           {refId ? `${refId.slice(0, 8)}...` : 'N/A'}
         </span>
-        <VerificationBadge status={isAnchored ? 'VERIFIED' : 'NOT_ANCHORED'} />
+        <VerificationBadge status={badgeStatus} />
       </div>
 
       <div className="blockchain__analysis-body">
@@ -294,8 +318,8 @@ export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, on
         )}
       </div>
 
-      <div className="blockchain__analysis-actions">
-        <VerifyButton refId={refId} onVerify={onVerify} />
+      <div className="blockchain__analysis-actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <VerifyButton refId={refId} onVerify={handleVerifyWithStatus} />
         {isAdmin && (
           <AnchorButton
             refId={refId}

@@ -68,14 +68,18 @@ export async function getBlockchainStatus() {
  * @param {number} params.limit - Items per page (default: 20)
  * @param {string} params.status - Filter by status: 'anchored', 'pending', 'all'
  * @param {number|string} params.classification - Filter by classification (scam_class), or 'all'
+ * @param {number|null} params.minConfidence - Minimum confidence percentage (0-100), or null for no filter
+ * @param {boolean} params.scamOnly - If true, only return scam classifications
  * @returns {Promise<{analyses: Array, total: number, page: number, limit: number, classifications: Array}>}
  */
-export async function listAnalyses({ page = 1, limit = 20, status = 'all', classification = 'all' } = {}) {
+export async function listAnalyses({ page = 1, limit = 20, status = 'all', classification = 'all', minConfidence = null, scamOnly = false } = {}) {
   const params = new URLSearchParams({
     page: String(page),
     limit: String(limit),
     ...(status !== 'all' && { status }),
     ...(classification !== 'all' && classification !== null && { classification: String(classification) }),
+    ...(minConfidence !== null && minConfidence !== undefined && { min_confidence: String(minConfidence) }),
+    ...(scamOnly && { scam_only: 'true' }),
   });
   return apiRequest(`/blockchain/analyses/?${params}`);
 }
