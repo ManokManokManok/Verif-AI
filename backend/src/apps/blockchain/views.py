@@ -369,6 +369,8 @@ def list_analyses(request: Request) -> Response:
     Query Parameters:
         status: Filter by status: 'anchored', 'pending', 'all' (default: 'all')
         classification: Filter by scam_class integer (0-14, or -1 for legit). Use 'all' for no filter.
+        min_confidence: Minimum confidence percentage (0-100). Converted to basis points internally.
+        scam_only: If "true", only return scam classifications (scam_class >= 0)
         anchored_only: If "true", only return anchored analyses (default: false) - DEPRECATED, use status
         page: Page number (default: 1)
         limit: Maximum number of results per page (default: 50, max: 100)
@@ -386,6 +388,8 @@ def list_analyses(request: Request) -> Response:
             "filters": {
                 "status": "all",
                 "classification": null,
+                "min_confidence_bps": null,
+                "scam_only": false,
                 "limit": 50
             },
             "classifications": [...] // Available classification options
@@ -415,6 +419,20 @@ def list_analyses(request: Request) -> Response:
         except ValueError:
             classification_filter = None
     
+    # Parse confidence filter (accepts percentage 0-100, converts to basis points 0-10000)
+    min_confidence_bps = None
+    min_confidence_param = request.query_params.get('min_confidence', None)
+    if min_confidence_param is not None:
+        try:
+            min_confidence_pct = float(min_confidence_param)
+            if 0 <= min_confidence_pct <= 100:
+                min_confidence_bps = int(min_confidence_pct * 100)
+        except (ValueError, TypeError):
+            pass
+    
+    # Parse scam_only filter
+    scam_only = request.query_params.get('scam_only', '').lower() == 'true'
+    
     # Map status to filter mode
     if status_filter == 'anchored' or anchored_only_param:
         filter_mode = 'anchored'
@@ -443,7 +461,9 @@ def list_analyses(request: Request) -> Response:
             filter_mode=filter_mode,
             page=page,
             limit=limit,
-            classification=classification_filter
+            classification=classification_filter,
+            min_confidence_bps=min_confidence_bps,
+            scam_only=scam_only
         )
         
         return Response(result, status=status.HTTP_200_OK)
@@ -593,13 +613,20 @@ def blockchain_status(request: Request) -> Response:
                 service._connect()
                 result['connected'] = True
                 result['record_count'] = service.get_record_count()
+                # Get current block number from the chain
+                try:
+                    result['block_number'] = service._web3.eth.block_number
+                except Exception:
+                    result['block_number'] = None
             except Exception as e:
                 result['connected'] = False
                 result['record_count'] = None
+                result['block_number'] = None
                 logger.warning(f"Blockchain connection check failed: {e}")
         else:
             result['connected'] = False
             result['record_count'] = None
+            result['block_number'] = None
         
         return Response(result, status=status.HTTP_200_OK)
         

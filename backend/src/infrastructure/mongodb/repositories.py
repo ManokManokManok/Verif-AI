@@ -475,36 +475,54 @@ class MongoDBUserRepository:
         except Exception:
             return False
     
-    def update_user_status(self, user_id: str, is_active: bool) -> bool:
+    def update_user_status(self, user_id: str, is_active: bool = None, status: str = None) -> bool:
         """
-        Enable or disable a user account (Admin only).
+        Update a user account status (Admin only).
+        
+        Supports both the new `status` string field ('active', 'inactive', 'suspended')
+        and the legacy `is_active` boolean for backward compatibility.
         
         Args:
             user_id: User's ID
-            is_active: New active status
+            is_active: Legacy boolean active status (deprecated, use status)
+            status: New status string ('active', 'inactive', 'suspended')
         
         Returns:
             True if status was updated successfully
         
         Raises:
             UserNotFoundError: If user not found
+            ValueError: If neither status nor is_active is provided, or invalid status
         """
         try:
             user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
             if not user_doc:
                 raise UserNotFoundError(f"User {user_id} not found")
             
+            update_data = {
+                "status_updated_at": datetime.utcnow()
+            }
+            
+            # Handle new status string field
+            if status is not None:
+                valid_statuses = ["active", "inactive", "suspended"]
+                if status not in valid_statuses:
+                    raise ValueError(f"Invalid status: {status}. Must be one of {valid_statuses}")
+                update_data["status"] = status
+                update_data["is_active"] = (status == "active")
+            # Handle legacy is_active boolean
+            elif is_active is not None:
+                update_data["is_active"] = is_active
+                update_data["status"] = "active" if is_active else "inactive"
+            else:
+                raise ValueError("Either status or is_active must be provided")
+            
             result = self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
-                {
-                    "$set": {
-                        "is_active": is_active,
-                        "status_updated_at": datetime.utcnow()
-                    }
-                }
+                {"$set": update_data}
             )
             return result.modified_count > 0
-        except UserNotFoundError:
+        except (UserNotFoundError, ValueError):
             raise
         except Exception:
             return False
@@ -587,14 +605,23 @@ class MongoDBUserRepository:
     
     def _document_to_user(self, doc: Dict[str, Any]) -> User:
         """Convert MongoDB document to User entity."""
+        # Derive status from stored value or fall back to is_active boolean
+        is_active = doc.get("is_active", True)
+        stored_status = doc.get("status")
+        if stored_status and stored_status in ("active", "inactive", "suspended"):
+            status = stored_status
+        else:
+            status = "active" if is_active else "inactive"
+        
         return User(
             id=str(doc["_id"]),
             email=doc["email"],
             username=doc.get("username"),
             password_hash=doc["password_hash"],
             roles=doc.get("roles", []),
-            is_active=doc.get("is_active", True),
+            is_active=is_active,
             is_verified=doc.get("is_verified", False),
+            status=status,
             created_at=doc.get("created_at"),
             last_login=doc.get("last_login")
         )

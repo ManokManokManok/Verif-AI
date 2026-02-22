@@ -101,11 +101,11 @@ export default function UserManagement({ onNotify }) {
   // Handle status update
   const handleUpdateStatus = async () => {
     if (!selectedUser || !editForm.status) return;
-    const isActive = editForm.status === 'active';
-    const result = await updateStatus(selectedUser.id, isActive);
+    const result = await updateStatus(selectedUser.id, editForm.status);
     if (result.success) {
       onNotify?.('success', `User status updated to ${editForm.status}`);
       closeModal();
+      refresh();
     } else {
       onNotify?.('error', `Failed to update status: ${result.error || 'Unknown error'}`);
     }
