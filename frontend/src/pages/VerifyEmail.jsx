@@ -37,29 +37,28 @@ function VerifyEmail() {
   }, [token]);
 
   return (
-    <div className="auth" style={{ gridTemplateColumns: '1fr' }}>
-      <div className="auth__panel auth__panel--right" style={{ alignItems: 'center' }}>
-        <div style={{ maxWidth: 440, width: '100%', textAlign: 'center' }}>
-          <h1 className="auth__title" style={{ marginTop: 0 }}>Email Verification</h1>
+    <div className="auth auth--single page-enter">
+      <div className="auth__panel auth__panel--right auth__panel--single">
+        <div className="auth__single-card auth__single-card--center">
+          <h1 className="auth__title auth__title--compact">Email Verification</h1>
 
           {status === 'verifying' && (
-            <div style={{ marginTop: 32 }}>
+            <div className="auth__single-center auth__single-center--spaced">
               <div className="verify-spinner" />
-              <p className="auth__subtitle" style={{ marginTop: 16 }}>
+              <p className="auth__subtitle auth__subtitle--spaced">
                 Verifying your email address…
               </p>
             </div>
           )}
 
           {status === 'success' && (
-            <div style={{ marginTop: 32 }}>
+            <div className="auth__single-center auth__single-center--spaced">
               <div className="verify-icon verify-icon--success">✓</div>
-              <p className="auth__subtitle" style={{ marginTop: 16 }}>
+              <p className="auth__subtitle auth__subtitle--spaced">
                 {message}
               </p>
               <button
                 className="auth__primary"
-                style={{ marginTop: 24 }}
                 onClick={() => navigate('/login')}
               >
                 <strong>Go to Login</strong>
@@ -68,12 +67,12 @@ function VerifyEmail() {
           )}
 
           {status === 'error' && (
-            <div style={{ marginTop: 32 }}>
+            <div className="auth__single-center auth__single-center--spaced">
               <div className="verify-icon verify-icon--error">✕</div>
-              <p className="auth__error" style={{ marginTop: 16, fontSize: 14 }}>
+              <p className="auth__error auth__error--single">
                 {message}
               </p>
-              <Link to="/login" className="auth__link" style={{ display: 'inline-block', marginTop: 24 }}>
+              <Link to="/login" className="auth__link auth__link--inline">
                 Back to Login
               </Link>
             </div>

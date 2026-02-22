@@ -151,7 +151,7 @@ function Landing() {
   }, [showUserMenu]);
 
   return (
-    <div className="page page--landing">
+    <div className="page page--landing page-enter">
       <header className="nav">
         <div className="brand">VerifAI</div>
         <nav className="nav__links">

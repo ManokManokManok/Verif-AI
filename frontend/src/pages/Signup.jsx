@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signupRequest } from '../api/client.js';
+import { useTheme } from '../context/ThemeContext';
 import signupImage from '../../assets/image/signup.png';
 
 function EyeIcon({ slashed }) {
@@ -150,6 +151,7 @@ function LockIcon() {
 
 function Signup() {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -192,7 +194,17 @@ function Signup() {
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--signup">
+    <div className="auth auth--signup page-enter">
+      {/* Theme Toggle Button */}
+      <button 
+        className="auth__theme-toggle" 
+        onClick={toggleTheme}
+        aria-label="Toggle theme"
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {theme === 'dark' ? '☀️' : '🌙'}
+      </button>
+
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
           <p className="auth__tagline">Keeping you Safe</p>
@@ -222,11 +234,12 @@ function Signup() {
               Please click the link in your email to verify your account before logging in.
             </p>
             <button
-              className="auth__primary"
+              className="auth__submit"
               style={{ marginTop: 28 }}
               onClick={() => navigate('/login')}
             >
-              <strong>Go to Login</strong>
+              <span>Go to Login</span>
+              <span className="auth__submit-arrow">→</span>
             </button>
             <p className="auth__subtitle" style={{ marginTop: 16, fontSize: 12 }}>
               Didn&apos;t receive the email? Check your spam folder.
@@ -348,8 +361,18 @@ function Signup() {
             </div>
           )}
 
-          <button type="submit" className="auth__primary">
-            <strong>{loading ? 'Registering…' : 'Register'}</strong>
+          <button type="submit" className="auth__submit" disabled={loading}>
+            {loading ? (
+              <>
+                <span className="auth__submit-spinner"></span>
+                <span>Registering…</span>
+              </>
+            ) : (
+              <>
+                <span>Register</span>
+                <span className="auth__submit-arrow">→</span>
+              </>
+            )}
           </button>
         </form>
         </>
