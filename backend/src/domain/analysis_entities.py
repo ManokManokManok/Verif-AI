@@ -97,6 +97,10 @@ class AnalysisResult:
     summary: Optional[str] = None
     key_markers: Optional[list] = None
 
+    # Low confidence review fields
+    needs_review: bool = False
+    review_reason: Optional[str] = None
+
     # Blockchain anchoring (None until anchored)
     chain_metadata: Optional[ChainMetadata] = None
     
@@ -117,7 +121,9 @@ class AnalysisResult:
         label: Optional[str] = None,
         type_confidence: Optional[float] = None,
         summary: Optional[str] = None,
-        key_markers: Optional[list] = None
+        key_markers: Optional[list] = None,
+        needs_review: bool = False,
+        review_reason: Optional[str] = None
     ) -> 'AnalysisResult':
         """
         Factory method to create a new AnalysisResult with generated ref_id.
@@ -140,6 +146,8 @@ class AnalysisResult:
             type_confidence=type_confidence,
             summary=summary,
             key_markers=key_markers,
+            needs_review=needs_review,
+            review_reason=review_reason,
             created_at=datetime.utcnow()
         )
     

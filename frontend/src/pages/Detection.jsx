@@ -94,6 +94,8 @@ function Detection() {
   const handleChatClick = async (chat) => {
     try {
       const detail = await getAnalysisDetail(chat.id);
+      console.log('[HISTORY DETAIL]', detail);
+      console.log('[HISTORY DETAIL needs_review]', detail.needs_review);
       setDetectionResult(detail);
       setSidebarOpen(false);
     } catch (err) {
@@ -155,6 +157,16 @@ function Detection() {
       const result = await detectScamRequest(text);
       console.log('[DETECTION RESULT]', result);
       setDetectionResult(result);
+      
+      // Refresh history list to include the new detection
+      try {
+        const res = await getChatHistory();
+        if (res.history && res.history.length > 0) {
+          setChatHistory(res.history);
+        }
+      } catch (histErr) {
+        console.warn('[HISTORY REFRESH] Failed to refresh history:', histErr);
+      }
     } catch (error) {
       console.error('[DETECTION ERROR]', error);
 
@@ -464,6 +476,24 @@ function Detection() {
               </div>
 
               <div className="detect__resultsGrid">
+                {/* Low Confidence Review Notice */}
+                {detectionResult.needs_review && (
+                  <div className="detect__resultCard detect__resultCard--review detect__resultCard--animate">
+                    <div className="detect__reviewBanner">
+                      <div className="detect__reviewIcon">🔍</div>
+                      <div className="detect__reviewContent">
+                        <h3 className="detect__reviewTitle">This result is under review</h3>
+                        <p className="detect__reviewText">
+                          Our AI model wasn&apos;t fully confident about this analysis. We&apos;ve flagged it for human review to ensure accuracy.
+                        </p>
+                        <p className="detect__reviewNote">
+                          Verif-AI is constantly learning and improving. Your patience helps us achieve even more accurate scam detection for everyone.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Summary & Original Message */}
                 <div className="detect__resultCard detect__resultCard--summary detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Summary</h3>

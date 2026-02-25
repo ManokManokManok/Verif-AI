@@ -3023,6 +3023,64 @@ button {
   border-color: rgba(148, 163, 184, 0.35);
 }
 
+/* Low Confidence Review Banner */
+.detect__resultCard--review {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-left: 4px solid #fbbf24;
+  padding: 16px 24px;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: center;
+}
+
+.detect__resultCard--review:hover {
+  transform: none;
+  border-color: rgba(251, 191, 36, 0.5);
+  border-left-color: #fbbf24;
+}
+
+.detect__reviewBanner {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  max-width: 700px;
+  width: 100%;
+}
+
+.detect__reviewIcon {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.detect__reviewContent {
+  flex: 1;
+}
+
+.detect__reviewTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fbbf24;
+  margin: 0 0 4px 0;
+}
+
+.detect__reviewText {
+  font-size: 13px;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.detect__reviewNote {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 4px 0 0 0;
+  font-style: italic;
+  line-height: 1.4;
+}
+
 .detect__cardTitle {
   font-size: 17px;
   font-weight: 700;
