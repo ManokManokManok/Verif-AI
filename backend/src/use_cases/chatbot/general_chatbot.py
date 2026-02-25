@@ -9,6 +9,7 @@ import logging
 from typing import Dict, Any, Optional, List
 
 from ...domain.chat_entities import ChatConversation, MessageRole
+from ...infrastructure.prompt_sanitizer import PromptSanitizer
 
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ class GeneralChatbotUseCase:
         """
         self.llm = llm_model
         self.conversation_repo = conversation_repository
+        self.sanitizer = PromptSanitizer(max_length=4000, log_threats=True)
     
     def send_message(
         self, 
@@ -92,6 +94,15 @@ class GeneralChatbotUseCase:
         """
         logger.info(f"[CHATBOT] User {user_id} sent message: {message[:100]}...")
         
+        # Sanitize user input to prevent prompt injection
+        sanitized = self.sanitizer.sanitize(message, context="chatbot")
+        safe_message = sanitized.sanitized_text
+        
+        if sanitized.threats_detected:
+            logger.warning(
+                f"[CHATBOT] Prompt injection attempt by user {user_id}: {sanitized.threats_detected}"
+            )
+        
         is_new_conversation = False
         
         # Get existing conversation or create new one
@@ -106,8 +117,8 @@ class GeneralChatbotUseCase:
             conversation = self.conversation_repo.create_conversation(user_id)
             is_new_conversation = True
         
-        # Add user's message to conversation
-        conversation.add_message(MessageRole.USER.value, message)
+        # Add user's SANITIZED message to conversation
+        conversation.add_message(MessageRole.USER.value, safe_message)
         
         # Build messages for LLM (system prompt + conversation history)
         llm_messages = [
