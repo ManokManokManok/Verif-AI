@@ -180,10 +180,16 @@ LOGGING = {
             'style': '{',
         },
     },
+    'filters': {
+        'sensitive_data': {
+            '()': 'src.infrastructure.logging.sensitive_filter.SensitiveDataFilter',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
+            'filters': ['sensitive_data'],
         },
         'security_file': {
             'class': 'logging.handlers.RotatingFileHandler',
@@ -191,6 +197,7 @@ LOGGING = {
             'maxBytes': 10485760,  # 10MB
             'backupCount': 5,
             'formatter': 'security',
+            'filters': ['sensitive_data'],
         },
     },
     'loggers': {
