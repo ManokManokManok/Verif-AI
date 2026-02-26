@@ -448,3 +448,4 @@ def wrap_prompt(text: str, context: Optional[str] = None) -> str:
         Wrapped, sanitized string ready for insertion into a prompt
     """
     return get_sanitizer().wrap_user_input(text, context)
+    
