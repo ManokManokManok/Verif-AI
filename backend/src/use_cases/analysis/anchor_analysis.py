@@ -150,7 +150,7 @@ class AnchorAnalysisUseCase:
             CanonicalPayload ready for anchoring
         """
         # For re-anchoring, use current timestamp to generate a new unique payload hash
-        # This is necessary because the smart contract doesn't allow duplicate hashes
+        # This ensures each anchoring produces a distinct event on-chain
         if force_new_timestamp:
             created_at_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
             logger.info(f"Re-anchoring with new timestamp: {created_at_str}")

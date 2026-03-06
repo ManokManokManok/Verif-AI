@@ -476,6 +476,53 @@ export async function detectScamRequest(message) {
   });
 }
 
+export async function extractTextFromImageRequest(imageFileOrBlob) {
+  const formData = new FormData();
+  formData.append('image', imageFileOrBlob, 'image.png');
+
+  const token = window.localStorage.getItem('access_token');
+  const response = await fetch(`${API_BASE}/extract-text/`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  const rawBody = await response.text();
+  let data = null;
+
+  if (rawBody) {
+    try {
+      data = JSON.parse(rawBody);
+    } catch {
+      const parseError = new Error('OCR service returned a non-JSON response');
+      parseError.status = response.status;
+      parseError.payload = rawBody;
+      throw parseError;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      `OCR extraction failed with status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = data;
+    throw error;
+  }
+
+  if (!data) {
+    const emptyBodyError = new Error('OCR service returned an empty response');
+    emptyBodyError.status = response.status;
+    throw emptyBodyError;
+  }
+
+  return data;
+}
+
 /**
  * Get stored user info
  */

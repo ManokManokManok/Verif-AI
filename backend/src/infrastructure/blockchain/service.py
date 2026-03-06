@@ -354,9 +354,43 @@ class BlockchainService:
             logger.error(f"Anchor failed: {str(e)}")
             raise ContractError(f"Failed to anchor analysis: {str(e)}")
     
+    def _get_record_from_events(self, payload_hash_bytes: bytes) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve record data from RecordStored event logs.
+        
+        The optimized contract stores data in events instead of storage.
+        This reads the event logs filtered by payloadHash to reconstruct the record.
+        
+        Args:
+            payload_hash_bytes: The 32-byte payload hash to search for
+            
+        Returns:
+            Record dict if found, None otherwise
+        """
+        entries = self._contract.events.RecordStored.get_logs(
+            from_block=0,
+            argument_filters={'payloadHash': payload_hash_bytes}
+        )
+        
+        if not entries:
+            return None
+        
+        # Use the first (and should be only) matching event
+        entry = entries[0]
+        args = entry['args']
+        return {
+            'scam_class': _uint8_to_scam_class(args['scamClass']),
+            'confidence_bps': args['confidenceBps'],
+            'timestamp': args['timestamp'],
+            'ref_id': _bytes32_to_uuid(args['refId']),
+            'stored_by': args['storedBy'],
+            'block_number': entry['blockNumber'],
+            'tx_hash': entry['transactionHash'].hex()
+        }
+    
     def verify_analysis(self, payload: CanonicalPayload) -> Dict[str, Any]:
         """
-        Verify an analysis result against on-chain data.
+        Verify an analysis result against on-chain event data.
         
         Args:
             payload: Canonical payload to verify
@@ -383,12 +417,10 @@ class BlockchainService:
         logger.info(f"  Payload hash: {payload_hash}")
         
         try:
-            # Call getRecord on contract
-            result = self._contract.functions.getRecord(payload_hash_bytes).call()
+            # Read RecordStored event logs filtered by payloadHash
+            on_chain_data = self._get_record_from_events(payload_hash_bytes)
             
-            exists, scam_class, confidence_bps, timestamp, ref_id, stored_by = result
-            
-            if not exists:
+            if on_chain_data is None:
                 logger.info("Record not found on-chain")
                 return {
                     'verified': False,
@@ -398,41 +430,29 @@ class BlockchainService:
                     'mismatches': ['Record does not exist on-chain']
                 }
             
-            # Convert on-chain values back to domain values
-            on_chain_scam_class = _uint8_to_scam_class(scam_class)
-            on_chain_ref_id = _bytes32_to_uuid(ref_id)
-            
-            on_chain_data = {
-                'scam_class': on_chain_scam_class,
-                'confidence_bps': confidence_bps,
-                'timestamp': timestamp,
-                'ref_id': on_chain_ref_id,
-                'stored_by': stored_by
-            }
-            
             # Compare values
             mismatches = []
             
-            if on_chain_scam_class != payload.scam_class:
+            if on_chain_data['scam_class'] != payload.scam_class:
                 mismatches.append(
-                    f"scam_class: on-chain={on_chain_scam_class}, expected={payload.scam_class}"
+                    f"scam_class: on-chain={on_chain_data['scam_class']}, expected={payload.scam_class}"
                 )
             
-            if confidence_bps != payload.confidence_bps:
+            if on_chain_data['confidence_bps'] != payload.confidence_bps:
                 mismatches.append(
-                    f"confidence_bps: on-chain={confidence_bps}, expected={payload.confidence_bps}"
+                    f"confidence_bps: on-chain={on_chain_data['confidence_bps']}, expected={payload.confidence_bps}"
                 )
             
             expected_timestamp = _timestamp_to_unix(payload.created_at)
-            if timestamp != expected_timestamp:
+            if on_chain_data['timestamp'] != expected_timestamp:
                 mismatches.append(
-                    f"timestamp: on-chain={timestamp}, expected={expected_timestamp}"
+                    f"timestamp: on-chain={on_chain_data['timestamp']}, expected={expected_timestamp}"
                 )
             
             # Compare ref_id (case-insensitive)
-            if on_chain_ref_id.lower() != payload.ref_id.lower():
+            if on_chain_data['ref_id'].lower() != payload.ref_id.lower():
                 mismatches.append(
-                    f"ref_id: on-chain={on_chain_ref_id}, expected={payload.ref_id}"
+                    f"ref_id: on-chain={on_chain_data['ref_id']}, expected={payload.ref_id}"
                 )
             
             verified = len(mismatches) == 0
@@ -456,7 +476,7 @@ class BlockchainService:
     
     def get_record(self, payload_hash: str) -> Optional[Dict[str, Any]]:
         """
-        Retrieve a record from the blockchain by payload hash.
+        Retrieve a record from blockchain event logs by payload hash.
         
         Args:
             payload_hash: The 0x-prefixed keccak256 hash
@@ -477,19 +497,18 @@ class BlockchainService:
         payload_hash_bytes = bytes.fromhex(payload_hash[2:])
         
         try:
-            result = self._contract.functions.getRecord(payload_hash_bytes).call()
-            exists, scam_class, confidence_bps, timestamp, ref_id, stored_by = result
+            record = self._get_record_from_events(payload_hash_bytes)
             
-            if not exists:
+            if record is None:
                 return None
             
             return {
                 'exists': True,
-                'scam_class': _uint8_to_scam_class(scam_class),
-                'confidence_bps': confidence_bps,
-                'timestamp': timestamp,
-                'ref_id': _bytes32_to_uuid(ref_id),
-                'stored_by': stored_by,
+                'scam_class': record['scam_class'],
+                'confidence_bps': record['confidence_bps'],
+                'timestamp': record['timestamp'],
+                'ref_id': record['ref_id'],
+                'stored_by': record['stored_by'],
                 'payload_hash': payload_hash
             }
             
@@ -498,7 +517,7 @@ class BlockchainService:
     
     def record_exists(self, payload_hash: str) -> bool:
         """
-        Check if a record exists on-chain.
+        Check if a record exists in on-chain event logs.
         
         Args:
             payload_hash: The 0x-prefixed keccak256 hash
@@ -514,13 +533,13 @@ class BlockchainService:
         payload_hash_bytes = bytes.fromhex(payload_hash[2:])
         
         try:
-            return self._contract.functions.recordExists(payload_hash_bytes).call()
+            return self._get_record_from_events(payload_hash_bytes) is not None
         except Exception as e:
             raise ChainConnectionError(f"Failed to check record existence: {str(e)}")
     
     def get_record_count(self) -> int:
         """
-        Get total number of records stored on-chain.
+        Get total number of records from on-chain event logs.
         
         Returns:
             Number of records
@@ -528,7 +547,10 @@ class BlockchainService:
         self._connect()
         
         try:
-            return self._contract.functions.recordCount().call()
+            entries = self._contract.events.RecordStored.get_logs(
+                from_block=0
+            )
+            return len(entries)
         except Exception as e:
             raise ChainConnectionError(f"Failed to get record count: {str(e)}")
     

@@ -358,6 +358,8 @@ class AnalysisResultRepository:
             "type_confidence": entity.type_confidence,
             "summary": entity.summary,
             "key_markers": entity.key_markers,
+            "needs_review": entity.needs_review,
+            "review_reason": entity.review_reason,
         }
         if entity.id:
             doc["_id"] = entity.id
@@ -412,5 +414,7 @@ class AnalysisResultRepository:
             type_confidence=doc.get("type_confidence"),
             summary=doc.get("summary"),
             key_markers=doc.get("key_markers"),
+            needs_review=doc.get("needs_review", False),
+            review_reason=doc.get("review_reason"),
             chain_metadata=chain_metadata
         )

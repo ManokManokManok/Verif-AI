@@ -81,7 +81,8 @@ def history_detail(request: Request, analysis_id: str) -> Response:
             'type_confidence': result.type_confidence,
             'key_markers': result.key_markers,
             'message': result.message,
-            # Add any other fields you want to expose
+            'needs_review': result.needs_review,
+            'review_reason': result.review_reason,
         }, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"[HISTORY_DETAIL] Error: {str(e)}", exc_info=True)
@@ -109,6 +110,7 @@ from ...use_cases.security_auth import (
 )
 from ...use_cases.ai.scam_detection import ScamDetectionUseCase
 from ...use_cases.ai.llm_analysis import LLMAnalysisUseCase
+from ...use_cases.ai.low_confidence_review import check_confidence, check_confidence_and_report
 from ...domain.services import (
     BCryptPasswordHasher, EmailValidator, PasswordValidator,
     TokenGenerator,
@@ -184,6 +186,8 @@ def history(request: Request) -> Response:
                 "type_confidence": result.type_confidence,
                 "key_markers": result.key_markers,
                 "message": result.message,
+                "needs_review": result.needs_review,
+                "review_reason": result.review_reason,
             })
         return Response({"history": history}, status=status.HTTP_200_OK)
 
@@ -1253,6 +1257,10 @@ def detect_scam(request: Request) -> Response:
             # Create analysis result entity (store full details for authenticated users only)
             # Always set user_id from user_account.id if available, else None
             resolved_user_id = str(user_account.id) if user_account and getattr(user_account, 'id', None) else None
+            
+            # First check confidence (without auto-report yet)
+            preliminary_check = check_confidence(bert_result=bert_result)
+            
             analysis = AnalysisResult.create(
                 scam_class=scam_class,
                 scam_type=bert_result.get('scam_type') or 'Not Scam',
@@ -1269,7 +1277,20 @@ def detect_scam(request: Request) -> Response:
                 type_confidence=bert_result.get('type_confidence'),
                 summary=llm_result.get('summary'),
                 key_markers=llm_result.get('key_markers'),
+                needs_review=preliminary_check.needs_review,
+                review_reason=preliminary_check.review_reason,
             )
+            
+            # Now auto-report if needed (we have ref_id now)
+            if preliminary_check.needs_review:
+                review_check = check_confidence_and_report(
+                    bert_result=bert_result,
+                    analysis_ref_id=analysis.ref_id,
+                    user_id=resolved_user_id,
+                    message_preview=message[:200] if message else None
+                )
+            else:
+                review_check = preliminary_check
 
             # Log the analysis entity before saving
             logger.debug(f"[DEBUG] AnalysisResult entity before save: {{'ref_id': {analysis.ref_id}, 'user_id': {analysis.user_id}, 'scam_class': {analysis.scam_class}, 'scam_type': {analysis.scam_type}, 'confidence_bps': {analysis.confidence_bps}, 'is_scam': {analysis.is_scam}, 'analyzer_type': {analysis.analyzer_type}, 'analyzer_version': {analysis.analyzer_version}, 'message_hash': {analysis.message_hash}, 'created_at': {analysis.created_at}}}")
@@ -1287,12 +1308,19 @@ def detect_scam(request: Request) -> Response:
             # Include ref_id in response for blockchain anchoring
             ref_id = saved_analysis.ref_id
             is_anchored = saved_analysis.is_anchored
+            needs_review = saved_analysis.needs_review
+            review_reason = saved_analysis.review_reason
+            
+            if needs_review:
+                logger.info(f"[LOW_CONFIDENCE] Result flagged for review: {review_reason}")
 
         except Exception as db_error:
             logger.error(f"[DB] Error saving analysis: {str(db_error)}")
             # Don't fail the request if DB save fails
             ref_id = None
             is_anchored = False
+            needs_review = False
+            review_reason = None
         
         # Combine results
         combined_result = {
@@ -1302,6 +1330,9 @@ def detect_scam(request: Request) -> Response:
             'created_at': (saved_analysis.created_at.isoformat() if saved_analysis and hasattr(saved_analysis, 'created_at') and saved_analysis.created_at else None),
             **bert_result,
             **llm_result,
+            # Low confidence review info (persisted to DB)
+            'needs_review': needs_review,
+            'review_reason': review_reason,
             # Debug info for browser console
             'jwt_debug': {
                 'payload': payload if 'payload' in locals() else None,
@@ -1320,6 +1351,113 @@ def detect_scam(request: Request) -> Response:
             'error': {
                 'code': 'DETECTION_ERROR',
                 'message': f'Error during scam detection: {str(e)}'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =========================================================================
+# Image Classification & OCR Endpoints
+# =========================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('api_write')
+def extract_text_from_image(request: Request) -> Response:
+    """
+    Extract text from uploaded image using high-accuracy PaddleOCR.
+    Text is automatically cleaned and organized for scam detection.
+    
+    Request: multipart/form-data
+    {
+        "image": <image file>
+    }
+    
+    Response:
+    {
+        "text": "Extracted and cleaned text ready for detection",
+        "confidence": 0.92,
+        "raw_text": "Raw OCR output (for debugging)",
+        "metadata": {
+            "emails": [...],
+            "urls": [...],
+            "phone_numbers": [...],
+            "has_urls": true,
+            "has_emails": false,
+            "length": 245
+        }
+    }
+    
+    Security:
+    - Rate limited (api_write: 30 requests per minute)
+    - File validation and size limits
+    """
+    try:
+        # Validate file input
+        if 'image' not in request.FILES:
+            return Response({
+                'error': {
+                    'code': 'MISSING_FILE',
+                    'message': 'Missing "image" field in request'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        image_file = request.FILES['image']
+        
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024
+        if image_file.size > max_size:
+            return Response({
+                'error': {
+                    'code': 'FILE_TOO_LARGE',
+                    'message': f'Image must be less than 10MB (got {image_file.size / 1024 / 1024:.1f}MB)'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate file type
+        allowed_formats = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+        if image_file.content_type not in allowed_formats:
+            return Response({
+                'error': {
+                    'code': 'INVALID_FORMAT',
+                    'message': f'Unsupported image format: {image_file.content_type}'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"[OCR] Processing image: {image_file.name} ({image_file.size / 1024:.1f}KB)")
+        
+        # Process image through OCR pipeline
+        from src.use_cases.ai.image_classification import ImageClassificationUseCase
+        
+        image_classifier = ImageClassificationUseCase(use_gpu=False)
+        result = image_classifier.process_image(image_file.read(), return_metadata=True)
+        
+        if 'error' in result:
+            return Response({
+                'error': {
+                    'code': 'OCR_FAILED',
+                    'message': result['error']
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(
+            f"[OCR] Text extracted successfully: "
+            f"{result['metadata']['length']} chars, "
+            f"confidence: {int(result['confidence'] * 100)}%"
+        )
+        
+        return Response({
+            'text': result['text'],
+            'confidence': result['confidence'],
+            'raw_text': result['raw_text'],
+            'metadata': result.get('metadata', {})
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"[OCR] Image text extraction failed: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'OCR_ERROR',
+                'message': f'Error extracting text from image: {str(e)}'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1409,6 +1547,27 @@ def send_mfa_code(request: Request) -> Response:
             }, status=status.HTTP_403_FORBIDDEN)
 
         # --- generate & store MFA code ---
+        from django.conf import settings
+        
+        # Development bypass: Use static code if MFA is disabled
+        if not getattr(settings, 'MFA_ENABLED', True):
+            code = getattr(settings, 'MFA_DEV_BYPASS_CODE', '000000')
+            logger.warning(f"[MFA] Development mode: MFA disabled. Use code: {code}")
+            # Return immediately without storing or sending
+            audit.log_event(
+                event_type=AuditEventType.MFA_CODE_SENT,
+                user_id=user.user_id if hasattr(user, 'user_id') else user.id,
+                email=email,
+                ip_address=ip,
+                user_agent=ua,
+                result="dev_bypass",
+            )
+            return Response({
+                'message': f'Development mode: MFA disabled. Use code: {code}',
+                'expires_in_seconds': 300,
+                'dev_bypass': True,
+            }, status=status.HTTP_200_OK)
+        
         code, expires_at = MFACodeGenerator.generate_code_with_expiry(5)
         mfa_repo = get_mfa_repository()
         stored = mfa_repo.create_mfa_code(
@@ -1516,8 +1675,16 @@ def verify_mfa_code(request: Request) -> Response:
         user_id = user.user_id if hasattr(user, 'user_id') else user.id
 
         # --- verify MFA code ---
-        mfa_repo = get_mfa_repository()
-        is_valid_code, error_msg = mfa_repo.verify_mfa_code(user_id, code)
+        from django.conf import settings
+        
+        # Development bypass: Accept any 6-digit code if MFA is disabled
+        if not getattr(settings, 'MFA_ENABLED', True):
+            logger.warning(f"[MFA] Development mode: MFA disabled. Accepting any code.")
+            is_valid_code = len(code) == 6 and code.isdigit()
+            error_msg = 'Invalid code format (must be 6 digits)' if not is_valid_code else None
+        else:
+            mfa_repo = get_mfa_repository()
+            is_valid_code, error_msg = mfa_repo.verify_mfa_code(user_id, code)
 
         if not is_valid_code:
             audit.log_event(

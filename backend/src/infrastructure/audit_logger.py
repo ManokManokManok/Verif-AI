@@ -18,12 +18,19 @@ Usage:
         email="user@example.com",
         ip_address="1.2.3.4",
     )
+
+Note:
+    Sensitive data in logs is automatically redacted by the SensitiveDataFilter
+    configured in Django settings. Email addresses and other PII are masked
+    before being written to log files.
 """
 
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from enum import Enum
+
+from .logging.sensitive_filter import SensitiveDataFilter
 
 
 class AuditEventType(Enum):
