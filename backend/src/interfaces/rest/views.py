@@ -1547,6 +1547,27 @@ def send_mfa_code(request: Request) -> Response:
             }, status=status.HTTP_403_FORBIDDEN)
 
         # --- generate & store MFA code ---
+        from django.conf import settings
+        
+        # Development bypass: Use static code if MFA is disabled
+        if not getattr(settings, 'MFA_ENABLED', True):
+            code = getattr(settings, 'MFA_DEV_BYPASS_CODE', '000000')
+            logger.warning(f"[MFA] Development mode: MFA disabled. Use code: {code}")
+            # Return immediately without storing or sending
+            audit.log_event(
+                event_type=AuditEventType.MFA_CODE_SENT,
+                user_id=user.user_id if hasattr(user, 'user_id') else user.id,
+                email=email,
+                ip_address=ip,
+                user_agent=ua,
+                result="dev_bypass",
+            )
+            return Response({
+                'message': f'Development mode: MFA disabled. Use code: {code}',
+                'expires_in_seconds': 300,
+                'dev_bypass': True,
+            }, status=status.HTTP_200_OK)
+        
         code, expires_at = MFACodeGenerator.generate_code_with_expiry(5)
         mfa_repo = get_mfa_repository()
         stored = mfa_repo.create_mfa_code(
@@ -1654,8 +1675,16 @@ def verify_mfa_code(request: Request) -> Response:
         user_id = user.user_id if hasattr(user, 'user_id') else user.id
 
         # --- verify MFA code ---
-        mfa_repo = get_mfa_repository()
-        is_valid_code, error_msg = mfa_repo.verify_mfa_code(user_id, code)
+        from django.conf import settings
+        
+        # Development bypass: Accept any 6-digit code if MFA is disabled
+        if not getattr(settings, 'MFA_ENABLED', True):
+            logger.warning(f"[MFA] Development mode: MFA disabled. Accepting any code.")
+            is_valid_code = len(code) == 6 and code.isdigit()
+            error_msg = 'Invalid code format (must be 6 digits)' if not is_valid_code else None
+        else:
+            mfa_repo = get_mfa_repository()
+            is_valid_code, error_msg = mfa_repo.verify_mfa_code(user_id, code)
 
         if not is_valid_code:
             audit.log_event(
