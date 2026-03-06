@@ -95,6 +95,11 @@ class EmailValidator:
 
 
 class TokenGenerator:
+    # !!!!! TESTING ENVIRONMENT ONLY ON EVENT OF SENDGRID SLOWDOWN !!!!!
+    # Set this to True to bypass verification code and always return '000000' for testing
+    BYPASS_VERIFICATION_CODE = True  # Set True to bypass
+
+
     @staticmethod
     def generate_secure_token(length: int = 32) -> str:
         """
@@ -112,10 +117,12 @@ class TokenGenerator:
     def generate_verification_token() -> str:
         """
         Generate email verification token.
-        
+        If BYPASS_VERIFICATION_CODE is True, always return '000000' for testing.
         Returns:
-            32-character verification token
+            32-character verification token (or '000000' if bypassed)
         """
+        if TokenGenerator.BYPASS_VERIFICATION_CODE or os.environ.get('BYPASS_VERIFICATION_CODE') == '1':
+            return '000000'
         return TokenGenerator.generate_secure_token(16)
     
     @staticmethod
@@ -176,6 +183,8 @@ class MockEmailService:
 
 
 class MFACodeGenerator:
+    # Set this to True to bypass MFA code and always return '000000' for testing
+    BYPASS_MFA_CODE = True  # Set True to bypass
     """
     Multi-Factor Authentication code generator.
 
@@ -194,6 +203,8 @@ class MFACodeGenerator:
         Returns:
             Zero-padded numeric string, e.g. "042917".
         """
+        if MFACodeGenerator.BYPASS_MFA_CODE or os.environ.get('BYPASS_MFA_CODE') == '1':
+            return '000000'
         return ''.join(secrets.choice(string.digits) for _ in range(length))
 
     @staticmethod
