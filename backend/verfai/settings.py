@@ -66,6 +66,16 @@ MIDDLEWARE = [
 # Analytics settings
 ANALYTICS_ENABLED = True
 
+# =============================================================================
+# MFA (Multi-Factor Authentication) SETTINGS
+# =============================================================================
+# In development, you can bypass MFA email verification by setting MFA_ENABLED=False
+# When disabled, the system will:
+# - Skip sending actual email codes
+# - Accept any 6-digit code (e.g., "000000") during verification
+MFA_ENABLED = os.getenv('MFA_ENABLED', 'False').lower() in ('1', 'true', 'yes')
+MFA_DEV_BYPASS_CODE = '000000'  # Static code accepted when MFA_ENABLED=False
+
 ROOT_URLCONF = 'verfai.urls'
 
 TEMPLATES = [

@@ -21,15 +21,10 @@ contract("AnalysisAnchor", (accounts) => {
       const contractOwner = await contract.owner();
       assert.equal(contractOwner, owner, "Owner should be deployer");
     });
-
-    it("should start with zero records", async () => {
-      const count = await contract.recordCount();
-      assert.equal(count.toNumber(), 0, "Record count should be 0");
-    });
   });
 
   describe("storeRecord", () => {
-    it("should store a valid record", async () => {
+    it("should emit RecordStored event with correct data", async () => {
       const tx = await contract.storeRecord(
         testPayloadHash,
         testScamClass,
@@ -44,10 +39,25 @@ contract("AnalysisAnchor", (accounts) => {
       assert.equal(tx.logs[0].event, "RecordStored", "Should emit RecordStored");
       assert.equal(tx.logs[0].args.payloadHash, testPayloadHash);
       assert.equal(tx.logs[0].args.scamClass.toNumber(), testScamClass);
+      assert.equal(tx.logs[0].args.confidenceBps.toNumber(), testConfidenceBps);
+      assert.equal(tx.logs[0].args.timestamp.toNumber(), testTimestamp);
+      assert.equal(tx.logs[0].args.storedBy, owner);
+    });
 
-      // Check record count
-      const count = await contract.recordCount();
-      assert.equal(count.toNumber(), 1, "Record count should be 1");
+    it("should use significantly less gas than storage-based approach", async () => {
+      const tx = await contract.storeRecord(
+        testPayloadHash,
+        testScamClass,
+        testConfidenceBps,
+        testTimestamp,
+        testRefId,
+        { from: owner }
+      );
+
+      const gasUsed = tx.receipt.gasUsed;
+      console.log(`      Gas used: ${gasUsed}`);
+      // Event-only approach should use well under 30,000 gas
+      assert.isBelow(gasUsed, 30000, `Gas should be < 30,000 (was ${gasUsed})`);
     });
 
     it("should reject unauthorized callers", async () => {
@@ -62,33 +72,7 @@ contract("AnalysisAnchor", (accounts) => {
         );
         assert.fail("Should have reverted");
       } catch (error) {
-        // Custom errors show as "revert" - just verify it reverted
         assert.include(error.message, "revert", "Should revert for unauthorized caller");
-      }
-    });
-
-    it("should reject duplicate payloadHash", async () => {
-      await contract.storeRecord(
-        testPayloadHash,
-        testScamClass,
-        testConfidenceBps,
-        testTimestamp,
-        testRefId,
-        { from: owner }
-      );
-
-      try {
-        await contract.storeRecord(
-          testPayloadHash,
-          testScamClass + 1,
-          testConfidenceBps,
-          testTimestamp,
-          testRefId,
-          { from: owner }
-        );
-        assert.fail("Should have reverted");
-      } catch (error) {
-        assert.include(error.message, "revert", "Should revert for duplicate hash");
       }
     });
 
@@ -139,7 +123,7 @@ contract("AnalysisAnchor", (accounts) => {
     it("should accept scamClass 0-14", async () => {
       for (let scamClass = 0; scamClass <= 14; scamClass++) {
         const hash = web3.utils.keccak256(`test-${scamClass}`);
-        await contract.storeRecord(
+        const tx = await contract.storeRecord(
           hash,
           scamClass,
           testConfidenceBps,
@@ -147,14 +131,13 @@ contract("AnalysisAnchor", (accounts) => {
           testRefId,
           { from: owner }
         );
+        assert.equal(tx.logs[0].args.scamClass.toNumber(), scamClass);
       }
-      const count = await contract.recordCount();
-      assert.equal(count.toNumber(), 15);
     });
   });
 
-  describe("getRecord", () => {
-    it("should return stored record data", async () => {
+  describe("Event-based record retrieval", () => {
+    it("should allow reading records from event logs", async () => {
       await contract.storeRecord(
         testPayloadHash,
         testScamClass,
@@ -164,94 +147,28 @@ contract("AnalysisAnchor", (accounts) => {
         { from: owner }
       );
 
-      const result = await contract.getRecord(testPayloadHash);
-      
-      assert.equal(result.exists, true, "Record should exist");
-      assert.equal(result.scamClass.toNumber(), testScamClass, "ScamClass should match");
-      assert.equal(result.confidenceBps.toNumber(), testConfidenceBps, "ConfidenceBps should match");
-      assert.equal(result.timestamp.toNumber(), testTimestamp, "Timestamp should match");
-      assert.equal(result.refId, testRefId, "RefId should match");
-      assert.equal(result.storedBy, owner, "StoredBy should be owner");
+      // Retrieve from event logs (the optimized verification path)
+      const events = await contract.getPastEvents("RecordStored", {
+        filter: { payloadHash: testPayloadHash },
+        fromBlock: 0,
+        toBlock: "latest"
+      });
+
+      assert.equal(events.length, 1, "Should find one matching event");
+      assert.equal(events[0].returnValues.scamClass, String(testScamClass));
+      assert.equal(events[0].returnValues.confidenceBps, String(testConfidenceBps));
+      assert.equal(events[0].returnValues.storedBy, owner);
     });
 
-    it("should return exists=false for non-existent record", async () => {
+    it("should return empty array for non-existent hash", async () => {
       const nonExistentHash = web3.utils.keccak256("does-not-exist");
-      const result = await contract.getRecord(nonExistentHash);
-      
-      assert.equal(result.exists, false, "Record should not exist");
-    });
-  });
+      const events = await contract.getPastEvents("RecordStored", {
+        filter: { payloadHash: nonExistentHash },
+        fromBlock: 0,
+        toBlock: "latest"
+      });
 
-  describe("recordExists", () => {
-    it("should return true for existing record", async () => {
-      await contract.storeRecord(
-        testPayloadHash,
-        testScamClass,
-        testConfidenceBps,
-        testTimestamp,
-        testRefId,
-        { from: owner }
-      );
-
-      const exists = await contract.recordExists(testPayloadHash);
-      assert.equal(exists, true);
-    });
-
-    it("should return false for non-existing record", async () => {
-      const exists = await contract.recordExists(testPayloadHash);
-      assert.equal(exists, false);
-    });
-  });
-
-  describe("verifyRecord", () => {
-    beforeEach(async () => {
-      await contract.storeRecord(
-        testPayloadHash,
-        testScamClass,
-        testConfidenceBps,
-        testTimestamp,
-        testRefId,
-        { from: owner }
-      );
-    });
-
-    it("should return matches=true for correct data", async () => {
-      const result = await contract.verifyRecord(
-        testPayloadHash,
-        testScamClass,
-        testConfidenceBps,
-        testTimestamp,
-        testRefId
-      );
-
-      assert.equal(result.matches, true, "Should match");
-      assert.equal(result.recordFound, true, "Record should be found");
-    });
-
-    it("should return matches=false for wrong scamClass", async () => {
-      const result = await contract.verifyRecord(
-        testPayloadHash,
-        testScamClass + 1, // Wrong
-        testConfidenceBps,
-        testTimestamp,
-        testRefId
-      );
-
-      assert.equal(result.matches, false, "Should not match");
-      assert.equal(result.recordFound, true, "Record should be found");
-    });
-
-    it("should return recordFound=false for non-existent hash", async () => {
-      const result = await contract.verifyRecord(
-        web3.utils.keccak256("does-not-exist"),
-        testScamClass,
-        testConfidenceBps,
-        testTimestamp,
-        testRefId
-      );
-
-      assert.equal(result.matches, false, "Should not match");
-      assert.equal(result.recordFound, false, "Record should not be found");
+      assert.equal(events.length, 0, "Should find no events");
     });
   });
 
