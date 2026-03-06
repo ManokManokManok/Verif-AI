@@ -1336,6 +1336,238 @@ button {
 }
 
 /* =============================================================================
+   Image Upload & OCR Preview
+   ============================================================================= */
+
+.detect__imagePreview {
+  margin-top: 24px;
+  width: min(860px, 95vw);
+  background: rgba(30, 41, 59, 0.8);
+  border: 2px solid rgba(96, 165, 250, 0.3);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.detect__imagePreview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.detect__imagePreview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detect__imagePreview-crop {
+  background: rgba(59, 130, 246, 0.2);
+  color: #bfdbfe;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.detect__imagePreview-crop:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #e0f2fe;
+}
+
+.detect__imagePreview-crop:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.detect__imagePreview-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.detect__imagePreview-remove {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.detect__imagePreview-remove:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fee2e2;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.detect__imagePreview-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.detect__imagePreview-img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.detect__imagePreview-progress {
+  margin-top: 12px;
+}
+
+.detect__imagePreview-progressBar {
+  width: 100%;
+  height: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.detect__imagePreview-progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+.detect__imagePreview-progressText {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.detect__cropInline {
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  background: rgba(15, 23, 42, 0.72);
+  padding: 14px;
+}
+
+.detect__cropHeader {
+  margin-bottom: 12px;
+}
+
+.detect__cropTitle {
+  margin: 0;
+  font-size: 18px;
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.detect__cropHint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.detect__cropBody {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.6);
+  padding: 12px;
+}
+
+.detect__cropImage {
+  max-height: 52vh;
+  width: auto;
+  max-width: 100%;
+  display: block;
+  margin: 0 auto;
+}
+
+.detect__cropActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+@media (max-width: 768px) {
+  .detect__cropImage {
+    max-height: 40vh;
+  }
+
+  .detect__cropActions {
+    flex-direction: column;
+  }
+
+  .detect__cropBtn {
+    width: 100%;
+  }
+}
+
+.detect__cropBtn {
+  border-radius: 10px;
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.detect__cropBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.detect__cropBtn--ghost {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+}
+
+.detect__cropBtn--ghost:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.95);
+}
+
+.detect__cropBtn--primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+}
+
+.detect__cropBtn--primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.45);
+}
+
+.detect__plus:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.detect__plus:disabled:hover {
+  color: #c7d2fe;
+  background: transparent;
+  transform: none;
+}
+
+/* =============================================================================
    Security: Error Messages and Character Count
    ============================================================================= */
 
@@ -3066,6 +3298,64 @@ button {
   transform: translateY(-4px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
   border-color: rgba(148, 163, 184, 0.35);
+}
+
+/* Low Confidence Review Banner */
+.detect__resultCard--review {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-left: 4px solid #fbbf24;
+  padding: 16px 24px;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: center;
+}
+
+.detect__resultCard--review:hover {
+  transform: none;
+  border-color: rgba(251, 191, 36, 0.5);
+  border-left-color: #fbbf24;
+}
+
+.detect__reviewBanner {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  max-width: 700px;
+  width: 100%;
+}
+
+.detect__reviewIcon {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.detect__reviewContent {
+  flex: 1;
+}
+
+.detect__reviewTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fbbf24;
+  margin: 0 0 4px 0;
+}
+
+.detect__reviewText {
+  font-size: 13px;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.detect__reviewNote {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 4px 0 0 0;
+  font-style: italic;
+  line-height: 1.4;
 }
 
 .detect__cardTitle {

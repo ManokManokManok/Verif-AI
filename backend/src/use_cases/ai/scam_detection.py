@@ -63,6 +63,9 @@ class ScamDetectionUseCase:
             calibrated_type_logits = type_logits / self.temperature
             
             # Calculate probabilities
+
+            # !!! Alter softmax calculation based on variable presence
+            # !!! Use bias calculations (maybe enforce scraping)
             scam_probs = F.softmax(calibrated_scam_logits, dim=1).squeeze()
             type_probs = F.softmax(calibrated_type_logits, dim=1).squeeze()
         
