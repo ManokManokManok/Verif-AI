@@ -159,7 +159,7 @@ export default function ChatBot({ accessToken = null }) {
         {isLoading && (
           <div style={{ ...styles.message, ...styles.botMessage }}>
             <div style={styles.messageHeader}>
-              <strong>🤖 Verif-AI</strong>
+              <strong>Verif-AI</strong>
             </div>
             <div style={styles.messageContent}>
               <span style={styles.typing}>Thinking...</span>

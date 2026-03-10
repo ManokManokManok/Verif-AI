@@ -728,7 +728,7 @@ function Detection() {
                         onClick={() => setIsReportModalOpen(true)}
                         title="Report an issue with this analysis"
                       >
-                        🚩 Report Issue
+                        Report Issue
                       </button>
                       <button
                         className="detect__newAnalysis"
@@ -737,7 +737,7 @@ function Detection() {
                         disabled={isOpeningGuidance}
                         title="Get personalized guidance based on this analysis"
                       >
-                        {isOpeningGuidance ? 'Opening...' : '💬 Ask AI for Guidance'}
+                        {isOpeningGuidance ? 'Opening...' : 'Ask AI for Guidance'}
                       </button>
                     </>
                   )}
@@ -746,7 +746,7 @@ function Detection() {
                     type="button"
                     onClick={handleNewAnalysis}
                   >
-                    ✨ New Analysis
+                    New Analysis
                   </button>
                 </div>
               </div>
