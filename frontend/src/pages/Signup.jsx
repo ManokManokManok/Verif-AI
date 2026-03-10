@@ -162,11 +162,17 @@ function Signup() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [registered, setRegistered] = useState(false);
+  const [agreed, setAgreed] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
     setFieldErrors({});
+
+    if (!agreed) {
+      setError('You must agree to the Terms and Conditions to sign up.');
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -360,6 +366,26 @@ function Signup() {
               )}
             </div>
           )}
+
+          <label className="auth__checkbox-label" style={{ display: 'flex', alignItems: 'center', margin: '16px 0 8px 0', fontSize: 14 }}>
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={e => setAgreed(e.target.checked)}
+              required
+              style={{ marginRight: 8 }}
+            />
+            I agree to the{' '}
+            <a
+              href="/terms-and-conditions"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#2563eb', textDecoration: 'underline', marginLeft: 4 }}
+              onClick={e => { e.stopPropagation(); }}
+            >
+              Verif-AI Terms and Conditions
+            </a>
+          </label>
 
           <button type="submit" className="auth__submit" disabled={loading}>
             {loading ? (
