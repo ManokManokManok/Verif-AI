@@ -61,8 +61,8 @@ def history_detail(request: Request, analysis_id: str) -> Response:
             }, status=status.HTTP_401_UNAUTHORIZED)
 
         repository = get_analysis_repository()
-        result = repository.get_by_id(analysis_id)
-        if not result or str(result.user_id) != str(user_id):
+        result = repository.get_by_id_for_user(analysis_id, user_id)
+        if not result:
             return Response({'error': {'code': 'NOT_FOUND', 'message': 'Analysis not found'}}, status=status.HTTP_404_NOT_FOUND)
 
         # Return all fields for the analysis result
@@ -197,6 +197,130 @@ def history(request: Request) -> Response:
             'error': {
                 'code': 'INTERNAL_ERROR',
                 'message': 'Failed to fetch chat history'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@rate_limit('api_write')
+def delete_history_detail(request: Request, analysis_id: str) -> Response:
+    """
+    Hide one detection record from a user's history.
+
+    Data retention:
+    - Keeps analysis metadata for admin/audit workflows
+    - Redacts raw message text from the record
+    - Removes the record from user-visible history APIs
+    """
+    if not analysis_id or len(analysis_id) > 50:
+        return Response({
+            'error': {
+                'code': 'INVALID_INPUT',
+                'message': 'Invalid analysis ID format'
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                jwt_service = get_jwt_service()
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[JWT] Could not extract user_id for delete_history_detail: {jwt_error}")
+
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'AUTHENTICATION_REQUIRED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        repository = get_analysis_repository()
+        deleted = repository.soft_delete_for_user(analysis_id, user_id)
+
+        if not deleted:
+            return Response({
+                'error': {
+                    'code': 'NOT_FOUND',
+                    'message': 'Analysis not found'
+                }
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        logger.info(f"[HISTORY_DELETE] User {user_id} deleted analysis {analysis_id}")
+        return Response({
+            'message': 'Detection history item deleted successfully',
+            'analysis_id': analysis_id,
+            'retention': {
+                'metadata_retained': True,
+                'raw_message_redacted': True,
+            }
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"[HISTORY_DELETE] Error deleting analysis item: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'Failed to delete history item'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@rate_limit('api_write')
+def delete_history(request: Request) -> Response:
+    """
+    Hide all detection history records for the authenticated user.
+
+    Data retention:
+    - Keeps analysis metadata for admin/audit workflows
+    - Redacts raw message text
+    - Removes records from user-visible history APIs
+    """
+    try:
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                jwt_service = get_jwt_service()
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[JWT] Could not extract user_id for delete_history: {jwt_error}")
+
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'AUTHENTICATION_REQUIRED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        repository = get_analysis_repository()
+        deleted_count = repository.soft_delete_all_for_user(user_id)
+
+        logger.info(f"[HISTORY_DELETE_ALL] User {user_id} deleted {deleted_count} analysis records")
+        return Response({
+            'message': 'Detection history deleted successfully',
+            'deleted_count': deleted_count,
+            'retention': {
+                'metadata_retained': True,
+                'raw_message_redacted': True,
+            }
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"[HISTORY_DELETE_ALL] Error deleting history: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'Failed to delete history'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
