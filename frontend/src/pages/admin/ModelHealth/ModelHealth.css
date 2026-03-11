@@ -101,3 +101,108 @@
 .admin-text-muted {
   color: var(--admin-text-muted);
 }
+
+/* ── Performance Banner ── */
+.model-health__perf-banner {
+  display: flex;
+  align-items: center;
+  background: var(--admin-bg-card);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  padding: 1rem 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.model-health__perf-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 110px;
+  padding: 0.25rem 1.25rem;
+}
+
+.model-health__perf-item:first-child {
+  padding-left: 0;
+}
+
+.model-health__perf-label {
+  font-size: 0.7rem;
+  color: var(--admin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.model-health__perf-value {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--admin-text);
+  white-space: nowrap;
+}
+
+.model-health__perf-value--name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--admin-primary);
+}
+
+.model-health__perf-divider {
+  width: 1px;
+  height: 44px;
+  background: var(--admin-border);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+@media (max-width: 768px) {
+  .model-health__perf-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .model-health__perf-divider {
+    display: none;
+  }
+  .model-health__perf-item {
+    padding: 0.25rem 0;
+  }
+}
+
+/* ── SystemInfoCard status badges ── */
+.model-health__info-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+}
+
+.model-health__info-badge--connected {
+  color: var(--admin-success);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.model-health__info-badge--disconnected {
+  color: var(--admin-danger);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.model-health__info-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.model-health__info-value {
+  color: var(--admin-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.model-health__info-unknown {
+  color: var(--admin-text-dim);
+}

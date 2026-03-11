@@ -16,10 +16,11 @@
 }
 
 .analysis-stats__percentage-fill {
-  height: 8px;
+  height: 100%;
   background: var(--admin-primary);
   border-radius: 4px;
-  min-width: 4px;
+  min-width: 2px;
+  transition: width 0.5s ease;
 }
 
 .analysis-stats__breakdown {
@@ -81,53 +82,6 @@
   background: var(--admin-success);
 }
 
-.analysis-stats__daily-chart {
-  padding: 1rem;
-}
-
-.analysis-stats__chart-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-  height: 200px;
-  padding: 1rem 0;
-}
-
-.analysis-stats__chart-bar-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  height: 100%;
-}
-
-.analysis-stats__chart-bar {
-  position: relative;
-  width: 100%;
-  background: var(--admin-primary);
-  border-radius: 4px 4px 0 0;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.analysis-stats__chart-bar:hover {
-  opacity: 0.8;
-}
-
-.analysis-stats__chart-bar-scam {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--admin-danger);
-  border-radius: 4px 4px 0 0;
-}
-
-.analysis-stats__chart-label {
-  font-size: 0.75rem;
-  color: var(--admin-text-muted);
-}
 
 .analysis-stats__chart-legend {
   display: flex;
@@ -153,11 +107,11 @@
 }
 
 .analysis-stats__legend-color--total {
-  background: var(--admin-primary);
+  background: linear-gradient(to right, #2563eb, #60a5fa);
 }
 
 .analysis-stats__legend-color--scam {
-  background: var(--admin-danger);
+  background: linear-gradient(to right, #dc2626, #f87171);
 }
 
 .analysis-stats__chart-empty {
@@ -176,4 +130,349 @@
 .analysis-stats__chart-hint {
   font-size: 0.75rem;
   margin-top: 0.5rem;
+}
+
+/* ── Card subtitle ── */
+.analysis-stats__card-subtitle {
+  font-size: 0.75rem;
+  color: var(--admin-text-muted);
+}
+
+/* ── Percentage bar (category table) ── */
+.analysis-stats__percentage-track {
+  flex: 1;
+  height: 8px;
+  background: var(--admin-border);
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.analysis-stats__percentage-text {
+  font-size: 0.8rem;
+  color: var(--admin-text-muted);
+  white-space: nowrap;
+  min-width: 38px;
+  text-align: right;
+}
+
+/* ── Rate Summary Banner ── */
+.analysis-stats__rate-banner {
+  display: flex;
+  align-items: center;
+  background: var(--admin-bg-card);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  padding: 1rem 1.5rem;
+  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.analysis-stats__rate-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 120px;
+  padding: 0.25rem 1.25rem;
+}
+
+.analysis-stats__rate-item:first-child {
+  padding-left: 0;
+}
+
+.analysis-stats__rate-label {
+  font-size: 0.7rem;
+  color: var(--admin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.analysis-stats__rate-value {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--admin-text);
+}
+
+.analysis-stats__rate-value--danger,
+.analysis-stats__rate-value--high {
+  color: var(--admin-danger);
+}
+
+.analysis-stats__rate-value--medium {
+  color: var(--admin-warning);
+}
+
+.analysis-stats__rate-value--category {
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.analysis-stats__rate-divider {
+  width: 1px;
+  height: 44px;
+  background: var(--admin-border);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ── Breakdown dot indicators ── */
+.analysis-stats__breakdown-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.analysis-stats__breakdown-dot--danger  { background: var(--admin-danger); }
+.analysis-stats__breakdown-dot--warning { background: var(--admin-warning); }
+.analysis-stats__breakdown-dot--info    { background: var(--admin-info); }
+.analysis-stats__breakdown-dot--success { background: var(--admin-success); }
+
+.analysis-stats__breakdown-label-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+.analysis-stats__breakdown-desc {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--admin-text-muted);
+  margin-top: 0.15rem;
+}
+
+.analysis-stats__breakdown-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+
+.analysis-stats__breakdown-pct {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--admin-text);
+}
+
+/* ── Daily Activity Chart ── */
+.daily-chart__header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.daily-chart__peak-badge {
+  font-size: 0.72rem;
+  color: var(--admin-warning, #f59e0b);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.daily-chart {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Y-axis + plot side by side */
+.daily-chart__wrap {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.daily-chart__y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 1.75rem;
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.daily-chart__y-label {
+  font-size: 0.6rem;
+  color: var(--admin-text-dim, #6b7280);
+  text-align: right;
+  line-height: 1;
+}
+
+/* Plot area */
+.daily-chart__plot {
+  flex: 1;
+  position: relative;
+  height: 200px;
+}
+
+/* Horizontal grid lines */
+.daily-chart__grid {
+  position: absolute;
+  inset: 0;
+  bottom: 1.75rem;
+  pointer-events: none;
+}
+
+.daily-chart__gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--admin-border, #374151);
+  opacity: 0.5;
+}
+
+/* Bars container */
+.daily-chart__bars {
+  position: absolute;
+  inset: 0;
+  bottom: 1.75rem;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.daily-chart__col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+  cursor: pointer;
+}
+
+.daily-chart__bar-track {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.daily-chart__bar {
+  width: 100%;
+  background: linear-gradient(to top, #2563eb, #60a5fa);
+  border-radius: 3px 3px 0 0;
+  transition: height 0.35s ease, opacity 0.2s ease, filter 0.2s ease;
+  min-height: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.daily-chart__bar--peak {
+  background: linear-gradient(to top, #d97706, #fbbf24);
+}
+
+.daily-chart__bar--hovered {
+  filter: brightness(1.3);
+  opacity: 1 !important;
+}
+
+/* Scam overlay at the bottom of each bar */
+.daily-chart__bar-scam {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, #dc2626, #f87171);
+  border-radius: 3px 3px 0 0;
+  opacity: 0.85;
+  transition: height 0.35s ease;
+}
+
+/* Tooltip */
+.daily-chart__tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  border: 1px solid var(--admin-border, #374151);
+  border-radius: 7px;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--admin-text-primary, #f9fafb);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.daily-chart__tooltip--left {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.daily-chart__tooltip strong {
+  color: #93c5fd;
+}
+
+.daily-chart__tooltip-scam {
+  color: #f87171;
+}
+
+/* X-axis */
+.daily-chart__x-axis {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1.75rem;
+  border-top: 1px solid var(--admin-border, #374151);
+  display: flex;
+  align-items: flex-start;
+  padding-top: 0.3rem;
+  pointer-events: none;
+}
+
+.daily-chart__x-label {
+  flex: 1;
+  text-align: center;
+  font-size: 0.6rem;
+  color: var(--admin-text-dim, #6b7280);
+  white-space: nowrap;
+}
+
+/* Hover summary strip */
+.daily-chart__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+  padding: 0.45rem 0.75rem;
+  background: var(--admin-bg-secondary, #1f2937);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  min-height: 2rem;
+}
+
+.daily-chart__summary-date {
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.daily-chart__summary-total {
+  color: var(--admin-text-primary, #f9fafb);
+}
+
+.daily-chart__summary-scam {
+  color: #f87171;
+}
+
+.daily-chart__summary-pct {
+  margin-left: auto;
+  color: var(--admin-text-dim, #6b7280);
+  font-size: 0.7rem;
+}
+
+.daily-chart__summary-hint {
+  color: var(--admin-text-dim, #6b7280);
+  font-style: italic;
 }

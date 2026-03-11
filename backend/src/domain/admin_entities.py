@@ -87,7 +87,15 @@ class ModelHealthMetrics:
     # System Uptime
     uptime_seconds: int = 0
     last_model_reload: Optional[datetime] = None
-    
+
+    # System info (collected once at startup)
+    platform: str = ''
+    python_version: str = ''
+    django_version: str = ''
+    load_average: Optional[float] = None
+    database_connected: bool = True
+    cache_connected: bool = True
+
     # Timestamp
     collected_at: datetime = field(default_factory=datetime.utcnow)
     
@@ -150,6 +158,7 @@ class ModelHealthMetrics:
             "cache": {
                 "hit_rate": self.cache_hit_rate,
                 "size_mb": self.cache_size_mb,
+                "connected": self.cache_connected,
             },
             "model": {
                 "name": self.model_name,
@@ -163,6 +172,13 @@ class ModelHealthMetrics:
                 "uptime_seconds": self.uptime_seconds,
                 "uptime_formatted": self.uptime_formatted,
                 "last_model_reload": self.last_model_reload.isoformat() if self.last_model_reload else None,
+                "platform": self.platform,
+                "python_version": self.python_version,
+                "django_version": self.django_version,
+                "load_average": self.load_average,
+            },
+            "database": {
+                "connected": self.database_connected,
             },
             "collected_at": self.collected_at.isoformat(),
         }
