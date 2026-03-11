@@ -543,6 +543,67 @@ PRIVATE_KEY=0xabcdef123456...
 
 ## LLM Model Configuration
 
+### `LLM_MULTIHEAD_MODEL_ID`
+**Required:** No  
+**Type:** Hugging Face repository ID  
+**Default:** `ManokManokManok/bimBert_Scam-Detection`
+
+Repository containing the scam-classifier artifacts.
+
+**Example:**
+```env
+LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
+```
+
+---
+
+### `LLM_MULTIHEAD_SUBFOLDER`
+**Required:** No  
+**Type:** String  
+**Default:** empty (auto-detect)
+
+Optional subfolder inside `LLM_MULTIHEAD_MODEL_ID` where model files are stored.
+
+**Behavior:**
+- Empty value: tries repo root, then `mk5`, then `mk4`
+- `mk5` or `mk4`: force loading from that subfolder
+- `root` or `.`: force loading from repository root
+
+**Example:**
+```env
+LLM_MULTIHEAD_SUBFOLDER=mk5
+```
+
+---
+
+### `LLM_GEMMA_MODEL_ID`
+**Required:** No  
+**Type:** Hugging Face repository ID  
+**Default:** `lmstudio-community/gemma-3-4B-it-qat-GGUF`
+
+Repository containing the GGUF model used by `llama_cpp`.
+
+**Example:**
+```env
+LLM_GEMMA_MODEL_ID=lmstudio-community/gemma-3-4B-it-qat-GGUF
+```
+
+---
+
+### `LLM_GGUF_FILENAME`
+**Required:** No  
+**Type:** String  
+**Default:** `gemma-3-4B-it-QAT-Q4_0.gguf`
+
+File name of the GGUF model in `LLM_GEMMA_MODEL_ID`.
+
+**Example:**
+```env
+LLM_GGUF_FILENAME=gemma-3-4B-it-QAT-Q4_0.gguf
+```
+
+---
+
 ### `LLM_WARMUP_ON_START`
 **Required:** No  
 **Type:** Boolean  
@@ -592,6 +653,8 @@ VALIDATE_SECURITY_CONFIG=false
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # Models
+LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
+LLM_MULTIHEAD_SUBFOLDER=mk5
 LLM_WARMUP_ON_START=false
 ```
 
@@ -627,6 +690,8 @@ VALIDATE_SECURITY_CONFIG=true
 CORS_ALLOWED_ORIGINS=https://verif-ai.com,https://www.verif-ai.com
 
 # Models
+LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
+LLM_MULTIHEAD_SUBFOLDER=mk5
 LLM_WARMUP_ON_START=true
 
 # Rate Limiting (tighten for production)
