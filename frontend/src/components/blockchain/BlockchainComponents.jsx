@@ -248,23 +248,21 @@ export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, on
 
   // Scam classification display - backend returns scam_type
   const scamType = analysis.scam_type || analysis.scamType || analysis.scamClassification || analysis.scam_classification || analysis.classification;
-  
-  // Confidence - backend returns confidence_bps (basis points 0-10000)
-  const confidenceBps = analysis.confidence_bps || analysis.confidenceBps;
-  const confidenceScore = analysis.confidence_score || analysis.confidenceScore || analysis.confidence;
-  
-  let confidencePercent = null;
-  if (confidenceBps != null) {
-    // Convert basis points to percentage (divide by 100)
-    confidencePercent = (confidenceBps / 100).toFixed(1);
-  } else if (confidenceScore != null) {
-    // Handle if it's already a decimal or percentage
-    if (confidenceScore <= 1) {
-      confidencePercent = (confidenceScore * 100).toFixed(1);
-    } else {
-      confidencePercent = confidenceScore.toFixed(1);
-    }
-  }
+
+  // Scam score (0-100 float, direct probability of being a scam)
+  const scamScore = analysis.scam_score ?? analysis.scamScore ?? null;
+  const scoreLevel = scamScore === null ? 'unknown'
+    : scamScore >= 80 ? 'critical'
+    : scamScore >= 60 ? 'high'
+    : scamScore >= 40 ? 'medium'
+    : 'low';
+
+  // Summary and review flag
+  const summary = analysis.summary || null;
+  const needsReview = analysis.needs_review || analysis.needsReview || false;
+
+  // TX hash — nested under chain object from backend
+  const txHash = analysis.txHash || analysis.chain?.tx_hash || analysis.chain?.txHash;
 
   // Wrap onVerify to capture the verification result and update badge
   const handleVerifyWithStatus = useCallback(async (id) => {
@@ -287,32 +285,52 @@ export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, on
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(analysis); } } : undefined}
     >
       <div className="blockchain__analysis-header">
-        <span className="blockchain__analysis-id" title={refId}>
-          {refId ? `${refId.slice(0, 8)}...` : 'N/A'}
-        </span>
+        <div className="blockchain__analysis-header-left">
+          <span className="blockchain__analysis-id" title={refId}>
+            {refId ? `${refId.slice(0, 8)}...` : 'N/A'}
+          </span>
+          {needsReview && (
+            <span className="blockchain__analysis-needs-review" title={analysis.review_reason || 'Needs review'}>
+              ⚠ Review
+            </span>
+          )}
+        </div>
         <VerificationBadge status={badgeStatus} />
       </div>
 
       <div className="blockchain__analysis-body">
         <div className="blockchain__analysis-row">
-          <span className="blockchain__analysis-label">Classification:</span>
+          <span className="blockchain__analysis-label">Type:</span>
           <span className="blockchain__analysis-value">{scamType || 'Unknown'}</span>
         </div>
-        {confidencePercent && (
+        {scamScore !== null && (
           <div className="blockchain__analysis-row">
-            <span className="blockchain__analysis-label">Confidence:</span>
-            <span className="blockchain__analysis-value">{confidencePercent}%</span>
+            <span className="blockchain__analysis-label">Scam Score:</span>
+            <div className="blockchain__analysis-score">
+              <div className="blockchain__analysis-score-bar">
+                <div
+                  className={`blockchain__analysis-score-fill blockchain__analysis-score-fill--${scoreLevel}`}
+                  style={{ width: `${scamScore}%` }}
+                />
+              </div>
+              <span className="blockchain__analysis-value">{scamScore.toFixed(1)}%</span>
+            </div>
+          </div>
+        )}
+        {summary && (
+          <div className="blockchain__analysis-row blockchain__analysis-row--summary">
+            <p className="blockchain__analysis-summary">{summary}</p>
           </div>
         )}
         <div className="blockchain__analysis-row">
           <span className="blockchain__analysis-label">Created:</span>
           <span className="blockchain__analysis-value">{formattedDate}</span>
         </div>
-        {isAnchored && analysis.txHash && (
+        {isAnchored && txHash && (
           <div className="blockchain__analysis-row">
             <span className="blockchain__analysis-label">TX Hash:</span>
             <span className="blockchain__analysis-value blockchain__analysis-value--mono">
-              {analysis.txHash.slice(0, 10)}...
+              {txHash.slice(0, 10)}...
             </span>
           </div>
         )}

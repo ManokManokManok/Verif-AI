@@ -49,8 +49,8 @@ export default function BlockchainVerification({ onNotify }) {
   // Filters
   const [filter, setFilter] = useState('all');
   const [classificationFilter, setClassificationFilter] = useState('all');
-  const [minConfidence, setMinConfidence] = useState(null);
-  const [scamOnly, setScamOnly] = useState(false);
+  const [minConfidence] = useState(null);
+  const [scamOnly] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Details modal state
@@ -150,11 +150,12 @@ export default function BlockchainVerification({ onNotify }) {
     pending: Math.max(0, totalAll - totalAnchored),
   }), [totalAll, totalAnchored]);
 
-  // Filter analyses by search term (client-side)
+  // Filter analyses: require scam_score >= 80, then apply search term (client-side)
   const filteredAnalyses = useMemo(() => {
-    if (!searchTerm) return analyses;
+    const highConfidenceScams = analyses.filter(a => (a.scam_score ?? 0) >= 80);
+    if (!searchTerm) return highConfidenceScams;
     const term = searchTerm.toLowerCase();
-    return analyses.filter(a => {
+    return highConfidenceScams.filter(a => {
       const refId = (a.ref_id || a.refId || a.id || '').toLowerCase();
       const scamType = (a.scam_type || a.scamType || '').toLowerCase();
       const message = (a.message || '').toLowerCase();
@@ -212,10 +213,6 @@ export default function BlockchainVerification({ onNotify }) {
         classifications={classifications}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
-        minConfidence={minConfidence}
-        setMinConfidence={setMinConfidence}
-        scamOnly={scamOnly}
-        setScamOnly={setScamOnly}
         setPage={setPage}
       />
 

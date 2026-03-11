@@ -4,10 +4,12 @@
  * Simple horizontal bar chart for analytics data.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
 export default function BarChart({ data, title, maxItems = 10 }) {
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
   if (!data || data.length === 0) {
     return (
       <div className="analytics-chart analytics-chart--empty">
@@ -18,7 +20,7 @@ export default function BarChart({ data, title, maxItems = 10 }) {
   }
 
   const items = data.slice(0, maxItems);
-  const maxValue = Math.max(...items.map(item => item.value || item.count || 0));
+  const maxValue = Math.max(...items.map(item => item.value || item.count || 0), 1);
 
   return (
     <div className="analytics-chart">
@@ -26,13 +28,22 @@ export default function BarChart({ data, title, maxItems = 10 }) {
       <div className="analytics-chart__bars">
         {items.map((item, index) => {
           const value = item.value || item.count || 0;
-          const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+          const percentage = (value / maxValue) * 100;
+          const isHovered = hoveredIdx === index;
           return (
-            <div key={index} className="analytics-chart__bar-item">
-              <span className="analytics-chart__label">{item.label || item.path || 'Unknown'}</span>
+            <div
+              key={index}
+              className="analytics-chart__bar-item"
+              onMouseEnter={() => setHoveredIdx(index)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            >
+              <span className="analytics-chart__rank">#{index + 1}</span>
+              <span className="analytics-chart__label" title={item.label || item.path}>
+                {item.label || item.path || 'Unknown'}
+              </span>
               <div className="analytics-chart__bar-container">
                 <div 
-                  className="analytics-chart__bar"
+                  className={`analytics-chart__bar${isHovered ? ' analytics-chart__bar--hovered' : ''}`}
                   style={{ width: `${percentage}%` }}
                 />
                 <span className="analytics-chart__value">{value.toLocaleString()}</span>
