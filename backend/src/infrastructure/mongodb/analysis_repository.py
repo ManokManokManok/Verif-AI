@@ -65,13 +65,92 @@ class AnalysisResultRepository:
         self.collection.create_index("message_hash", sparse=True)
         # Index on created_at for time-based queries
         self.collection.create_index("created_at")
+        # Index to support user-visible history filtering
+        self.collection.create_index([("user_id", 1), ("user_deleted", 1), ("created_at", -1)])
         # Index on chain metadata for anchored records
         self.collection.create_index("chain_metadata.payload_hash", sparse=True)
 
-    def get_by_user_id(self, user_id: str, limit: int = 50):
-        """Fetch all analysis results for a user, most recent first."""
-        docs = self.collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+    @staticmethod
+    def _active_user_visibility_query() -> Dict[str, Any]:
+        """Query clause for records still visible in user history."""
+        return {
+            "$or": [
+                {"user_deleted": {"$exists": False}},
+                {"user_deleted": False},
+            ]
+        }
+
+    def get_by_user_id(self, user_id: str, limit: int = 50, include_deleted: bool = False):
+        """Fetch analysis results for a user, most recent first."""
+        query: Dict[str, Any] = {"user_id": str(user_id)}
+        if not include_deleted:
+            query.update(self._active_user_visibility_query())
+
+        docs = self.collection.find(query).sort("created_at", -1).limit(limit)
         return [self._document_to_entity(doc) for doc in docs]
+
+    def get_by_id_for_user(self, analysis_id: str, user_id: str, include_deleted: bool = False) -> Optional[AnalysisResult]:
+        """Get analysis by id with ownership and visibility checks."""
+        try:
+            query: Dict[str, Any] = {
+                "_id": ObjectId(analysis_id),
+                "user_id": str(user_id),
+            }
+            if not include_deleted:
+                query.update(self._active_user_visibility_query())
+
+            doc = self.collection.find_one(query)
+        except Exception:
+            return None
+
+        if not doc:
+            return None
+
+        return self._document_to_entity(doc)
+
+    def soft_delete_for_user(self, analysis_id: str, user_id: str) -> bool:
+        """Hide one analysis from user history while retaining backend metadata."""
+        try:
+            result = self.collection.update_one(
+                {
+                    "_id": ObjectId(analysis_id),
+                    "user_id": str(user_id),
+                    **self._active_user_visibility_query(),
+                },
+                {
+                    "$set": {
+                        "user_deleted": True,
+                        "user_deleted_at": datetime.utcnow(),
+                        "deleted_by_user_id": str(user_id),
+                        # Remove raw message content once user deletes history.
+                        "message": None,
+                    }
+                },
+            )
+            return result.modified_count > 0
+        except Exception:
+            return False
+
+    def soft_delete_all_for_user(self, user_id: str) -> int:
+        """Hide all user analyses from history while retaining backend metadata."""
+        try:
+            result = self.collection.update_many(
+                {
+                    "user_id": str(user_id),
+                    **self._active_user_visibility_query(),
+                },
+                {
+                    "$set": {
+                        "user_deleted": True,
+                        "user_deleted_at": datetime.utcnow(),
+                        "deleted_by_user_id": str(user_id),
+                        "message": None,
+                    }
+                },
+            )
+            return int(result.modified_count)
+        except Exception:
+            return 0
     
     def save(self, result: AnalysisResult) -> AnalysisResult:
         """

@@ -2,6 +2,19 @@ from django.core.management.base import BaseCommand
 import time
 import json
 
+
+def _resolve_metric(value):
+    """Return a JSON-serializable metric value.
+
+    Some model attributes are exposed as callables (e.g., llm.n_ctx).
+    """
+    if callable(value):
+        try:
+            value = value()
+        except TypeError:
+            return str(value)
+    return value
+
 class Command(BaseCommand):
     help = 'Downloads and loads required LLM models (multihead BERT, Gemma GGUF).'
 
@@ -49,10 +62,11 @@ class Command(BaseCommand):
             start = time.time()
             try:
                 llm = load_gemma_model()
+                ctx_value = _resolve_metric(getattr(llm, 'n_ctx', None))
                 status['gemma'] = {
                     'ok': True,
                     'elapsed_s': round(time.time() - start, 2),
-                    'ctx': getattr(llm, 'n_ctx', None),
+                    'ctx': ctx_value,
                 }
             except ImportError as ie:
                 status['gemma'] = {
