@@ -1073,6 +1073,32 @@ button {
   scrollbar-color: #374151 #1f2937;
 }
 
+.detect__chat-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 8px 8px;
+}
+
+.detect__chat-clear {
+  border: 1px solid #4b5563;
+  background: #111827;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.detect__chat-clear:hover:not(:disabled) {
+  background: #1f2937;
+  border-color: #6b7280;
+}
+
+.detect__chat-clear:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .detect__chat-list::-webkit-scrollbar {
   width: 6px;
 }
@@ -1115,6 +1141,34 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.detect__chat-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detect__chat-delete {
+  border: 1px solid #4b5563;
+  background: transparent;
+  color: #d1d5db;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.detect__chat-delete:hover:not(:disabled) {
+  border-color: #ef4444;
+  color: #fecaca;
+}
+
+.detect__chat-delete:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .detect__chat-item-preview {

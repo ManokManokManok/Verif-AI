@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
-import { getAnalysisDetail } from '../api/analysis';
+import { getAnalysisDetail, deleteAnalysisHistoryItem, deleteAllAnalysisHistory } from '../api/analysis';
 import { anchorAnalysis, verifyAnalysis } from '../api/blockchain';
 import { getAnalysisConversation } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
@@ -29,6 +29,8 @@ function Detection() {
   const [detectionResult, setDetectionResult] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const [isDeletingHistoryId, setIsDeletingHistoryId] = useState(null);
+  const [isDeletingAllHistory, setIsDeletingAllHistory] = useState(false);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
   const [analysisStep, setAnalysisStep] = useState(0);
@@ -55,21 +57,24 @@ function Detection() {
   const [cropImageElement, setCropImageElement] = useState(null);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    async function fetchHistory() {
-      try {
-        const res = await getChatHistory();
-        if (res.history && res.history.length > 0) {
-          setChatHistory(res.history);
-        } else {
-          setChatHistory(mockChatHistory);
-        }
-      } catch (err) {
-        setChatHistory(mockChatHistory);
+  const refreshHistory = async () => {
+    try {
+      const res = await getChatHistory();
+      if (Array.isArray(res?.history)) {
+        // For authenticated users, respect empty history (do not fall back to mock data).
+        setChatHistory(res.history);
+        return;
       }
+    } catch (err) {
+      // Fall through to fallback behavior below.
     }
-    fetchHistory();
-  }, []);
+
+    setChatHistory(isLoggedIn ? [] : mockChatHistory);
+  };
+
+  useEffect(() => {
+    refreshHistory();
+  }, [isLoggedIn]);
 
   // Analyzing animation: step labels + simulated progress
   useEffect(() => {
@@ -114,6 +119,44 @@ function Detection() {
       setSidebarOpen(false);
     } catch (err) {
       alert('Failed to load analysis details.');
+    }
+  };
+
+  const handleDeleteHistoryItem = async (analysisId) => {
+    if (!isLoggedIn || !analysisId || isDeletingHistoryId === analysisId) return;
+
+    const confirmed = window.confirm('Delete this detection history item?');
+    if (!confirmed) return;
+
+    setIsDeletingHistoryId(analysisId);
+    try {
+      await deleteAnalysisHistoryItem(analysisId);
+      if (detectionResult?.id === analysisId) {
+        setDetectionResult(null);
+      }
+      await refreshHistory();
+    } catch (err) {
+      alert('Failed to delete history item. Please try again.');
+    } finally {
+      setIsDeletingHistoryId(null);
+    }
+  };
+
+  const handleDeleteAllHistory = async () => {
+    if (!isLoggedIn || isDeletingAllHistory) return;
+
+    const confirmed = window.confirm('Delete all detection history? This will remove it from your view.');
+    if (!confirmed) return;
+
+    setIsDeletingAllHistory(true);
+    try {
+      await deleteAllAnalysisHistory();
+      setDetectionResult(null);
+      await refreshHistory();
+    } catch (err) {
+      alert('Failed to delete detection history. Please try again.');
+    } finally {
+      setIsDeletingAllHistory(false);
     }
   };
 
@@ -173,14 +216,7 @@ function Detection() {
       setDetectionResult(result);
       
       // Refresh history list to include the new detection
-      try {
-        const res = await getChatHistory();
-        if (res.history && res.history.length > 0) {
-          setChatHistory(res.history);
-        }
-      } catch (histErr) {
-        console.warn('[HISTORY REFRESH] Failed to refresh history:', histErr);
-      }
+      await refreshHistory();
     } catch (error) {
       console.error('[DETECTION ERROR]', error);
 
@@ -461,6 +497,18 @@ function Detection() {
         {sidebarOpen && (
           <div className="detect__chat-history">
             <div className="detect__chat-title">Chat History</div>
+            {isLoggedIn && chatHistory.length > 0 && (
+              <div className="detect__chat-actions">
+                <button
+                  className="detect__chat-clear"
+                  type="button"
+                  onClick={handleDeleteAllHistory}
+                  disabled={isDeletingAllHistory}
+                >
+                  {isDeletingAllHistory ? 'Deleting...' : 'Clear All'}
+                </button>
+              </div>
+            )}
             <div className="detect__chat-list">
               {chatHistory.map((chat) => (
                 <div
@@ -469,7 +517,22 @@ function Detection() {
                   onClick={() => handleChatClick(chat)}
                   style={{ cursor: 'pointer' }}
                 >
-                  <div className="detect__chat-item-title">{chat.title}</div>
+                  <div className="detect__chat-item-header">
+                    <div className="detect__chat-item-title">{chat.title}</div>
+                    {isLoggedIn && chat.id && (
+                      <button
+                        className="detect__chat-delete"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteHistoryItem(chat.id);
+                        }}
+                        disabled={isDeletingHistoryId === chat.id}
+                      >
+                        {isDeletingHistoryId === chat.id ? '...' : 'Delete'}
+                      </button>
+                    )}
+                  </div>
                   <div className="detect__chat-item-preview">{chat.description}</div>
                   <div className="detect__chat-item-time">{chat.timestamp}</div>
                 </div>

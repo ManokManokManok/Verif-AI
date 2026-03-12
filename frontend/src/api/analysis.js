@@ -6,3 +6,15 @@ export async function getAnalysisDetail(id) {
     method: 'GET',
   });
 }
+
+export async function deleteAnalysisHistoryItem(id) {
+  return authApiRequest(`/history/${id}/delete/`, {
+    method: 'DELETE',
+  });
+}
+
+export async function deleteAllAnalysisHistory() {
+  return authApiRequest('/history/delete/', {
+    method: 'DELETE',
+  });
+}
