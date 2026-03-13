@@ -356,7 +356,7 @@ class DeleteUserUseCase:
                 )
                 self._admin_repository.log_admin_activity(log)
             
-            action_text = "permanently deleted" if hard_delete else "deactivated"
+            action_text = "permanently deleted" if hard_delete else "archived"
             return OperationResult(
                 success=True,
                 message=f"User {user.email} has been {action_text}"

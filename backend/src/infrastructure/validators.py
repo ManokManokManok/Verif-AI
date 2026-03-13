@@ -9,15 +9,48 @@ Security References:
 - OWASP XSS Prevention Cheat Sheet
 """
 
+import os
 import re
 import html
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from dataclasses import dataclass
 from enum import Enum
 
 logger = logging.getLogger(__name__)
 security_logger = logging.getLogger('security')
+
+# =============================================================================
+# COMMON PASSWORD BLACKLIST
+# =============================================================================
+
+_common_passwords: Optional[Set[str]] = None
+
+
+def _load_common_passwords() -> Set[str]:
+    """Load common passwords from blacklist file (case-insensitive)."""
+    global _common_passwords
+    if _common_passwords is not None:
+        return _common_passwords
+
+    passwords_file = os.path.join(os.path.dirname(__file__), 'common_passwords.txt')
+    _common_passwords = set()
+    try:
+        with open(passwords_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                pw = line.strip()
+                if pw:
+                    _common_passwords.add(pw.lower())
+        logger.info(f"Loaded {len(_common_passwords)} common passwords from blacklist")
+    except FileNotFoundError:
+        logger.warning(f"Common passwords file not found: {passwords_file}")
+    return _common_passwords
+
+
+def is_common_password(password: str) -> bool:
+    """Check if a password appears in the common password blacklist."""
+    blacklist = _load_common_passwords()
+    return password.lower() in blacklist
 
 
 class ValidationError(Exception):
@@ -249,6 +282,10 @@ def validate_password(password: str) -> Tuple[bool, List[str]]:
     if not re.search(r'[!@#$%^&*(),.?":{}|<>\[\]\\;\'`~_+=/-]', password):
         errors.append("Password must contain at least one special character")
     
+    # Check against common password blacklist
+    if is_common_password(password):
+        errors.append("This password is too common. Please choose a stronger password.")
+    
     return len(errors) == 0, errors
 
 
@@ -273,6 +310,10 @@ def validate_username(username: str) -> Tuple[bool, Optional[str]]:
     
     if not re.match(USERNAME_CONSTRAINTS['pattern'], username):
         return False, "Username may only contain letters, numbers, underscores, and hyphens"
+    
+    # Username must contain at least one letter (cannot be numbers only)
+    if not re.search(r'[a-zA-Z]', username):
+        return False, "Username must contain at least one letter"
     
     return True, None
 

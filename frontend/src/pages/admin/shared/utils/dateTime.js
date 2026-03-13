@@ -5,12 +5,29 @@
  */
 
 /**
+ * Normalise a datetime string from the API to UTC.
+ * Python's datetime.utcnow().isoformat() produces strings like "2026-03-12T14:47:57"
+ * without a timezone marker. JavaScript's Date constructor treats those as LOCAL time,
+ * which shifts the apparent time by the browser's UTC offset.
+ * Appending "Z" forces UTC interpretation, matching how the value was originally stored.
+ */
+function toUtcDate(dateString) {
+  if (!dateString) return null;
+  // Already has timezone info (ends with Z or contains +/- offset like +00:00)
+  if (/Z$/.test(dateString) || /[+-]\d{2}:\d{2}$/.test(dateString)) {
+    return new Date(dateString);
+  }
+  // Naive datetime string — assume UTC
+  return new Date(dateString + 'Z');
+}
+
+/**
  * Format timestamp as relative time (e.g., "5m ago", "2h ago")
  */
 export function formatTimeAgo(timestamp) {
   if (!timestamp) return '';
   
-  const date = new Date(timestamp);
+  const date = toUtcDate(timestamp);
   const now = new Date();
   const diffMs = now - date;
   const diffSecs = Math.floor(diffMs / 1000);
@@ -29,7 +46,7 @@ export function formatTimeAgo(timestamp) {
 export function formatRelativeTime(dateString) {
   if (!dateString) return '';
   
-  const date = new Date(dateString);
+  const date = toUtcDate(dateString);
   const now = new Date();
   const diffMs = now - date;
   const diffSecs = Math.floor(diffMs / 1000);
@@ -49,7 +66,7 @@ export function formatRelativeTime(dateString) {
  */
 export function formatDate(dateString, options = {}) {
   if (!dateString) return '';
-  return new Date(dateString).toLocaleDateString(undefined, options);
+  return toUtcDate(dateString).toLocaleDateString(undefined, options);
 }
 
 /**
@@ -57,5 +74,5 @@ export function formatDate(dateString, options = {}) {
  */
 export function formatDateTime(dateString) {
   if (!dateString) return '';
-  return new Date(dateString).toLocaleString();
+  return toUtcDate(dateString).toLocaleString();
 }

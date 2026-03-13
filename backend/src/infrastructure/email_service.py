@@ -3,11 +3,12 @@ Email Service Implementation
 
 Supports multiple email backends:
 - SendGrid (recommended for production)
+- Nodemailer bridge (Node.js-based alternative)
 - SMTP (for development/testing with Gmail, Outlook, etc.)
 - Mock (for unit tests and local development)
 
 Configuration (via .env):
-    EMAIL_BACKEND=sendgrid|smtp|mock   (default: mock)
+    EMAIL_BACKEND=sendgrid|nodemailer|smtp|mock   (default: mock)
     SENDGRID_API_KEY=...               (required for SendGrid)
     EMAIL_FROM_ADDRESS=noreply@verfai.com
     EMAIL_FROM_NAME=Verif-AI
@@ -21,8 +22,12 @@ Usage:
 """
 
 import os
+import json
 import logging
-from typing import Protocol, Optional
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +44,27 @@ class EmailServiceProtocol(Protocol):
     def send_password_reset_email(self, email: str, token: str) -> bool: ...
 
     def send_mfa_code_email(self, email: str, code: str) -> bool: ...
+
+
+class _TemplatedEmailServiceBase:
+    """Shared email template/link behavior for all providers."""
+
+    def __init__(self):
+        self.frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
+    def _send(self, to_email: str, subject: str, html: str) -> bool:
+        raise NotImplementedError
+
+    def send_verification_email(self, email: str, token: str) -> bool:
+        link = f"{self.frontend_url}/verify-email?token={token}"
+        return self._send(email, "Verify Your Email - Verif-AI", _verification_html(link))
+
+    def send_password_reset_email(self, email: str, token: str) -> bool:
+        link = f"{self.frontend_url}/reset-password?token={token}"
+        return self._send(email, "Reset Your Password - Verif-AI", _password_reset_html(link))
+
+    def send_mfa_code_email(self, email: str, code: str) -> bool:
+        return self._send(email, "Your Verification Code - Verif-AI", _mfa_code_html(code))
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +153,7 @@ def _mfa_code_html(code: str) -> str:
 # SendGrid backend
 # ---------------------------------------------------------------------------
 
-class SendGridEmailService:
+class SendGridEmailService(_TemplatedEmailServiceBase):
     """
     Production email service powered by SendGrid.
 
@@ -137,10 +163,10 @@ class SendGridEmailService:
     """
 
     def __init__(self):
+        super().__init__()
         self.api_key = os.getenv('SENDGRID_API_KEY')
         self.from_address = os.getenv('EMAIL_FROM_ADDRESS', 'noreply@verfai.com')
         self.from_name = os.getenv('EMAIL_FROM_NAME', 'Verif-AI')
-        self.frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
         if not self.api_key:
             raise ValueError("SENDGRID_API_KEY environment variable not set")
@@ -175,25 +201,116 @@ class SendGridEmailService:
             logger.error(f"SendGrid error sending to {to_email}: {exc}")
             return False
 
-    # -- public API ---------------------------------------------------------
+class NodeMailerEmailService(_TemplatedEmailServiceBase):
+    """
+    NodeMailer email service invoked through a Node.js bridge script.
 
-    def send_verification_email(self, email: str, token: str) -> bool:
-        link = f"{self.frontend_url}/verify-email?token={token}"
-        return self._send(email, "Verify Your Email - Verif-AI", _verification_html(link))
+    Requires:
+        npm install (in backend directory, to install nodemailer)
+        Node.js available on PATH (or NODE_EXECUTABLE configured)
 
-    def send_password_reset_email(self, email: str, token: str) -> bool:
-        link = f"{self.frontend_url}/reset-password?token={token}"
-        return self._send(email, "Reset Your Password - Verif-AI", _password_reset_html(link))
+    Env vars:
+        NODE_EXECUTABLE=node
+        NODEMAILER_SCRIPT_PATH=backend/scripts/nodemailer_sender.js
+        NODEMAILER_HOST / NODEMAILER_PORT / NODEMAILER_SECURE
+        NODEMAILER_USER / NODEMAILER_PASS
+        NODEMAILER_TIMEOUT_SECONDS=15
+    """
 
-    def send_mfa_code_email(self, email: str, code: str) -> bool:
-        return self._send(email, "Your Verification Code - Verif-AI", _mfa_code_html(code))
+    def __init__(self):
+        super().__init__()
+        self.from_address = os.getenv('EMAIL_FROM_ADDRESS', 'noreply@verfai.com')
+        self.from_name = os.getenv('EMAIL_FROM_NAME', 'Verif-AI')
+        self.node_executable = self._get_env('NODE_EXECUTABLE', 'node')
+        self.timeout_seconds = int(self._get_env('NODEMAILER_TIMEOUT_SECONDS', '15'))
+        self.script_path = self._resolve_script_path()
+        self.host = self._get_env('NODEMAILER_HOST', self._get_env('EMAIL_HOST', 'smtp.gmail.com'))
+        self.port = int(self._get_env('NODEMAILER_PORT', self._get_env('EMAIL_PORT', '587')))
+        secure_default = 'True' if self.port == 465 else 'False'
+        self.secure = self._get_env('NODEMAILER_SECURE', secure_default).lower() == 'true'
+        self.username = self._get_env('NODEMAILER_USER', self._get_env('EMAIL_HOST_USER', ''))
+        self.password = self._get_env('NODEMAILER_PASS', self._get_env('EMAIL_HOST_PASSWORD', ''))
+
+        if not shutil.which(self.node_executable):
+            raise ValueError(
+                f"Node executable '{self.node_executable}' not found. "
+                "Install Node.js or set NODE_EXECUTABLE."
+            )
+
+        if not self.script_path.exists():
+            raise ValueError(
+                f"Nodemailer bridge script not found: {self.script_path}. "
+                "Ensure backend/scripts/nodemailer_sender.js exists."
+            )
+
+    @staticmethod
+    def _get_env(key: str, default: str = '') -> str:
+        value = os.getenv(key)
+        if value is None:
+            return default
+        value = value.strip()
+        return value if value else default
+
+    def _resolve_script_path(self) -> Path:
+        configured_path = os.getenv('NODEMAILER_SCRIPT_PATH', '').strip()
+        if configured_path:
+            return Path(configured_path).expanduser().resolve()
+        backend_root = Path(__file__).resolve().parents[2]
+        return (backend_root / 'scripts' / 'nodemailer_sender.js').resolve()
+
+    def _send(self, to_email: str, subject: str, html: str) -> bool:
+        payload = {
+            'transport': {
+                'host': self.host,
+                'port': self.port,
+                'secure': self.secure,
+                'auth': {
+                    'user': self.username,
+                    'pass': self.password,
+                },
+            },
+            'message': {
+                'from': f"{self.from_name} <{self.from_address}>",
+                'to': to_email,
+                'subject': subject,
+                'html': html,
+            }
+        }
+
+        try:
+            result = subprocess.run(
+                [self.node_executable, str(self.script_path)],
+                input=json.dumps(payload),
+                text=True,
+                capture_output=True,
+                timeout=self.timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            logger.error(
+                f"Nodemailer timed out after {self.timeout_seconds}s while sending to {to_email}"
+            )
+            return False
+        except Exception as exc:
+            logger.error(f"Nodemailer execution error for {to_email}: {exc}")
+            return False
+
+        if result.returncode != 0:
+            stderr = (result.stderr or '').strip()
+            logger.error(
+                f"Nodemailer failed for {to_email} (code={result.returncode}): {stderr}"
+            )
+            return False
+
+        logger.info(f"Email sent to {to_email} via Nodemailer")
+        return True
 
 
 # ---------------------------------------------------------------------------
 # SMTP backend (Gmail, Outlook, etc.)
 # ---------------------------------------------------------------------------
 
-class SMTPEmailService:
+class SMTPEmailService(_TemplatedEmailServiceBase):
     """
     SMTP email service for development / smaller deployments.
 
@@ -203,6 +320,7 @@ class SMTPEmailService:
     """
 
     def __init__(self):
+        super().__init__()
         self.host = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
         self.port = int(os.getenv('EMAIL_PORT', '587'))
         self.use_tls = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
@@ -210,7 +328,6 @@ class SMTPEmailService:
         self.password = os.getenv('EMAIL_HOST_PASSWORD')
         self.from_address = os.getenv('EMAIL_FROM_ADDRESS', self.username or 'noreply@verfai.com')
         self.from_name = os.getenv('EMAIL_FROM_NAME', 'Verif-AI')
-        self.frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
         if not self.username or not self.password:
             raise ValueError(
@@ -241,30 +358,18 @@ class SMTPEmailService:
             logger.error(f"SMTP error sending to {to_email}: {exc}")
             return False
 
-    def send_verification_email(self, email: str, token: str) -> bool:
-        link = f"{self.frontend_url}/verify-email?token={token}"
-        return self._send(email, "Verify Your Email - Verif-AI", _verification_html(link))
-
-    def send_password_reset_email(self, email: str, token: str) -> bool:
-        link = f"{self.frontend_url}/reset-password?token={token}"
-        return self._send(email, "Reset Your Password - Verif-AI", _password_reset_html(link))
-
-    def send_mfa_code_email(self, email: str, code: str) -> bool:
-        return self._send(email, "Your Verification Code - Verif-AI", _mfa_code_html(code))
-
-
 # ---------------------------------------------------------------------------
 # Mock backend (development / testing)
 # ---------------------------------------------------------------------------
 
-class MockEmailService:
+class MockEmailService(_TemplatedEmailServiceBase):
     """
     Mock email service — logs to stdout instead of sending.
     Used when EMAIL_BACKEND=mock or is unset.
     """
 
     def __init__(self):
-        self.frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+        super().__init__()
 
     def send_verification_email(self, email: str, token: str) -> bool:
         link = f"{self.frontend_url}/verify-email?token={token}"
@@ -300,6 +405,7 @@ def get_email_service() -> EmailServiceProtocol:
 
     Reads EMAIL_BACKEND env var:
         'sendgrid' → SendGridEmailService
+        'nodemailer' → NodeMailerEmailService
         'smtp'     → SMTPEmailService
         'mock'     → MockEmailService (default)
     """
@@ -312,6 +418,8 @@ def get_email_service() -> EmailServiceProtocol:
 
     if backend == 'sendgrid':
         _email_service_instance = SendGridEmailService()
+    elif backend == 'nodemailer':
+        _email_service_instance = NodeMailerEmailService()
     elif backend == 'smtp':
         _email_service_instance = SMTPEmailService()
     else:
