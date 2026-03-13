@@ -9,6 +9,7 @@ import AIChatbot from './pages/AIChatbot.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import Settings from './pages/Settings.jsx';
 import { AdminDashboard } from './pages/admin';
 import SessionExpiredModal from './components/auth/SessionExpiredModal';
 
@@ -63,6 +64,14 @@ function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
         {/* Redirect old /blockchain route to admin panel */}
         <Route path="/blockchain" element={<Navigate to="/admin" replace />} />
         <Route 

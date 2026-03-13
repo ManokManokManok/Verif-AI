@@ -248,20 +248,90 @@ JWT_REFRESH_TOKEN_LIFETIME=2592000  # 30 days
 **Required:** No  
 **Type:** String  
 **Default:** `mock`  
-**Values:** `mock`, `sendgrid`, `smtp`
+**Values:** `mock`, `sendgrid`, `nodemailer`, `smtp`
 
 Email service provider to use.
 
 **Options:**
 - `mock`: Console/log output only (development)
 - `sendgrid`: SendGrid email service (recommended for production)
+- `nodemailer`: Node.js Nodemailer transport (SMTP via Node bridge)
 - `smtp`: Standard SMTP server
 
 **Example:**
 ```env
 EMAIL_BACKEND=mock      # Development
 EMAIL_BACKEND=sendgrid  # Production with SendGrid
+EMAIL_BACKEND=nodemailer  # Production with Nodemailer transport
 EMAIL_BACKEND=smtp      # Production with custom SMTP
+```
+
+---
+
+### Nodemailer Configuration
+
+Required when `EMAIL_BACKEND=nodemailer`:
+
+#### `NODE_EXECUTABLE`
+**Required:** No  
+**Default:** `node`
+
+Node.js executable used to run the Nodemailer bridge script.
+
+```env
+NODE_EXECUTABLE=node
+```
+
+---
+
+#### `NODEMAILER_SCRIPT_PATH`
+**Required:** No  
+**Default:** `backend/scripts/nodemailer_sender.js`
+
+Absolute path to Nodemailer bridge script. Leave empty to use the default script in this repository.
+
+```env
+NODEMAILER_SCRIPT_PATH=
+```
+
+---
+
+#### `NODEMAILER_TIMEOUT_SECONDS`
+**Required:** No  
+**Default:** `15`
+
+Timeout for Nodemailer send operation.
+
+```env
+NODEMAILER_TIMEOUT_SECONDS=15
+```
+
+---
+
+#### `NODEMAILER_HOST`, `NODEMAILER_PORT`, `NODEMAILER_SECURE`, `NODEMAILER_USER`, `NODEMAILER_PASS`
+**Required:** Usually yes (unless your transport does not require auth)
+
+SMTP transport settings for Nodemailer.
+
+If any are omitted, the service falls back to equivalent SMTP variables:
+- `NODEMAILER_HOST` → `EMAIL_HOST`
+- `NODEMAILER_PORT` → `EMAIL_PORT`
+- `NODEMAILER_USER` → `EMAIL_HOST_USER`
+- `NODEMAILER_PASS` → `EMAIL_HOST_PASSWORD`
+
+```env
+NODEMAILER_HOST=smtp.gmail.com
+NODEMAILER_PORT=587
+NODEMAILER_SECURE=False
+NODEMAILER_USER=yourapp@gmail.com
+NODEMAILER_PASS=your-app-password
+```
+
+Before using Nodemailer, install dependencies:
+
+```bash
+cd backend
+npm install
 ```
 
 ---

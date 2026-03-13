@@ -102,7 +102,7 @@ import logging
 
 from ...use_cases.auth import (
     SignupUseCase, LoginUseCase, GetUserProfileUseCase,
-    CheckPermissionUseCase
+    CheckPermissionUseCase, UpdateUsernameUseCase, DeleteAccountUseCase
 )
 from ...use_cases.security_auth import (
     EmailVerificationUseCase, PasswordResetUseCase, LogoutUseCase,
@@ -130,7 +130,8 @@ from ...infrastructure.validators import (
     get_login_validator, get_signup_validator, get_detect_scam_validator,
     get_email_only_validator, get_token_only_validator,
     get_password_reset_validator, get_refresh_token_validator,
-    get_check_permission_validator, sanitize_for_logging
+    get_check_permission_validator, sanitize_for_logging,
+    validate_username
 )
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
 
@@ -539,6 +540,121 @@ def profile(request: Request) -> Response:
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['PATCH'])
+@rate_limit('api_write')
+def update_username(request: Request) -> Response:
+    """
+    Update the authenticated user's username.
+    
+    Request body:
+    {
+        "username": "new_username"
+    }
+    """
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return Response({
+                'error': {'code': 'AUTHENTICATION_REQUIRED', 'message': 'Authentication required'}
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        new_username = (request.data.get('username') or '').strip()
+        if not new_username:
+            return Response({
+                'error': {'code': 'VALIDATION_ERROR', 'message': 'Username is required'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_repo = get_user_repository()
+        use_case = UpdateUsernameUseCase(user_repository=user_repo)
+        user = use_case.execute(user_id, new_username)
+        
+        get_audit_logger().log_event(
+            event_type=AuditEventType.USER_UPDATED,
+            user_id=user_id,
+            ip_address=_get_client_ip(request),
+            metadata={'field': 'username', 'new_value': new_username},
+        )
+        
+        return Response({
+            'message': 'Username updated successfully',
+            'user': user_to_dict(user)
+        }, status=status.HTTP_200_OK)
+    
+    except ValueError as e:
+        return Response({
+            'error': {'code': 'VALIDATION_ERROR', 'message': str(e)}
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except UserNotFoundError as e:
+        return Response({
+            'error': {'code': 'USER_NOT_FOUND', 'message': str(e)}
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception:
+        return Response({
+            'error': {'code': 'INTERNAL_ERROR', 'message': 'An unexpected error occurred'}
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@rate_limit('auth_login')
+def delete_account(request: Request) -> Response:
+    """
+    Delete the authenticated user's own account. Requires password confirmation.
+    
+    Request body:
+    {
+        "password": "current_password"
+    }
+    """
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return Response({
+                'error': {'code': 'AUTHENTICATION_REQUIRED', 'message': 'Authentication required'}
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        password = request.data.get('password', '')
+        if not password:
+            return Response({
+                'error': {'code': 'VALIDATION_ERROR', 'message': 'Password is required to delete your account'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_repo = get_user_repository()
+        password_hasher = BCryptPasswordHasher()
+        use_case = DeleteAccountUseCase(
+            user_repository=user_repo,
+            password_hasher=password_hasher
+        )
+        success = use_case.execute(user_id, password)
+        
+        if success:
+            get_audit_logger().log_event(
+                event_type=AuditEventType.USER_DELETED,
+                user_id=user_id,
+                ip_address=_get_client_ip(request),
+                metadata={'reason': 'self_delete'},
+            )
+            return Response({
+                'message': 'Account deleted successfully'
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'error': {'code': 'DELETE_FAILED', 'message': 'Failed to delete account'}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    except InvalidCredentialsError as e:
+        return Response({
+            'error': {'code': 'INVALID_PASSWORD', 'message': str(e)}
+        }, status=status.HTTP_403_FORBIDDEN)
+    except UserNotFoundError as e:
+        return Response({
+            'error': {'code': 'USER_NOT_FOUND', 'message': str(e)}
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception:
+        return Response({
+            'error': {'code': 'INTERNAL_ERROR', 'message': 'An unexpected error occurred'}
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @rate_limit('api_read')
 def check_permission(request: Request) -> Response:
@@ -937,6 +1053,126 @@ def reset_password(request: Request) -> Response:
                 'message': 'An unexpected error occurred'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('api_read')
+def password_reset_token_status(request: Request) -> Response:
+    """
+    Check reset token state without consuming it.
+
+    Request body:
+    {
+        "token": "reset_token_here"
+    }
+    """
+    try:
+        validator = get_token_only_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
+
+        if not is_valid:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        token = cleaned_data['token']
+        token_repo = get_token_repository()
+        token_status = token_repo.get_password_reset_token_status(token)
+        status_value = token_status.get('status', 'invalid')
+
+        if status_value == 'valid':
+            return Response({'status': 'valid'}, status=status.HTTP_200_OK)
+
+        if status_value in ('expired', 'used'):
+            return Response({
+                'status': 'expired',
+                'message': 'This password reset link has expired.'
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            'status': 'invalid',
+            'message': 'Invalid password reset link.'
+        }, status=status.HTTP_200_OK)
+
+    except Exception:
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('password_reset')
+def resend_password_reset_link(request: Request) -> Response:
+    """
+    Resend password reset email based on an existing reset token.
+
+    Request body:
+    {
+        "token": "expired_or_old_token"
+    }
+
+    Security:
+    - Generic response to avoid user enumeration
+    - Rate limited
+    - Old token invalidated before issuing a new one
+    """
+    generic_response = {
+        'message': 'If this request is valid, a new password reset email has been sent.'
+    }
+
+    try:
+        validator = get_token_only_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
+
+        if not is_valid:
+            return Response(generic_response, status=status.HTTP_200_OK)
+
+        token = cleaned_data['token']
+        token_repo = get_token_repository()
+        user_repo = get_user_repository()
+        email_service = get_email_service()
+        token_generator = TokenGenerator()
+
+        token_status = token_repo.get_password_reset_token_status(token)
+        user_id = token_status.get('user_id')
+
+        if not user_id:
+            return Response(generic_response, status=status.HTTP_200_OK)
+
+        user = user_repo.get_by_id(user_id)
+        email = getattr(user, 'email', None) if user else None
+        if not email:
+            return Response(generic_response, status=status.HTTP_200_OK)
+
+        token_repo.invalidate_password_reset_token(token)
+
+        from datetime import datetime, timedelta
+        new_token = token_generator.generate_password_reset_token()
+        expires_at = datetime.utcnow() + timedelta(hours=1)
+        token_repo.create_password_reset_token(user_id, new_token, expires_at)
+        email_service.send_password_reset_email(email, new_token)
+
+        get_audit_logger().log_event(
+            event_type=AuditEventType.PASSWORD_RESET_REQUESTED,
+            user_id=user_id,
+            email=email,
+            ip_address=_get_client_ip(request),
+            metadata={'source': 'expired_link_resend'}
+        )
+
+        return Response(generic_response, status=status.HTTP_200_OK)
+
+    except Exception:
+        return Response(generic_response, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -1723,6 +1959,9 @@ def verify_mfa_code(request: Request) -> Response:
             roles=roles,
             permissions=list(set(permissions)),
         )
+
+        # Update last login timestamp
+        user_repo.update_last_login(user_id)
 
         audit.log_event(
             event_type=AuditEventType.MFA_CODE_VERIFIED,
