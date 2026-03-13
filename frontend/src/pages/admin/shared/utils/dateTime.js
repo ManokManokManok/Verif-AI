@@ -22,18 +22,49 @@ function toUtcDate(dateString) {
 }
 
 /**
+ * Parse a timestamp for relative-time calculations.
+ *
+ * For legacy records where a local-naive timestamp may have been stored,
+ * interpreting as UTC can create future values (e.g. -28800s ago in UTC+8).
+ * If a naive timestamp appears too far in the future, retry local parsing.
+ */
+function parseDateForRelativeTime(dateString) {
+  if (!dateString) return null;
+
+  const hasTimezone = /Z$/.test(dateString) || /[+-]\d{2}:\d{2}$/.test(dateString);
+  if (hasTimezone) return new Date(dateString);
+
+  const utcInterpreted = toUtcDate(dateString);
+  if (!utcInterpreted || Number.isNaN(utcInterpreted.getTime())) {
+    return utcInterpreted;
+  }
+
+  const fiveMinutesMs = 5 * 60 * 1000;
+  if (utcInterpreted.getTime() - Date.now() > fiveMinutesMs) {
+    const localInterpreted = new Date(dateString);
+    if (!Number.isNaN(localInterpreted.getTime())) {
+      return localInterpreted;
+    }
+  }
+
+  return utcInterpreted;
+}
+
+/**
  * Format timestamp as relative time (e.g., "5m ago", "2h ago")
  */
 export function formatTimeAgo(timestamp) {
   if (!timestamp) return '';
   
-  const date = toUtcDate(timestamp);
+  const date = parseDateForRelativeTime(timestamp);
+  if (!date || Number.isNaN(date.getTime())) return '';
   const now = new Date();
   const diffMs = now - date;
   const diffSecs = Math.floor(diffMs / 1000);
   const diffMins = Math.floor(diffSecs / 60);
   const diffHours = Math.floor(diffMins / 60);
   
+  if (diffSecs < 0) return 'Just now';
   if (diffSecs < 60) return `${diffSecs}s ago`;
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
@@ -46,7 +77,8 @@ export function formatTimeAgo(timestamp) {
 export function formatRelativeTime(dateString) {
   if (!dateString) return '';
   
-  const date = toUtcDate(dateString);
+  const date = parseDateForRelativeTime(dateString);
+  if (!date || Number.isNaN(date.getTime())) return '';
   const now = new Date();
   const diffMs = now - date;
   const diffSecs = Math.floor(diffMs / 1000);
@@ -54,6 +86,7 @@ export function formatRelativeTime(dateString) {
   const diffHours = Math.floor(diffMins / 60);
   const diffDays = Math.floor(diffHours / 24);
 
+  if (diffSecs < 0) return 'Just now';
   if (diffDays > 30) return date.toLocaleDateString();
   if (diffDays > 0) return `${diffDays}d ago`;
   if (diffHours > 0) return `${diffHours}h ago`;
