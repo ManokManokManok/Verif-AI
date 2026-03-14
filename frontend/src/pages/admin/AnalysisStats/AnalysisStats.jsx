@@ -93,6 +93,11 @@ export default function AnalysisStats({ onNotify }) {
   const analysisTrend = getTrend(totalAnalyses, stats.previous_total_count);
   const scamTrend = getTrend(scamDetectedCount, stats.previous_scam_count);
 
+  // Compute max category percentage for relative bar width scaling
+  const maxCategoryPercentage = scamCategories.length > 0
+    ? Math.max(...scamCategories.map(c => c.percentage || 0), 1)
+    : 100;
+
   // Scam categories table columns
   const categoryColumns = [
     { key: 'rank', label: '#' },
@@ -105,15 +110,20 @@ export default function AnalysisStats({ onNotify }) {
     { 
       key: 'percentage', 
       label: 'Share',
-      render: (value) => (
-        <div className="analysis-stats__percentage-bar">
-          <div 
-            className="analysis-stats__percentage-fill" 
-            style={{ width: `${value || 0}%` }}
-          />
-          <span>{(value || 0).toFixed(1)}%</span>
-        </div>
-      )
+      render: (value) => {
+        const relWidth = ((value || 0) / maxCategoryPercentage) * 100;
+        return (
+          <div className="analysis-stats__percentage-bar">
+            <div className="analysis-stats__percentage-track">
+              <div 
+                className="analysis-stats__percentage-fill" 
+                style={{ width: `${relWidth}%` }}
+              />
+            </div>
+            <span className="analysis-stats__percentage-text">{(value || 0).toFixed(1)}%</span>
+          </div>
+        );
+      }
     },
     {
       key: 'severity',
@@ -159,20 +169,55 @@ export default function AnalysisStats({ onNotify }) {
           trend={scamTrend.direction}
           trendValue={scamTrend.value}
           variant="danger"
-          subtitle={`${scamPercentage.toFixed(1)}% of total`}
+          subtitle={`${scamPercentage.toFixed(1)}% detection rate`}
         />
         <StatCard
           title="Legitimate"
           value={legitimateCount.toLocaleString()}
           variant="success"
-          subtitle={`${legitimatePercentage.toFixed(1)}% of total`}
+          subtitle={`${legitimatePercentage.toFixed(1)}% pass rate`}
         />
         <StatCard
           title="High Risk"
           value={(stats.high_risk_count || 0).toLocaleString()}
-          variant="info"
-          subtitle="High confidence detections"
+          variant="danger"
+          subtitle={`${totalAnalyses > 0 ? (((stats.high_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}% of total`}
         />
+      </div>
+
+      {/* Rate Summary Banner */}
+      <div className="analysis-stats__rate-banner admin-mt-4">
+        <div className="analysis-stats__rate-item">
+          <span className="analysis-stats__rate-label">Detection Rate</span>
+          <span className="analysis-stats__rate-value analysis-stats__rate-value--danger">
+            {scamPercentage.toFixed(1)}%
+          </span>
+        </div>
+        <div className="analysis-stats__rate-divider" />
+        <div className="analysis-stats__rate-item">
+          <span className="analysis-stats__rate-label">High Risk Rate</span>
+          <span className="analysis-stats__rate-value analysis-stats__rate-value--high">
+            {totalAnalyses > 0 ? (((stats.high_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}%
+          </span>
+        </div>
+        <div className="analysis-stats__rate-divider" />
+        <div className="analysis-stats__rate-item">
+          <span className="analysis-stats__rate-label">Medium Risk Rate</span>
+          <span className="analysis-stats__rate-value analysis-stats__rate-value--medium">
+            {totalAnalyses > 0 ? (((stats.medium_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}%
+          </span>
+        </div>
+        {stats.top_scam_category && (
+          <>
+            <div className="analysis-stats__rate-divider" />
+            <div className="analysis-stats__rate-item">
+              <span className="analysis-stats__rate-label">Top Category</span>
+              <span className="analysis-stats__rate-value analysis-stats__rate-value--category">
+                {stats.top_scam_category.replace(/_/g, ' ')}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Detection Breakdown */}

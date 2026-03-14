@@ -31,6 +31,7 @@ from ...use_cases.admin.analysis_stats import (
 from ...use_cases.admin.user_stats import (
     GetUserStatisticsUseCase,
     GetUserReportsUseCase,
+    GetReportByIdUseCase,
     UpdateReportStatusUseCase,
 )
 from ...use_cases.admin.user_management import (
@@ -491,6 +492,57 @@ def list_reports(request: Request) -> Response:
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@rate_limit('api_read')
+def get_report(request: Request, report_id: str) -> Response:
+    """
+    Get detailed information for a specific report.
+    
+    GET /api/admin/reports/<report_id>/
+    
+    Path Parameters:
+        report_id: UUID of the report
+    
+    Returns:
+        200: Report details
+        404: Report not found
+    
+    Requires: admin role
+    """
+    auth_error = require_admin(request)
+    if auth_error:
+        return auth_error
+    
+    try:
+        admin_repo = get_admin_repository()
+        use_case = GetReportByIdUseCase(admin_repo)
+        result = use_case.execute(report_id=report_id)
+        
+        if result.success:
+            return Response({
+                'success': True,
+                'data': result.report.to_dict()
+            }, status=status.HTTP_200_OK)
+        else:
+            error_status_code = status.HTTP_404_NOT_FOUND if 'not found' in result.error_message.lower() else status.HTTP_400_BAD_REQUEST
+            return Response({
+                'success': False,
+                'error': {
+                    'code': 'REPORT_NOT_FOUND',
+                    'message': result.error_message
+                }
+            }, status=error_status_code)
+    except Exception as e:
+        logger.error(f"Get report error: {e}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'Failed to retrieve report details'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['PATCH'])
 @rate_limit('api_write')
 def update_report(request: Request, report_id: str) -> Response:
@@ -838,10 +890,13 @@ def reset_user_password(request: Request, user_id: str) -> Response:
 @rate_limit('api_write')
 def update_user_status(request: Request, user_id: str) -> Response:
     """
-    Enable or disable a user account.
+    Update a user account status.
+    
+    Supports both the new `status` string and legacy `is_active` boolean.
     
     Body:
-        - is_active: New active status (boolean)
+        - status: New status string ('active', 'inactive', 'suspended') [preferred]
+        - is_active: Legacy boolean active status (deprecated, use status)
     
     Requires: admin role + manage_users permission
     """
@@ -852,23 +907,40 @@ def update_user_status(request: Request, user_id: str) -> Response:
     try:
         admin_user_id, _, _ = extract_user_from_request(request)
         
+        # Support both new 'status' string and legacy 'is_active' boolean
+        status_str = request.data.get('status')
         is_active = request.data.get('is_active')
-        if is_active is None:
+        
+        if status_str is None and is_active is None:
             return Response({
                 'success': False,
                 'error': {
                     'code': 'INVALID_INPUT',
-                    'message': 'is_active is required'
+                    'message': 'Either status or is_active is required'
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate status if provided
+        if status_str is not None:
+            valid_statuses = ['active', 'inactive', 'suspended']
+            if str(status_str).lower() not in valid_statuses:
+                return Response({
+                    'success': False,
+                    'error': {
+                        'code': 'INVALID_INPUT',
+                        'message': f'Invalid status: {status_str}. Must be one of {valid_statuses}'
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+            status_str = str(status_str).lower()
         
         user_repo = get_user_repository()
         admin_repo = get_admin_repository()
         use_case = UpdateUserStatusUseCase(user_repo, admin_repo)
         result = use_case.execute(
             user_id=user_id,
-            is_active=bool(is_active),
-            admin_user_id=admin_user_id
+            admin_user_id=admin_user_id,
+            status=status_str,
+            is_active=bool(is_active) if is_active is not None and status_str is None else None
         )
         
         if result.success:

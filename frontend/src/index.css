@@ -937,19 +937,68 @@ button {
   justify-content: center;
 }
 
-.auth__error {
-  color: #fca5a5;
-  font-size: 12px;
-  margin: 4px 0 0;
+/* ── Error banner (login / MFA) ── */
+@keyframes auth-error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Enhanced error display for multiple validation errors */
-.auth__error-container {
-  margin: 8px 0;
-  padding: 10px 14px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+.auth__error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-left: 3px solid #f87171;
   border-radius: 8px;
+  animation: auth-error-slide-in 0.25s ease-out;
+}
+
+.auth__error-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f87171;
+  margin-top: 1px;
+}
+
+.auth__error-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.auth__error-text {
+  color: #fca5a5;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.auth__error-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #f87171;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.auth__error-dismiss:hover,
+.auth__error-dismiss:focus-visible {
+  opacity: 1;
 }
 
 .auth__error-list {
@@ -960,13 +1009,81 @@ button {
 
 .auth__error-item {
   color: #fca5a5;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
-  margin: 4px 0;
+  margin: 3px 0;
 }
 
-.auth__error-container .auth__error {
-  margin: 0;
+/* ── Password requirements (dynamic feedback) ── */
+.password-requirements {
+  margin: 6px 0 0;
+}
+
+.password-requirements__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+}
+
+.password-requirements__item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.5;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.password-requirements__item--met {
+  color: #4ade80;
+}
+
+.password-requirements__item--unmet {
+  color: #f87171;
+}
+
+.password-requirements__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.password-requirements__success {
+  display: block;
+  font-size: 11px;
+  color: #4ade80;
+  line-height: 1.5;
+}
+
+[data-theme="light"] .password-requirements__item--met {
+  color: #16a34a;
+}
+
+[data-theme="light"] .password-requirements__item--unmet {
+  color: #dc2626;
+}
+
+[data-theme="light"] .password-requirements__success {
+  color: #16a34a;
+}
+
+/* ── Field hint (username validation) ── */
+.auth__field-hint {
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.auth__field-hint--error {
+  color: #f87171;
+}
+
+[data-theme="light"] .auth__field-hint--error {
+  color: #dc2626;
 }
 
 .detect {
@@ -4246,6 +4363,70 @@ button {
   gap: 8px;
 }
 
+/* Scam Score Bar */
+.blockchain__analysis-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.blockchain__analysis-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.blockchain__analysis-score-bar {
+  width: 72px;
+  height: 6px;
+  background: #374151;
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.blockchain__analysis-score-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.blockchain__analysis-score-fill--critical { background: #ef4444; }
+.blockchain__analysis-score-fill--high     { background: #f97316; }
+.blockchain__analysis-score-fill--medium   { background: #f59e0b; }
+.blockchain__analysis-score-fill--low      { background: #10b981; }
+.blockchain__analysis-score-fill--unknown  { background: #6b7280; }
+
+.blockchain__analysis-row--summary {
+  display: block;
+}
+
+.blockchain__analysis-summary {
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  width: 100%;
+}
+
+.blockchain__analysis-needs-review {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
 /* Badges */
 .blockchain__badge {
   display: inline-flex;
@@ -4274,6 +4455,11 @@ button {
 .blockchain__badge--not-anchored {
   background: rgba(107, 114, 128, 0.2);
   color: #9ca3af;
+}
+
+.blockchain__badge--anchored {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
 }
 
 .blockchain__badge--error {
@@ -4624,4 +4810,263 @@ button {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ===========================
+   Settings Page
+   =========================== */
+
+.settings {
+  min-height: 100vh;
+  background: #0f0f0f;
+  color: #f9fafb;
+  padding: 0 16px 48px;
+}
+
+.settings__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 0 8px;
+}
+
+.settings__back {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.settings__back:hover {
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.settings__title {
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #e2e8f0, #ffffff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.settings__content {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-top: 24px;
+}
+
+.settings__section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 12px;
+  letter-spacing: 0.3px;
+}
+
+.settings__card {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 14px;
+  padding: 24px;
+  backdrop-filter: blur(8px);
+}
+
+.settings__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.settings__input {
+  height: 44px;
+  border-radius: 0;
+  border: none;
+  border-bottom: 2px solid rgba(148, 163, 184, 0.3);
+  background: transparent;
+  color: #f9fafb;
+  padding: 0 4px;
+  font-size: 15px;
+  transition: border-color 0.3s;
+}
+
+.settings__input:focus {
+  outline: none;
+  border-bottom-color: #6366f1;
+}
+
+.settings__input--readonly {
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.settings__input--error {
+  border-bottom-color: #ef4444;
+}
+
+.settings__hint {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.settings__error {
+  font-size: 13px;
+  color: #ef4444;
+}
+
+.settings__success {
+  font-size: 13px;
+  color: #22c55e;
+}
+
+.settings__btn {
+  height: 42px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 20px;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.settings__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings__btn--primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+}
+
+.settings__btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+}
+
+.settings__btn--danger {
+  background: #dc2626;
+  color: #fff;
+}
+
+.settings__btn--danger:hover:not(:disabled) {
+  background: #ef4444;
+}
+
+.settings__btn--secondary {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+
+.settings__btn--secondary:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.settings__btn-group {
+  display: flex;
+  gap: 12px;
+}
+
+/* Danger zone */
+.settings__section--danger {
+  margin-top: 16px;
+}
+
+.settings__section-title--danger {
+  color: #f87171;
+}
+
+.settings__card--danger {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.settings__danger-text {
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* Light‑theme overrides */
+[data-theme="light"] .settings {
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+[data-theme="light"] .settings__title {
+  background: linear-gradient(135deg, #1e293b, #334155);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme="light"] .settings__section-title {
+  color: #475569;
+}
+
+[data-theme="light"] .settings__card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .settings__input {
+  color: #1e293b;
+  border-bottom-color: #cbd5e1;
+}
+
+[data-theme="light"] .settings__input--readonly {
+  color: #94a3b8;
+}
+
+[data-theme="light"] .settings__label {
+  color: #64748b;
+}
+
+[data-theme="light"] .settings__hint {
+  color: #94a3b8;
+}
+
+[data-theme="light"] .settings__back {
+  color: #64748b;
+}
+
+[data-theme="light"] .settings__back:hover {
+  color: #1e293b;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .settings__danger-text {
+  color: #64748b;
+}
+
+[data-theme="light"] .settings__btn--secondary {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+[data-theme="light"] .settings__btn--secondary:hover:not(:disabled) {
+  background: #cbd5e1;
 }

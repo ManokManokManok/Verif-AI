@@ -83,6 +83,7 @@ yarn-error.log*
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+pyrightconfig.json
 .idea/
 *.swp
 *.swo

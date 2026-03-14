@@ -239,9 +239,9 @@ def get_visits_time_series(request: HttpRequest) -> JsonResponse:
     start_date, end_date = parse_date_params(request)
     
     if not start_date:
-        start_date = datetime.now() - timedelta(days=30)
+        start_date = datetime.utcnow() - timedelta(days=30)
     if not end_date:
-        end_date = datetime.now()
+        end_date = datetime.utcnow()
     
     granularity = request.GET.get('granularity', 'day')
     if granularity not in ['hour', 'day', 'week', 'month']:
@@ -401,7 +401,7 @@ def get_analytics_summary(request: HttpRequest) -> JsonResponse:
     
     period = request.GET.get('period', 'week')
     
-    now = datetime.now()
+    now = datetime.utcnow()
     if period == 'today':
         start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == 'week':

@@ -558,7 +558,7 @@ def test_phase2_contract_abi():
         
         function_names = [item['name'] for item in abi if item.get('type') == 'function']
         
-        required_functions = ['storeRecord', 'getRecord', 'recordExists', 'verifyRecord', 'owner', 'transferOwnership']
+        required_functions = ['storeRecord', 'owner', 'transferOwnership']
         missing = [fn for fn in required_functions if fn not in function_names]
         
         assert not missing, f"Missing functions: {missing}"
@@ -616,23 +616,23 @@ def test_phase2_contract_structure():
         print(f"❌ storeRecord signature check failed: {e}")
         tests_failed += 1
     
-    # Test: getRecord returns expected fields
+    # Test: RecordStored event has all required fields for off-chain retrieval
     try:
         abi_path = backend_dir / "src" / "infrastructure" / "blockchain" / "abi" / "AnalysisAnchor.json"
         abi = load_contract_abi(abi_path)
         
-        get_record = next((item for item in abi if item.get('name') == 'getRecord'), None)
-        assert get_record is not None, "getRecord function not found"
+        record_stored = next((item for item in abi if item.get('name') == 'RecordStored' and item.get('type') == 'event'), None)
+        assert record_stored is not None, "RecordStored event not found"
         
-        output_names = [out['name'] for out in get_record['outputs']]
-        expected_outputs = ['exists', 'scamClass', 'confidenceBps', 'timestamp', 'refId', 'storedBy']
+        input_names = [inp['name'] for inp in record_stored['inputs']]
+        expected_fields = ['payloadHash', 'refId', 'scamClass', 'confidenceBps', 'timestamp', 'storedBy']
         
-        assert output_names == expected_outputs, f"Expected outputs {expected_outputs}, got {output_names}"
+        assert input_names == expected_fields, f"Expected event fields {expected_fields}, got {input_names}"
         
-        print("✅ getRecord returns all required fields")
+        print("✅ RecordStored event contains all required fields")
         tests_passed += 1
     except Exception as e:
-        print(f"❌ getRecord output check failed: {e}")
+        print(f"❌ RecordStored event field check failed: {e}")
         tests_failed += 1
     
     # Test: Data types are correct

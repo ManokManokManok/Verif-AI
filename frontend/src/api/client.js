@@ -196,7 +196,9 @@ async function apiRequest(path, options = {}) {
   if (!response.ok) {
     // Handle 401 Unauthorized — attempt token refresh
     if (response.status === 401) {
-      const error = new Error(data?.message || 'Unauthorized');
+      const error = new Error(
+        data?.error?.message || data?.message || 'Invalid email or password'
+      );
       error.status = 401;
       error.payload = data;
       error.isUnauthorized = true;
@@ -437,6 +439,62 @@ export async function resetPasswordRequest({ token, new_password }) {
     method: 'POST',
     body: JSON.stringify({ token, new_password }),
   });
+}
+
+/**
+ * Check reset token status without consuming it.
+ */
+export async function getPasswordResetTokenStatusRequest(token) {
+  return apiRequest('/auth/reset-password/status/', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+/**
+ * Resend password reset email using the original reset token context.
+ */
+export async function resendPasswordResetLinkRequest(token) {
+  return apiRequest('/auth/reset-password/resend/', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+/**
+ * Update the current user's username.
+ */
+export async function updateUsernameRequest({ username }) {
+  const data = await authApiRequest('/auth/update-username/', {
+    method: 'PATCH',
+    body: JSON.stringify({ username: username.trim() }),
+  });
+
+  // Update stored user object
+  const stored = getStoredUser();
+  if (stored) {
+    stored.username = username.trim();
+    window.localStorage.setItem('user', JSON.stringify(stored));
+  }
+
+  return data;
+}
+
+/**
+ * Delete the current user's account. Requires password confirmation.
+ */
+export async function deleteAccountRequest({ password }) {
+  const data = await authApiRequest('/auth/delete-account/', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+
+  // Clear all local auth state
+  window.localStorage.removeItem('access_token');
+  window.localStorage.removeItem('refresh_token');
+  window.localStorage.removeItem('user');
+
+  return data;
 }
 
 export async function logoutRequest() {

@@ -546,7 +546,7 @@ function Detection() {
               ✎
             </button>
             <div className="detect__spacer" />
-            <button className="detect__sidebtn" type="button" aria-label="Settings">
+            <button className="detect__sidebtn" type="button" aria-label="Settings" onClick={() => navigate('/settings')}>
               ⚙
             </button>
           </>
@@ -583,6 +583,13 @@ function Detection() {
           {isLoggedIn ? (
             <div className="nav__user-actions">
               <span className="nav__username">{user?.username || user?.email}</span>
+              <button
+                className="nav__link nav__btn"
+                type="button"
+                onClick={() => navigate('/settings')}
+              >
+                Settings
+              </button>
               <button
                 className="nav__login"
                 type="button"

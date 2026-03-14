@@ -298,12 +298,16 @@ export function useUsers(filters = {}, paginationOptions = {}) {
     }
   }, []);
 
-  const updateStatus = useCallback(async (userId, isActive) => {
+  const updateStatus = useCallback(async (userId, newStatus) => {
     try {
-      const res = await apiUpdateUserStatus(userId, isActive);
+      const res = await apiUpdateUserStatus(userId, newStatus);
       if (res.success) {
         setUsers(prev => 
-          prev.map(u => u.id === userId ? { ...u, is_active: isActive } : u)
+          prev.map(u => u.id === userId ? { 
+            ...u, 
+            status: newStatus,
+            is_active: newStatus === 'active',
+          } : u)
         );
         return { success: true };
       }

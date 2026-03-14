@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
 /**
  * VerificationBadge - Displays verification status with colored badge and icon
@@ -18,6 +18,11 @@ export function VerificationBadge({ status, className = '' }) {
       label: 'Not Verified',
       icon: '✗',
       bgClass: 'blockchain__badge--not-verified',
+    },
+    ANCHORED: {
+      label: 'Anchored',
+      icon: '⬡',
+      bgClass: 'blockchain__badge--anchored',
     },
     NOT_ANCHORED: {
       label: 'Not Anchored',
@@ -199,12 +204,12 @@ export function BlockchainStatusCard({ status, isLoading, error }) {
         </div>
         <div className="blockchain__status-item">
           <span className="blockchain__status-label">Block Number</span>
-          <span className="blockchain__status-value">{status.blockNumber || '-'}</span>
+          <span className="blockchain__status-value">{status.blockNumber || status.block_number || '-'}</span>
         </div>
         <div className="blockchain__status-item">
           <span className="blockchain__status-label">Contract</span>
           <span className="blockchain__status-value blockchain__status-value--mono">
-            {status.contractAddress ? `${status.contractAddress.slice(0, 10)}...${status.contractAddress.slice(-8)}` : '-'}
+            {(status.contractAddress || status.contract_address) ? `${(status.contractAddress || status.contract_address).slice(0, 10)}...${(status.contractAddress || status.contract_address).slice(-8)}` : '-'}
           </span>
         </div>
       </div>
@@ -222,9 +227,10 @@ export function BlockchainStatusCard({ status, isLoading, error }) {
  * @param {boolean} props.isAdmin - Whether user is admin
  * @param {Function} props.onRefresh - Callback to refresh data
  */
-export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, onRefresh }) {
+export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, onRefresh, onClick }) {
   const isAnchored = analysis.isAnchored || analysis.is_anchored;
   const refId = analysis.refId || analysis.ref_id || analysis.id;
+  const [verificationStatus, setVerificationStatus] = useState(null);
   
   // Format date - handle ISO string format from backend
   const createdAt = analysis.createdAt || analysis.created_at;
@@ -242,60 +248,96 @@ export function AnalysisCard({ analysis, onVerify, onAnchor, isAdmin = false, on
 
   // Scam classification display - backend returns scam_type
   const scamType = analysis.scam_type || analysis.scamType || analysis.scamClassification || analysis.scam_classification || analysis.classification;
-  
-  // Confidence - backend returns confidence_bps (basis points 0-10000)
-  const confidenceBps = analysis.confidence_bps || analysis.confidenceBps;
-  const confidenceScore = analysis.confidence_score || analysis.confidenceScore || analysis.confidence;
-  
-  let confidencePercent = null;
-  if (confidenceBps != null) {
-    // Convert basis points to percentage (divide by 100)
-    confidencePercent = (confidenceBps / 100).toFixed(1);
-  } else if (confidenceScore != null) {
-    // Handle if it's already a decimal or percentage
-    if (confidenceScore <= 1) {
-      confidencePercent = (confidenceScore * 100).toFixed(1);
-    } else {
-      confidencePercent = confidenceScore.toFixed(1);
+
+  // Scam score (0-100 float, direct probability of being a scam)
+  const scamScore = analysis.scam_score ?? analysis.scamScore ?? null;
+  const scoreLevel = scamScore === null ? 'unknown'
+    : scamScore >= 80 ? 'critical'
+    : scamScore >= 60 ? 'high'
+    : scamScore >= 40 ? 'medium'
+    : 'low';
+
+  // Summary and review flag
+  const summary = analysis.summary || null;
+  const needsReview = analysis.needs_review || analysis.needsReview || false;
+
+  // TX hash — nested under chain object from backend
+  const txHash = analysis.txHash || analysis.chain?.tx_hash || analysis.chain?.txHash;
+
+  // Wrap onVerify to capture the verification result and update badge
+  const handleVerifyWithStatus = useCallback(async (id) => {
+    const result = await onVerify(id);
+    if (result && result.status) {
+      setVerificationStatus(result.status);
     }
-  }
+    return result;
+  }, [onVerify]);
+
+  // Determine the badge status to display
+  const badgeStatus = verificationStatus || (isAnchored ? 'ANCHORED' : 'NOT_ANCHORED');
 
   return (
-    <div className={`blockchain__analysis-card ${isAnchored ? 'blockchain__analysis-card--anchored' : ''}`}>
+    <div
+      className={`blockchain__analysis-card ${isAnchored ? 'blockchain__analysis-card--anchored' : ''} ${onClick ? 'blockchain__analysis-card--clickable' : ''}`}
+      onClick={onClick ? () => onClick(analysis) : undefined}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(analysis); } } : undefined}
+    >
       <div className="blockchain__analysis-header">
-        <span className="blockchain__analysis-id" title={refId}>
-          {refId ? `${refId.slice(0, 8)}...` : 'N/A'}
-        </span>
-        <VerificationBadge status={isAnchored ? 'VERIFIED' : 'NOT_ANCHORED'} />
+        <div className="blockchain__analysis-header-left">
+          <span className="blockchain__analysis-id" title={refId}>
+            {refId ? `${refId.slice(0, 8)}...` : 'N/A'}
+          </span>
+          {needsReview && (
+            <span className="blockchain__analysis-needs-review" title={analysis.review_reason || 'Needs review'}>
+              ⚠ Review
+            </span>
+          )}
+        </div>
+        <VerificationBadge status={badgeStatus} />
       </div>
 
       <div className="blockchain__analysis-body">
         <div className="blockchain__analysis-row">
-          <span className="blockchain__analysis-label">Classification:</span>
+          <span className="blockchain__analysis-label">Type:</span>
           <span className="blockchain__analysis-value">{scamType || 'Unknown'}</span>
         </div>
-        {confidencePercent && (
+        {scamScore !== null && (
           <div className="blockchain__analysis-row">
-            <span className="blockchain__analysis-label">Confidence:</span>
-            <span className="blockchain__analysis-value">{confidencePercent}%</span>
+            <span className="blockchain__analysis-label">Scam Score:</span>
+            <div className="blockchain__analysis-score">
+              <div className="blockchain__analysis-score-bar">
+                <div
+                  className={`blockchain__analysis-score-fill blockchain__analysis-score-fill--${scoreLevel}`}
+                  style={{ width: `${scamScore}%` }}
+                />
+              </div>
+              <span className="blockchain__analysis-value">{scamScore.toFixed(1)}%</span>
+            </div>
+          </div>
+        )}
+        {summary && (
+          <div className="blockchain__analysis-row blockchain__analysis-row--summary">
+            <p className="blockchain__analysis-summary">{summary}</p>
           </div>
         )}
         <div className="blockchain__analysis-row">
           <span className="blockchain__analysis-label">Created:</span>
           <span className="blockchain__analysis-value">{formattedDate}</span>
         </div>
-        {isAnchored && analysis.txHash && (
+        {isAnchored && txHash && (
           <div className="blockchain__analysis-row">
             <span className="blockchain__analysis-label">TX Hash:</span>
             <span className="blockchain__analysis-value blockchain__analysis-value--mono">
-              {analysis.txHash.slice(0, 10)}...
+              {txHash.slice(0, 10)}...
             </span>
           </div>
         )}
       </div>
 
-      <div className="blockchain__analysis-actions">
-        <VerifyButton refId={refId} onVerify={onVerify} />
+      <div className="blockchain__analysis-actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <VerifyButton refId={refId} onVerify={handleVerifyWithStatus} />
         {isAdmin && (
           <AnchorButton
             refId={refId}

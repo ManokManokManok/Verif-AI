@@ -527,6 +527,14 @@ EMAIL_BACKEND=sendgrid
 SENDGRID_API_KEY=SG.your-api-key
 SENDGRID_FROM_EMAIL=noreply@yourdomain.com
 
+# Or use Nodemailer bridge
+# EMAIL_BACKEND=nodemailer
+# NODEMAILER_HOST=smtp.gmail.com
+# NODEMAILER_PORT=587
+# NODEMAILER_SECURE=False
+# NODEMAILER_USER=your-smtp-user
+# NODEMAILER_PASS=your-smtp-password
+
 # Security
 VALIDATE_SECURITY_CONFIG=true
 

@@ -319,7 +319,9 @@ class AnalysisResultRepository:
         filter_mode: str = 'all',
         page: int = 1,
         limit: int = 50,
-        classification: int = None
+        classification: int = None,
+        min_confidence_bps: int = None,
+        scam_only: bool = False
     ) -> List[AnalysisResult]:
         """
         List analysis results with filtering and pagination.
@@ -329,6 +331,8 @@ class AnalysisResultRepository:
             page: Page number (1-indexed)
             limit: Maximum number of results per page
             classification: Filter by scam_class (None for all)
+            min_confidence_bps: Minimum confidence in basis points (0-10000)
+            scam_only: If True, only include scam classifications (scam_class >= 0)
             
         Returns:
             List of AnalysisResult entities
@@ -348,6 +352,16 @@ class AnalysisResultRepository:
         if classification is not None:
             query["scam_class"] = classification
         
+        # Confidence filter
+        if min_confidence_bps is not None:
+            query["confidence_bps"] = {"$gte": min_confidence_bps}
+        
+        # Scam-only filter (exclude legitimate classifications)
+        if scam_only:
+            if "scam_class" not in query:
+                query["scam_class"] = {"$gte": 0}
+            # If classification is already set, it takes priority
+        
         # Calculate skip for pagination
         skip = (page - 1) * limit
         
@@ -364,28 +378,40 @@ class AnalysisResultRepository:
         """
         return self.collection.distinct("scam_class")
     
-    def count_anchored(self, classification: int = None) -> int:
+    def count_anchored(self, classification: int = None, min_confidence_bps: int = None, scam_only: bool = False) -> int:
         """
         Count total number of anchored analysis results.
         
         Args:
             classification: Filter by scam_class (None for all)
+            min_confidence_bps: Minimum confidence threshold
+            scam_only: Only count scam classifications
         """
         query = {"chain_metadata": {"$exists": True}}
         if classification is not None:
             query["scam_class"] = classification
+        if min_confidence_bps is not None:
+            query["confidence_bps"] = {"$gte": min_confidence_bps}
+        if scam_only and "scam_class" not in query:
+            query["scam_class"] = {"$gte": 0}
         return self.collection.count_documents(query)
     
-    def count_all(self, classification: int = None) -> int:
+    def count_all(self, classification: int = None, min_confidence_bps: int = None, scam_only: bool = False) -> int:
         """
         Count total number of analysis results.
         
         Args:
             classification: Filter by scam_class (None for all)
+            min_confidence_bps: Minimum confidence threshold
+            scam_only: Only count scam classifications
         """
         query = {}
         if classification is not None:
             query["scam_class"] = classification
+        if min_confidence_bps is not None:
+            query["confidence_bps"] = {"$gte": min_confidence_bps}
+        if scam_only and "scam_class" not in query:
+            query["scam_class"] = {"$gte": 0}
         return self.collection.count_documents(query)
     
     def _entity_to_document(self, entity: AnalysisResult) -> Dict[str, Any]:

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signupRequest } from '../api/client.js';
 import { useTheme } from '../context/ThemeContext';
+import { getPasswordRequirements, validateUsername } from '../utils/validation.js';
 import signupImage from '../../assets/image/signup.png';
 
 function EyeIcon({ slashed }) {
@@ -164,6 +165,15 @@ function Signup() {
   const [registered, setRegistered] = useState(false);
   const [agreed, setAgreed] = useState(false);
 
+  // Dynamic password requirements
+  const passwordRequirements = getPasswordRequirements(password);
+  const showPasswordReqs = password.length > 0;
+  const allPasswordReqsMet = passwordRequirements.every((r) => r.met);
+  const unmetReqs = passwordRequirements.filter((r) => !r.met);
+
+  // Dynamic username validation
+  const usernameError = username.length > 0 ? validateUsername(username) : null;
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
@@ -196,7 +206,22 @@ function Signup() {
   };
 
   // Parse error message into list for multi-error display
-  const errorList = parseErrors(error);
+  // Filter out password/username validation errors already shown inline
+  const errorList = parseErrors(error).filter((msg) => {
+    const lower = msg.toLowerCase();
+    // Skip messages already covered by inline password requirements
+    if (lower.includes('at least one uppercase')) return false;
+    if (lower.includes('at least one lowercase')) return false;
+    if (lower.includes('at least one digit')) return false;
+    if (lower.includes('at least one special character')) return false;
+    if (lower.includes('at least') && lower.includes('characters')) return false;
+    if (lower.includes('too common')) return false;
+    if (lower.includes('choose a stronger password')) return false;
+    if (lower.includes('must not contain spaces')) return false;
+    // Skip username errors shown inline
+    if (lower.includes('at least one letter') && lower.includes('username')) return false;
+    return true;
+  });
   const hasMultipleErrors = errorList.length > 1;
 
   return (
@@ -297,6 +322,9 @@ function Signup() {
                 <UserIcon />
               </span>
             </div>
+            {usernameError && !usernameError.valid && (
+              <span className="auth__field-hint auth__field-hint--error">{usernameError.error}</span>
+            )}
           </label>
 
           <label className="auth__field">
@@ -323,6 +351,22 @@ function Signup() {
                 </span>
               </button>
             </div>
+            {showPasswordReqs && (
+              <div className="password-requirements">
+                {allPasswordReqsMet ? (
+                  <span className="password-requirements__success">✓ Password meets all requirements</span>
+                ) : (
+                  <div className="password-requirements__grid">
+                    {unmetReqs.map((req) => (
+                      <span key={req.key} className="password-requirements__item password-requirements__item--unmet">
+                        <span className="password-requirements__icon">✗</span>
+                        {req.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </label>
 
           <label className="auth__field">
@@ -353,7 +397,7 @@ function Signup() {
             </div>
           </label>
 
-          {error && (
+          {errorList.length > 0 && (
             <div className="auth__error-container">
               {hasMultipleErrors ? (
                 <ul className="auth__error-list">
