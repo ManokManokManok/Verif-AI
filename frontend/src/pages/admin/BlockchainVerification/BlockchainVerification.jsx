@@ -23,6 +23,7 @@ import {
 } from '../../../api/blockchain';
 import BlockchainStatsCard from './components/BlockchainStatsCard';
 import BlockchainFilters from './components/BlockchainFilters';
+import AnalysisDetailsModal from './components/AnalysisDetailsModal';
 import './BlockchainVerification.css';
 
 /**
@@ -48,7 +49,13 @@ export default function BlockchainVerification({ onNotify }) {
   // Filters
   const [filter, setFilter] = useState('all');
   const [classificationFilter, setClassificationFilter] = useState('all');
+  const [minConfidence] = useState(null);
+  const [scamOnly] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Details modal state
+  const [selectedAnalysis, setSelectedAnalysis] = useState(null);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
 
   // Fetch blockchain status
   const fetchStatus = useCallback(async () => {
@@ -74,6 +81,8 @@ export default function BlockchainVerification({ onNotify }) {
         limit,
         status: filter,
         classification: classificationFilter,
+        minConfidence,
+        scamOnly,
       });
       setAnalyses(response.analyses || []);
       setTotalFiltered(response.total || response.count || 0);
@@ -87,7 +96,7 @@ export default function BlockchainVerification({ onNotify }) {
     } finally {
       setAnalysesLoading(false);
     }
-  }, [page, filter, classificationFilter]);
+  }, [page, filter, classificationFilter, minConfidence, scamOnly]);
 
   // Initial fetch
   useEffect(() => {
@@ -123,6 +132,17 @@ export default function BlockchainVerification({ onNotify }) {
     }
   }, [onNotify, fetchAnalyses]);
 
+  // Handle card click - open details modal
+  const handleCardClick = useCallback((analysis) => {
+    setSelectedAnalysis(analysis);
+    setDetailsModalOpen(true);
+  }, []);
+
+  const closeDetailsModal = useCallback(() => {
+    setDetailsModalOpen(false);
+    setSelectedAnalysis(null);
+  }, []);
+
   // Compute stats
   const stats = useMemo(() => ({
     total: totalAll,
@@ -130,11 +150,12 @@ export default function BlockchainVerification({ onNotify }) {
     pending: Math.max(0, totalAll - totalAnchored),
   }), [totalAll, totalAnchored]);
 
-  // Filter analyses by search term (client-side)
+  // Filter analyses: require scam_score >= 80, then apply search term (client-side)
   const filteredAnalyses = useMemo(() => {
-    if (!searchTerm) return analyses;
+    const highConfidenceScams = analyses.filter(a => (a.scam_score ?? 0) >= 80);
+    if (!searchTerm) return highConfidenceScams;
     const term = searchTerm.toLowerCase();
-    return analyses.filter(a => {
+    return highConfidenceScams.filter(a => {
       const refId = (a.ref_id || a.refId || a.id || '').toLowerCase();
       const scamType = (a.scam_type || a.scamType || '').toLowerCase();
       const message = (a.message || '').toLowerCase();
@@ -226,6 +247,7 @@ export default function BlockchainVerification({ onNotify }) {
                   onAnchor={handleAnchor}
                   isAdmin={true}
                   onRefresh={fetchAnalyses}
+                  onClick={handleCardClick}
                 />
               ))}
             </div>
@@ -255,6 +277,15 @@ export default function BlockchainVerification({ onNotify }) {
           </>
         )}
       </div>
+      {/* Analysis Details Modal */}
+      <AnalysisDetailsModal
+        isOpen={detailsModalOpen}
+        analysis={selectedAnalysis}
+        onClose={closeDetailsModal}
+        onVerify={handleVerify}
+        onAnchor={handleAnchor}
+        onRefresh={fetchAnalyses}
+      />
     </div>
   );
 }

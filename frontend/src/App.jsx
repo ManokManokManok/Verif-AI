@@ -9,6 +9,7 @@ import AIChatbot from './pages/AIChatbot.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import Settings from './pages/Settings.jsx';
 import { AdminDashboard } from './pages/admin';
 import TermsAndConditions from './pages/TermsAndConditions.jsx';
 import SessionExpiredModal from './components/auth/SessionExpiredModal';
@@ -56,26 +57,33 @@ function App() {
       <AuthProvider>
         <SessionExpiredModal />
         <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/detection" element={<Detection />} />
-          <Route path="/chatbot" element={<AIChatbot />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
-          {/* Redirect old /blockchain route to admin panel */}
-          <Route path="/blockchain" element={<Navigate to="/admin" replace />} />
-          <Route 
-            path="/admin" 
-            element={
-              <ProtectedRoute requireAdmin>
-                <AdminDashboard />
-              </ProtectedRoute>
-            } 
-          />
-        </Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/detection" element={<Detection />} />
+        <Route path="/chatbot" element={<AIChatbot />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+        {/* Redirect old /blockchain route to admin panel */}
+        <Route path="/blockchain" element={<Navigate to="/admin" replace />} />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute requireAdmin>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
+      </Routes>
       </AuthProvider>
     </ThemeProvider>
   );

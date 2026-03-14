@@ -289,7 +289,13 @@ All API endpoints return consistent error responses:
 ### Development Notes
 
 #### Email Service
-Currently uses a mock email service that prints to console. For production, replace `MockEmailService` with a real email service (SendGrid, SES, etc.).
+Uses pluggable email backends via `EMAIL_BACKEND`:
+- `mock` (development)
+- `sendgrid`
+- `nodemailer` (Node.js bridge)
+- `smtp`
+
+For `nodemailer`, run `npm install` inside `backend/` to install bridge dependencies.
 
 #### Token Blacklisting
 Currently uses an in-memory mock service. For production, configure Redis or use the MongoDB-based blacklisting service.

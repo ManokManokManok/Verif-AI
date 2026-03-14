@@ -2,10 +2,22 @@ from typing import List, Optional, Dict, Any
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 
 from ...domain.entities import User, Role, Permission, UserAlreadyExistsError, UserNotFoundError
+
+
+def _now_utc_naive() -> datetime:
+    return datetime.utcnow()
+
+
+def _to_utc_naive(value: datetime) -> Optional[datetime]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class MongoDBTokenRepository:
@@ -39,7 +51,7 @@ class MongoDBTokenRepository:
             self.verification_tokens_collection.insert_one({
                 "user_id": user_id,
                 "token": token,
-                "created_at": datetime.utcnow(),
+                "created_at": _now_utc_naive(),
                 "expires_at": expires_at,
                 "is_used": False
             })
@@ -67,7 +79,7 @@ class MongoDBTokenRepository:
             self.password_reset_tokens_collection.insert_one({
                 "user_id": user_id,
                 "token": token,
-                "created_at": datetime.utcnow(),
+                "created_at": _now_utc_naive(),
                 "expires_at": expires_at,
                 "is_used": False
             })
@@ -89,7 +101,7 @@ class MongoDBTokenRepository:
             token_doc = self.verification_tokens_collection.find_one({
                 "token": token,
                 "is_used": False,
-                "expires_at": {"$gt": datetime.utcnow()}
+                "expires_at": {"$gt": _now_utc_naive()}
             })
             
             if not token_doc:
@@ -98,7 +110,7 @@ class MongoDBTokenRepository:
             # Mark token as used
             self.verification_tokens_collection.update_one(
                 {"_id": token_doc["_id"]},
-                {"$set": {"is_used": True, "used_at": datetime.utcnow()}}
+                {"$set": {"is_used": True, "used_at": _now_utc_naive()}}
             )
             
             return token_doc["user_id"]
@@ -119,7 +131,7 @@ class MongoDBTokenRepository:
             token_doc = self.password_reset_tokens_collection.find_one({
                 "token": token,
                 "is_used": False,
-                "expires_at": {"$gt": datetime.utcnow()}
+                "expires_at": {"$gt": _now_utc_naive()}
             })
             
             if not token_doc:
@@ -128,12 +140,55 @@ class MongoDBTokenRepository:
             # Mark token as used
             self.password_reset_tokens_collection.update_one(
                 {"_id": token_doc["_id"]},
-                {"$set": {"is_used": True, "used_at": datetime.utcnow()}}
+                {"$set": {"is_used": True, "used_at": _now_utc_naive()}}
             )
             
             return token_doc["user_id"]
         except Exception:
             return None
+
+    def get_password_reset_token_status(self, token: str) -> Dict[str, Optional[str]]:
+        """
+        Get password reset token status without consuming the token.
+
+        Returns:
+            {
+                "status": "valid" | "expired" | "used" | "invalid",
+                "user_id": Optional[str]
+            }
+        """
+        try:
+            token_doc = self.password_reset_tokens_collection.find_one({"token": token})
+            if not token_doc:
+                return {"status": "invalid", "user_id": None}
+
+            user_id = token_doc.get("user_id")
+            if token_doc.get("is_used"):
+                return {"status": "used", "user_id": user_id}
+
+            expires_at = _to_utc_naive(token_doc.get("expires_at"))
+            if expires_at and expires_at <= _now_utc_naive():
+                return {"status": "expired", "user_id": user_id}
+
+            return {"status": "valid", "user_id": user_id}
+        except Exception:
+            return {"status": "invalid", "user_id": None}
+
+    def invalidate_password_reset_token(self, token: str) -> bool:
+        """
+        Invalidate password reset token so it cannot be reused.
+
+        Returns:
+            True if token document was updated, False otherwise.
+        """
+        try:
+            result = self.password_reset_tokens_collection.update_one(
+                {"token": token, "is_used": False},
+                {"$set": {"is_used": True, "used_at": _now_utc_naive()}}
+            )
+            return result.modified_count > 0
+        except Exception:
+            return False
     
     def update_user_verification(self, user_id: str) -> bool:
         """
@@ -148,7 +203,7 @@ class MongoDBTokenRepository:
         try:
             self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
-                {"$set": {"is_verified": True, "verified_at": datetime.utcnow()}}
+                {"$set": {"is_verified": True, "verified_at": _now_utc_naive()}}
             )
             return True
         except Exception:
@@ -168,7 +223,7 @@ class MongoDBTokenRepository:
         try:
             self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
-                {"$set": {"password_hash": password_hash, "password_updated_at": datetime.utcnow()}}
+                {"$set": {"password_hash": password_hash, "password_updated_at": _now_utc_naive()}}
             )
             return True
         except Exception:
@@ -184,12 +239,12 @@ class MongoDBTokenRepository:
         try:
             # Clean expired verification tokens
             verification_result = self.verification_tokens_collection.delete_many({
-                "expires_at": {"$lt": datetime.utcnow()}
+                "expires_at": {"$lt": _now_utc_naive()}
             })
             
             # Clean expired password reset tokens
             reset_result = self.password_reset_tokens_collection.delete_many({
-                "expires_at": {"$lt": datetime.utcnow()}
+                "expires_at": {"$lt": _now_utc_naive()}
             })
             
             return verification_result.deleted_count + reset_result.deleted_count
@@ -201,6 +256,7 @@ class MongoDBUserRepository:
     def __init__(self, client: MongoClient, database_name: str):
         self.db: Database = client[database_name]
         self.users_collection: Collection = self.db.users
+        self.archived_users_collection: Collection = self.db.archived_users
         self.roles_collection: Collection = self.db.roles
     
     def create_user(self, user: User) -> User:
@@ -284,13 +340,22 @@ class MongoDBUserRepository:
         Args:
             user_id: User's ID
         """
+        from datetime import timezone
         try:
-            self.users_collection.update_one(
+            result = self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
-                {"$set": {"last_login": datetime.utcnow()}}
+                {"$set": {"last_login": datetime.now(timezone.utc)}}
             )
-        except:
-            pass
+            if result.matched_count == 0:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"update_last_login: no document matched for user_id={user_id}"
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(
+                f"update_last_login failed for user_id={user_id}: {e}"
+            )
     
     def get_user_roles(self, user_id: str) -> List[Role]:
         """
@@ -422,18 +487,17 @@ class MongoDBUserRepository:
                 result = self.users_collection.delete_one({"_id": ObjectId(user_id)})
                 return result.deleted_count > 0
             else:
-                # Soft delete - deactivate the account
-                result = self.users_collection.update_one(
-                    {"_id": ObjectId(user_id)},
-                    {
-                        "$set": {
-                            "is_active": False,
-                            "deleted_at": datetime.utcnow(),
-                            "deleted": True
-                        }
-                    }
-                )
-                return result.modified_count > 0
+                # Archive the user: move document to archived_users collection
+                archive_doc = dict(user_doc)
+                archive_doc["archived_at"] = datetime.utcnow()
+                archive_doc["archive_reason"] = "admin_soft_delete"
+                archive_doc["original_id"] = str(user_doc["_id"])
+                # Store with a fresh _id so archived_users can hold multiple versions
+                del archive_doc["_id"]
+                self.archived_users_collection.insert_one(archive_doc)
+                # Remove from active users collection
+                result = self.users_collection.delete_one({"_id": ObjectId(user_id)})
+                return result.deleted_count > 0
         except UserNotFoundError:
             raise
         except Exception as e:
@@ -475,36 +539,54 @@ class MongoDBUserRepository:
         except Exception:
             return False
     
-    def update_user_status(self, user_id: str, is_active: bool) -> bool:
+    def update_user_status(self, user_id: str, is_active: bool = None, status: str = None) -> bool:
         """
-        Enable or disable a user account (Admin only).
+        Update a user account status (Admin only).
+        
+        Supports both the new `status` string field ('active', 'inactive', 'suspended')
+        and the legacy `is_active` boolean for backward compatibility.
         
         Args:
             user_id: User's ID
-            is_active: New active status
+            is_active: Legacy boolean active status (deprecated, use status)
+            status: New status string ('active', 'inactive', 'suspended')
         
         Returns:
             True if status was updated successfully
         
         Raises:
             UserNotFoundError: If user not found
+            ValueError: If neither status nor is_active is provided, or invalid status
         """
         try:
             user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
             if not user_doc:
                 raise UserNotFoundError(f"User {user_id} not found")
             
+            update_data = {
+                "status_updated_at": datetime.utcnow()
+            }
+            
+            # Handle new status string field
+            if status is not None:
+                valid_statuses = ["active", "inactive", "suspended"]
+                if status not in valid_statuses:
+                    raise ValueError(f"Invalid status: {status}. Must be one of {valid_statuses}")
+                update_data["status"] = status
+                update_data["is_active"] = (status == "active")
+            # Handle legacy is_active boolean
+            elif is_active is not None:
+                update_data["is_active"] = is_active
+                update_data["status"] = "active" if is_active else "inactive"
+            else:
+                raise ValueError("Either status or is_active must be provided")
+            
             result = self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
-                {
-                    "$set": {
-                        "is_active": is_active,
-                        "status_updated_at": datetime.utcnow()
-                    }
-                }
+                {"$set": update_data}
             )
             return result.modified_count > 0
-        except UserNotFoundError:
+        except (UserNotFoundError, ValueError):
             raise
         except Exception:
             return False
@@ -546,12 +628,6 @@ class MongoDBUserRepository:
     def get_user_activity_summary(self, user_id: str) -> Dict[str, Any]:
         """
         Get activity summary for a user (Admin only).
-        
-        Args:
-            user_id: User's ID
-        
-        Returns:
-            Dict with activity summary
         """
         from .analysis_repository import AnalysisResultRepository
         
@@ -585,16 +661,68 @@ class MongoDBUserRepository:
         except Exception:
             return {}
     
+    def get_by_username(self, username: str) -> Optional[User]:
+        """Get user by username (case-insensitive)."""
+        user_doc = self.users_collection.find_one(
+            {"username": {"$regex": f"^{username}$", "$options": "i"}}
+        )
+        if not user_doc:
+            return None
+        return self._document_to_user(user_doc)
+    
+    def update_username(self, user_id: str, new_username: str) -> bool:
+        """Update a user's username."""
+        try:
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": {"username": new_username, "username_updated_at": datetime.utcnow()}}
+            )
+            return result.modified_count > 0
+        except Exception:
+            return False
+    
+    def self_delete_user(self, user_id: str) -> bool:
+        """
+        Self-service account deletion. Archives the user then removes from active collection.
+        """
+        try:
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if not user_doc:
+                raise UserNotFoundError(f"User {user_id} not found")
+            
+            archive_doc = dict(user_doc)
+            archive_doc["archived_at"] = datetime.utcnow()
+            archive_doc["archive_reason"] = "self_delete"
+            archive_doc["original_id"] = str(user_doc["_id"])
+            del archive_doc["_id"]
+            self.archived_users_collection.insert_one(archive_doc)
+            
+            result = self.users_collection.delete_one({"_id": ObjectId(user_id)})
+            return result.deleted_count > 0
+        except UserNotFoundError:
+            raise
+        except Exception:
+            return False
+    
     def _document_to_user(self, doc: Dict[str, Any]) -> User:
         """Convert MongoDB document to User entity."""
+        # Derive status from stored value or fall back to is_active boolean
+        is_active = doc.get("is_active", True)
+        stored_status = doc.get("status")
+        if stored_status and stored_status in ("active", "inactive", "suspended"):
+            status = stored_status
+        else:
+            status = "active" if is_active else "inactive"
+        
         return User(
             id=str(doc["_id"]),
             email=doc["email"],
             username=doc.get("username"),
             password_hash=doc["password_hash"],
             roles=doc.get("roles", []),
-            is_active=doc.get("is_active", True),
+            is_active=is_active,
             is_verified=doc.get("is_verified", False),
+            status=status,
             created_at=doc.get("created_at"),
             last_login=doc.get("last_login")
         )

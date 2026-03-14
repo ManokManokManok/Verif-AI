@@ -2,6 +2,7 @@
  * BlockchainFilters Component
  * 
  * Filter controls for blockchain verification page.
+ * Includes status, classification, search, confidence threshold, and scam-only filters.
  */
 
 import React from 'react';
@@ -27,8 +28,11 @@ export default function BlockchainFilters({
     setPage(1);
   };
 
+
+
   return (
     <div className="blockchain-admin__filters">
+      {/* Primary filter row */}
       <div className="blockchain-admin__filter-row">
         <div className="blockchain-admin__filter-group">
           <button
@@ -74,6 +78,8 @@ export default function BlockchainFilters({
           />
         </div>
       </div>
+
+
     </div>
   );
 }
@@ -84,7 +90,7 @@ BlockchainFilters.propTypes = {
   classificationFilter: PropTypes.string.isRequired,
   setClassificationFilter: PropTypes.func.isRequired,
   classifications: PropTypes.arrayOf(PropTypes.shape({
-    value: PropTypes.string.isRequired,
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     label: PropTypes.string.isRequired,
   })).isRequired,
   searchTerm: PropTypes.string.isRequired,

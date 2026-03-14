@@ -21,6 +21,7 @@ urlpatterns = [
     # User Statistics - Tab 3
     path('user-stats/', views.user_stats, name='user_stats'),
     path('reports/', views.list_reports, name='list_reports'),
+    path('reports/<str:report_id>/detail/', views.get_report, name='get_report'),
     path('reports/<str:report_id>/', views.update_report, name='update_report'),
     
     # User Management - Tab 4
