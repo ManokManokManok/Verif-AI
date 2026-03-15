@@ -69,40 +69,60 @@ class AdminRepository:
             pass
     
     # ==================== Analysis Statistics ====================
-    
-    def get_analysis_statistics(
+
+    def _resolve_statistics_date_range(
         self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        period: StatisticsPeriod = StatisticsPeriod.ALL_TIME
-    ) -> AnalysisStatistics:
-        """
-        Get aggregated analysis statistics.
-        
-        Args:
-            start_date: Start of date range (inclusive)
-            end_date: End of date range (inclusive)
-            period: Time period for grouping
-            
-        Returns:
-            AnalysisStatistics entity with aggregated data
-        """
-        # Build date filter
-        date_filter = {}
+        start_date: Optional[datetime],
+        end_date: Optional[datetime],
+        period: StatisticsPeriod
+    ) -> Tuple[Optional[datetime], Optional[datetime]]:
+        """Resolve effective date range from explicit dates or period."""
+        if start_date or end_date:
+            return start_date, end_date
+
+        if period == StatisticsPeriod.ALL_TIME:
+            return None, None
+
+        now = datetime.utcnow()
+        if period == StatisticsPeriod.DAY:
+            return now - timedelta(days=1), now
+        if period == StatisticsPeriod.WEEK:
+            return now - timedelta(days=7), now
+        if period == StatisticsPeriod.MONTH:
+            return now - timedelta(days=30), now
+        if period == StatisticsPeriod.YEAR:
+            return now - timedelta(days=365), now
+
+        return None, None
+
+    def _build_created_at_filter(
+        self,
+        start_date: Optional[datetime],
+        end_date: Optional[datetime]
+    ) -> Dict[str, Any]:
+        """Build created_at date filter for Mongo match stages."""
+        date_filter: Dict[str, Any] = {}
         if start_date:
             date_filter["$gte"] = start_date
         if end_date:
             date_filter["$lte"] = end_date
-        
-        match_stage = {}
+        return date_filter
+
+    def _get_summary_counts(
+        self,
+        start_date: Optional[datetime],
+        end_date: Optional[datetime]
+    ) -> Dict[str, int]:
+        """Get summary counts for a date range."""
+        match_stage: Dict[str, Any] = {}
+        date_filter = self._build_created_at_filter(start_date, end_date)
         if date_filter:
             match_stage["created_at"] = date_filter
-        
-        # Main aggregation pipeline
-        pipeline = []
+
+        pipeline: List[Dict[str, Any]] = []
         if match_stage:
             pipeline.append({"$match": match_stage})
-        
+
         pipeline.append({
             "$group": {
                 "_id": None,
@@ -113,7 +133,6 @@ class AdminRepository:
                 "legitimate_count": {
                     "$sum": {"$cond": [{"$eq": ["$is_scam", False]}, 1, 0]}
                 },
-                # High risk: is_scam=True and confidence >= 70% (7000 bps or scam_score >= 0.7)
                 "high_risk_count": {
                     "$sum": {
                         "$cond": [
@@ -128,7 +147,6 @@ class AdminRepository:
                         ]
                     }
                 },
-                # Medium risk: is_scam=True and confidence 40-69%
                 "medium_risk_count": {
                     "$sum": {
                         "$cond": [
@@ -151,26 +169,96 @@ class AdminRepository:
                 },
             }
         })
-        
+
         result = list(self.analysis_collection.aggregate(pipeline))
+        if not result:
+            return {
+                "total_count": 0,
+                "scam_count": 0,
+                "legitimate_count": 0,
+                "high_risk_count": 0,
+                "medium_risk_count": 0,
+            }
+        return result[0]
+
+    def _get_previous_period_bounds(
+        self,
+        start_date: Optional[datetime],
+        end_date: Optional[datetime],
+    ) -> Tuple[Optional[datetime], Optional[datetime]]:
+        """Get previous period date bounds based on current effective bounds."""
+        if not start_date or not end_date:
+            return None, None
+
+        if end_date <= start_date:
+            return None, None
+
+        duration = end_date - start_date
+        previous_end = start_date
+        previous_start = start_date - duration
+        return previous_start, previous_end
+    
+    def get_analysis_statistics(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        period: StatisticsPeriod = StatisticsPeriod.ALL_TIME
+    ) -> AnalysisStatistics:
+        """
+        Get aggregated analysis statistics.
         
-        if result:
-            stats = result[0]
-            total = stats.get("total_count", 0)
-            high_risk = stats.get("high_risk_count", 0)
-            medium_risk = stats.get("medium_risk_count", 0)
-            scam_total = stats.get("scam_count", 0)
-            legitimate = stats.get("legitimate_count", 0)
-            # Low risk = scams that are not high or medium
-            low_risk = max(0, scam_total - high_risk - medium_risk)
-        else:
-            total = high_risk = medium_risk = low_risk = legitimate = 0
+        Args:
+            start_date: Start of date range (inclusive)
+            end_date: End of date range (inclusive)
+            period: Time period for grouping
+            
+        Returns:
+            AnalysisStatistics entity with aggregated data
+        """
+        effective_start_date, effective_end_date = self._resolve_statistics_date_range(
+            start_date=start_date,
+            end_date=end_date,
+            period=period,
+        )
+
+        stats = self._get_summary_counts(
+            start_date=effective_start_date,
+            end_date=effective_end_date,
+        )
+
+        total = stats.get("total_count", 0)
+        high_risk = stats.get("high_risk_count", 0)
+        medium_risk = stats.get("medium_risk_count", 0)
+        scam_total = stats.get("scam_count", 0)
+        legitimate = stats.get("legitimate_count", 0)
+        low_risk = max(0, scam_total - high_risk - medium_risk)
+
+        previous_total = 0
+        previous_scam_total = 0
+        previous_start, previous_end = self._get_previous_period_bounds(
+            start_date=effective_start_date,
+            end_date=effective_end_date,
+        )
+        if previous_start and previous_end:
+            previous_stats = self._get_summary_counts(
+                start_date=previous_start,
+                end_date=previous_end,
+            )
+            previous_total = previous_stats.get("total_count", 0)
+            previous_scam_total = previous_stats.get("scam_count", 0)
         
         # Get category breakdown
-        categories = self.get_top_scam_categories(start_date, end_date, limit=15)
+        categories = self.get_top_scam_categories(
+            start_date=effective_start_date,
+            end_date=effective_end_date,
+            period=period,
+            limit=15,
+        )
         
         # Get daily counts for trend
-        daily_counts = self._get_daily_analysis_counts(start_date, end_date)
+        daily_counts = self._get_daily_analysis_counts(effective_start_date, effective_end_date)
+        previous_daily_counts = self._get_daily_analysis_counts(previous_start, previous_end) if previous_start and previous_end else []
+        confidence_distribution = self._get_confidence_distribution(effective_start_date, effective_end_date)
         
         return AnalysisStatistics(
             total_count=total,
@@ -178,11 +266,15 @@ class AdminRepository:
             medium_risk_count=medium_risk,
             low_risk_count=low_risk,
             legitimate_count=legitimate,
+            previous_total_count=previous_total,
+            previous_scam_count=previous_scam_total,
             scam_categories_breakdown=categories,
             period=period,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=effective_start_date,
+            end_date=effective_end_date,
             daily_counts=daily_counts,
+            previous_daily_counts=previous_daily_counts,
+            confidence_distribution=confidence_distribution,
             calculated_at=datetime.utcnow(),
         )
     
@@ -190,6 +282,7 @@ class AdminRepository:
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        period: StatisticsPeriod = StatisticsPeriod.ALL_TIME,
         limit: int = 10
     ) -> List[ScamCategoryBreakdown]:
         """
@@ -203,14 +296,17 @@ class AdminRepository:
         Returns:
             List of ScamCategoryBreakdown entities
         """
+        effective_start_date, effective_end_date = self._resolve_statistics_date_range(
+            start_date=start_date,
+            end_date=end_date,
+            period=period,
+        )
+
         # Build match stage
         match_stage = {"is_scam": True}
-        if start_date or end_date:
-            match_stage["created_at"] = {}
-            if start_date:
-                match_stage["created_at"]["$gte"] = start_date
-            if end_date:
-                match_stage["created_at"]["$lte"] = end_date
+        date_filter = self._build_created_at_filter(effective_start_date, effective_end_date)
+        if date_filter:
+            match_stage["created_at"] = date_filter
         
         pipeline = [
             {"$match": match_stage},
@@ -299,6 +395,114 @@ class AdminRepository:
             }
             for r in results
         ]
+
+    def _get_confidence_distribution(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """Get confidence distribution buckets for analyses."""
+        match_stage: Dict[str, Any] = {}
+        date_filter = self._build_created_at_filter(start_date, end_date)
+        if date_filter:
+            match_stage["created_at"] = date_filter
+
+        pipeline: List[Dict[str, Any]] = []
+        if match_stage:
+            pipeline.append({"$match": match_stage})
+
+        pipeline.extend([
+            {
+                "$addFields": {
+                    "confidence_percent": {
+                        "$cond": [
+                            {"$ne": ["$confidence_bps", None]},
+                            {"$divide": ["$confidence_bps", 100]},
+                            {
+                                "$cond": [
+                                    {"$ne": ["$scam_score", None]},
+                                    {"$multiply": ["$scam_score", 100]},
+                                    None,
+                                ]
+                            },
+                        ]
+                    }
+                }
+            },
+            {
+                "$addFields": {
+                    "bucket": {
+                        "$switch": {
+                            "branches": [
+                                {"case": {"$lte": ["$confidence_percent", 20]}, "then": "0-20"},
+                                {
+                                    "case": {
+                                        "$and": [
+                                            {"$gt": ["$confidence_percent", 20]},
+                                            {"$lte": ["$confidence_percent", 40]},
+                                        ]
+                                    },
+                                    "then": "21-40",
+                                },
+                                {
+                                    "case": {
+                                        "$and": [
+                                            {"$gt": ["$confidence_percent", 40]},
+                                            {"$lte": ["$confidence_percent", 60]},
+                                        ]
+                                    },
+                                    "then": "41-60",
+                                },
+                                {
+                                    "case": {
+                                        "$and": [
+                                            {"$gt": ["$confidence_percent", 60]},
+                                            {"$lte": ["$confidence_percent", 80]},
+                                        ]
+                                    },
+                                    "then": "61-80",
+                                },
+                                {
+                                    "case": {
+                                        "$and": [
+                                            {"$gt": ["$confidence_percent", 80]},
+                                            {"$lte": ["$confidence_percent", 100]},
+                                        ]
+                                    },
+                                    "then": "81-100",
+                                },
+                            ],
+                            "default": "unknown",
+                        }
+                    }
+                }
+            },
+            {"$match": {"bucket": {"$ne": "unknown"}}},
+            {
+                "$group": {
+                    "_id": "$bucket",
+                    "count": {"$sum": 1}
+                }
+            },
+        ])
+
+        results = list(self.analysis_collection.aggregate(pipeline))
+        counts_by_bucket = {r.get("_id"): r.get("count", 0) for r in results}
+
+        ordered_buckets = ["0-20", "21-40", "41-60", "61-80", "81-100"]
+        known_total = sum(counts_by_bucket.get(bucket, 0) for bucket in ordered_buckets)
+
+        distribution = []
+        for bucket in ordered_buckets:
+            count = counts_by_bucket.get(bucket, 0)
+            percentage = round((count / known_total) * 100, 2) if known_total > 0 else 0.0
+            distribution.append({
+                "bucket": bucket,
+                "count": count,
+                "percentage": percentage,
+            })
+
+        return distribution
     
     # ==================== User Statistics ====================
     
