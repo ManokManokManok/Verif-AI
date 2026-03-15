@@ -10,39 +10,63 @@ const TERMS = [
   },
   {
     number: '02',
-    title: 'User Responsibilities',
+    title: 'Eligibility',
     content:
-      'You agree to use VerifAI for lawful purposes only. You must not misuse the service, attempt to reverse-engineer any component, or use the platform to facilitate harmful or fraudulent activity.',
+      'You must be at least 13 years old to use VerifAI. By using the service, you represent that you meet this requirement.',
   },
   {
     number: '03',
-    title: 'Privacy & Data',
+    title: 'User Responsibilities',
     content:
-      'Your privacy is important to us. We do not store raw messages on the blockchain — only hashes and classifications. Please review our Privacy Policy for full details on how we handle your data.',
+      'You agree to use VerifAI for lawful purposes only. You must not misuse the service, attempt to reverse-engineer any component, or use the platform to facilitate harmful or fraudulent activity. You are responsible for maintaining the confidentiality of your account credentials.',
   },
   {
     number: '04',
-    title: 'Disclaimer',
+    title: 'Privacy & Data Practices',
     content:
-      'VerifAI provides AI-powered guidance and scam prevention tools, but does not guarantee outcomes. Our results are advisory in nature and do not constitute legal, financial, or professional advice.',
+      'We are committed to protecting your privacy. VerifAI collects only the information necessary to provide and improve our services, including your email address, password (hashed), and analysis data. Raw messages and images for scam analysis are processed securely; images for OCR are processed on your device and not stored. Only non-personal metadata (hashes, classifications, confidence, timestamps, reference IDs) are stored on the blockchain. No raw messages, emails, phone numbers, or other personal data are ever stored on-chain. Security and audit logs are maintained for compliance and may include user IDs and emails. For more details, please review our Privacy Policy (coming soon).',
   },
   {
     number: '05',
-    title: 'Blockchain Anchoring',
+    title: 'Data Retention, Deletion & Model Improvement',
     content:
-      'Analyses anchored on-chain are immutable and publicly verifiable. By requesting anchoring, you acknowledge that the classification and hash will be permanently recorded on the blockchain.',
+      'Audit logs are retained for 90 days. You may request account deletion at any time; your account and analysis history will be deleted or redacted as required. Some metadata may be retained for security and compliance purposes. For ongoing improvement of our detection models, anonymized and aggregated analysis data may be exported and used by administrators, even after deletion. Once data has been used for model training or improvement, it cannot be removed from those processes, but it will never be linked to your identity or used for any other purpose.',
   },
   {
     number: '06',
-    title: 'Changes to Terms',
+    title: 'Blockchain Anchoring',
     content:
-      'We may update these Terms and Conditions from time to time. Continued use of VerifAI after changes are posted constitutes your acceptance of the revised terms.',
+      'When you request to anchor an analysis on-chain, only non-personal metadata is stored immutably and publicly. By using this feature, you acknowledge that the classification and hash will be permanently recorded on the blockchain and cannot be removed.',
   },
   {
     number: '07',
+    title: 'Disclaimer',
+    content:
+      'VerifAI provides AI-powered guidance and scam prevention tools, but does not guarantee outcomes. Results are advisory and do not constitute legal, financial, or professional advice. Use of the service is at your own risk.',
+  },
+  {
+    number: '08',
+    title: 'Limitation of Liability',
+    content:
+      'To the fullest extent permitted by law, VerifAI and its operators are not liable for any damages or losses resulting from your use of the service, including but not limited to direct, indirect, incidental, or consequential damages.',
+  },
+  {
+    number: '09',
+    title: 'Changes to Terms',
+    content:
+      'We may update these Terms and Conditions from time to time. Continued use of VerifAI after changes are posted constitutes your acceptance of the revised terms. Material changes will be communicated via the platform.',
+  },
+  {
+    number: '10',
+    title: 'Governing Law',
+    content:
+      'These Terms and Conditions are governed by the laws of the Republic of the Philippines. Any disputes arising from or relating to these terms shall be resolved in the courts of the Philippines.',
+  },
+  {
+    number: '11',
     title: 'Contact',
     content:
-      'For questions or concerns regarding these terms, please reach out to us at support@verifai.com. We aim to respond within 2–3 business days.',
+      'For questions or concerns regarding these terms or your data, please contact us at support@verifai.com. We aim to respond within 2–3 business days. (placeholder for now)',
   },
 ];
 
