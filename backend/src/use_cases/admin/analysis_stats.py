@@ -29,6 +29,7 @@ class AdminRepository(Protocol):
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        period: StatisticsPeriod = StatisticsPeriod.ALL_TIME,
         limit: int = 10
     ) -> List[ScamCategoryBreakdown]: ...
 
@@ -192,6 +193,7 @@ class GetTopScamCategoriesUseCase:
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        period: StatisticsPeriod = StatisticsPeriod.ALL_TIME,
         limit: int = 10
     ) -> TopCategoriesResult:
         """
@@ -215,6 +217,7 @@ class GetTopScamCategoriesUseCase:
             categories = self._admin_repository.get_top_scam_categories(
                 start_date=start_date,
                 end_date=end_date,
+                period=period,
                 limit=limit
             )
             

@@ -23,6 +23,7 @@ vi.mock('../src/api/admin', () => ({
   getModelHealthSummary: vi.fn(),
   getAnalysisStats: vi.fn(),
   getTopScamCategories: vi.fn(),
+  exportAnalysisStats: vi.fn(),
   getUserStats: vi.fn(),
   getUserReports: vi.fn(),
   updateReportStatus: vi.fn(),
