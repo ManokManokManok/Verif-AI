@@ -22,6 +22,7 @@ const ANALYSIS_STEPS = [
 function Detection() {
   const navigate = useNavigate();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -581,22 +582,41 @@ function Detection() {
             )}
           </nav>
           {isLoggedIn ? (
-            <div className="nav__user-actions">
-              <span className="nav__username">{user?.username || user?.email}</span>
-              <button
-                className="nav__link nav__btn"
-                type="button"
-                onClick={() => navigate('/settings')}
-              >
-                Settings
-              </button>
+            <div className="nav__user-menu" onClick={e => e.stopPropagation()}>
               <button
                 className="nav__login"
                 type="button"
-                onClick={handleLogout}
+                onClick={() => setShowUserMenu(v => !v)}
               >
-                Logout
+                {user?.username || user?.email || 'Profile'}
               </button>
+              {showUserMenu && (
+                <div className="nav__dropdown">
+                  <button
+                    className="nav__dropdown-item"
+                    type="button"
+                    onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
+                  >
+                    Settings
+                  </button>
+                  {isAdmin && (
+                    <button
+                      className="nav__dropdown-item nav__dropdown-item--admin"
+                      type="button"
+                      onClick={() => { navigate('/admin'); setShowUserMenu(false); }}
+                    >
+                      Admin Panel
+                    </button>
+                  )}
+                  <button
+                    className="nav__dropdown-item nav__dropdown-item--logout"
+                    type="button"
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <button

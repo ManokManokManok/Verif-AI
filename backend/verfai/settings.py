@@ -116,10 +116,17 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Configuration
+# Add your frontend URLs here. For development, you may use CORS_ALLOW_ALL_ORIGINS = True for flexibility.
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost:3000',  # Add Vite/React default port if needed
+    'http://127.0.0.1:3000',
 ]
+
+# Allow all origins in development for easier testing (disable in production!)
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOW_CREDENTIALS = True
 
