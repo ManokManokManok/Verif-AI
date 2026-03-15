@@ -17,9 +17,8 @@ import {
 } from '../../../components/admin';
 import { useUserStats, useUserReports } from '../../../hooks/useAdminData';
 import { getReportDetails } from '../../../api/admin';
-import RoleDistributionCard from './components/RoleDistributionCard';
 import ReportDetailsModal from './components/ReportDetailsModal';
-import { getPercentage, getRoleColor } from './utils';
+import { getPercentage } from './utils';
 import './UserStats.css';
 
 export default function UserStats({ onNotify }) {
@@ -283,15 +282,6 @@ export default function UserStats({ onNotify }) {
             }}
           />
         )}
-      </div>
-
-      {/* User Role Distribution */}
-      <div className="admin-mt-4">
-        <RoleDistributionCard 
-          roleDistribution={userStats.role_distribution}
-          totalUsers={userStats.total_users}
-          getRoleColor={getRoleColor}
-        />
       </div>
 
       {/* Confirmation Modal */}

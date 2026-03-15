@@ -214,6 +214,8 @@ class AnalysisStatistics:
     medium_risk_count: int  # is_scam = True with confidence 40-69%
     low_risk_count: int  # is_scam = True with confidence < 40% OR is_scam = False
     legitimate_count: int  # is_scam = False
+    previous_total_count: int = 0
+    previous_scam_count: int = 0
     
     # Scam categories breakdown
     scam_categories_breakdown: List[ScamCategoryBreakdown] = field(default_factory=list)
@@ -225,6 +227,8 @@ class AnalysisStatistics:
     
     # Trends (optional, for time-series data)
     daily_counts: List[Dict[str, Any]] = field(default_factory=list)
+    previous_daily_counts: List[Dict[str, Any]] = field(default_factory=list)
+    confidence_distribution: List[Dict[str, Any]] = field(default_factory=list)
     
     # Timestamp
     calculated_at: datetime = field(default_factory=datetime.utcnow)
@@ -252,11 +256,13 @@ class AnalysisStatistics:
         """Convert to dictionary for API responses."""
         return {
             "total_count": self.total_count,
+            "previous_total_count": self.previous_total_count,
             "high_risk_count": self.high_risk_count,
             "medium_risk_count": self.medium_risk_count,
             "low_risk_count": self.low_risk_count,
             "legitimate_count": self.legitimate_count,
             "scam_count": self.scam_count,
+            "previous_scam_count": self.previous_scam_count,
             "scam_rate_percent": round(self.scam_rate_percent, 2),
             "top_scam_category": self.top_scam_category,
             "scam_categories_breakdown": [
@@ -266,6 +272,8 @@ class AnalysisStatistics:
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,
             "daily_counts": self.daily_counts,
+            "previous_daily_counts": self.previous_daily_counts,
+            "confidence_distribution": self.confidence_distribution,
             "calculated_at": self.calculated_at.isoformat(),
         }
 
