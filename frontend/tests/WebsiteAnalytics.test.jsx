@@ -159,10 +159,10 @@ describe('WebsiteAnalytics', () => {
 
     render(<WebsiteAnalytics onNotify={mockOnNotify} />);
 
-    expect(screen.getByText('Recent Visits (Live)')).toBeInTheDocument();
+    expect(screen.getByText('Recent Visits')).toBeInTheDocument();
   });
 
-  it('displays top referrers', () => {
+  it('does not display top referrers section', () => {
     adminDataHooks.useAnalytics.mockReturnValue({
       data: mockAnalyticsData,
       loading: false,
@@ -172,8 +172,8 @@ describe('WebsiteAnalytics', () => {
 
     render(<WebsiteAnalytics onNotify={mockOnNotify} />);
 
-    expect(screen.getByText('Top Referrers')).toBeInTheDocument();
-    expect(screen.getByText('https://google.com')).toBeInTheDocument();
+    expect(screen.queryByText('Top Referrers')).not.toBeInTheDocument();
+    expect(screen.queryByText('https://google.com')).not.toBeInTheDocument();
   });
 
   it('calls refresh on button click', () => {
@@ -186,7 +186,7 @@ describe('WebsiteAnalytics', () => {
 
     render(<WebsiteAnalytics onNotify={mockOnNotify} />);
 
-    const refreshButton = screen.getByText('🔄 Refresh');
+    const refreshButton = screen.getByText('Refresh');
     fireEvent.click(refreshButton);
 
     expect(mockRefresh).toHaveBeenCalled();
@@ -216,7 +216,7 @@ describe('WebsiteAnalytics', () => {
 
     render(<WebsiteAnalytics onNotify={mockOnNotify} />);
 
-    expect(screen.getByText('No recent visits')).toBeInTheDocument();
+    expect(screen.getByText('No recent visits recorded yet')).toBeInTheDocument();
   });
 
   it('handles missing data gracefully', () => {

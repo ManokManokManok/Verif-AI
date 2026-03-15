@@ -121,33 +121,34 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: transparent;
+  background: rgba(15, 23, 42, 0.35);
   border: none;
   border-radius: 10px;
-  color: #9ca3af;
+  color: #94a3b8;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease-in-out;
   text-align: left;
-  border: 1px solid transparent;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .admin-sidebar__button:hover {
-  background: #1f2937;
+  background: rgba(30, 41, 59, 0.85);
   color: #f9fafb;
-  border-color: rgba(148, 163, 184, 0.2);
+  border-color: rgba(148, 163, 184, 0.35);
+  transform: translateX(2px);
 }
 
 .admin-sidebar__button--active {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.2);
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.24) 0%, rgba(37, 99, 235, 0.08) 100%);
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.55);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22), inset 0 0 0 1px rgba(147, 197, 253, 0.18);
 }
 
 .admin-sidebar__button--active:hover {
-  background: rgba(59, 130, 246, 0.25);
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.3) 0%, rgba(37, 99, 235, 0.12) 100%);
   color: #93c5fd;
 }
 
@@ -156,6 +157,32 @@
   flex-shrink: 0;
   width: 24px;
   text-align: center;
+  display: grid;
+  place-items: center;
+}
+
+.admin-sidebar__icon-image {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+  opacity: 0.72;
+  filter: brightness(0) saturate(100%) invert(70%) sepia(9%) saturate(548%) hue-rotate(179deg) brightness(93%) contrast(90%);
+  transition: filter 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.admin-sidebar__button:hover .admin-sidebar__icon-image,
+.admin-sidebar__iconbtn:hover .admin-sidebar__icon-image {
+  opacity: 0.95;
+  filter: brightness(0) saturate(100%) invert(95%) sepia(19%) saturate(410%) hue-rotate(176deg) brightness(107%) contrast(95%);
+}
+
+.admin-sidebar__button--active .admin-sidebar__icon-image,
+.admin-sidebar__iconbtn--active .admin-sidebar__icon-image {
+  opacity: 1;
+  filter: brightness(0) saturate(100%) invert(72%) sepia(46%) saturate(1918%) hue-rotate(194deg) brightness(100%) contrast(102%);
+  transform: scale(1.02);
 }
 
 .admin-sidebar__label {
@@ -170,35 +197,37 @@
   width: 54px;
   height: 54px;
   border-radius: 12px;
-  background: #1f2937;
-  color: #9ca3af;
+  background: rgba(30, 41, 59, 0.72);
+  color: #94a3b8;
   font-weight: 600;
   font-size: 20px;
   display: grid;
   place-items: center;
-  border: 1px solid #374151;
+  border: 1px solid rgba(148, 163, 184, 0.26);
   transition: all 0.2s ease-in-out;
   flex-shrink: 0;
   cursor: pointer;
 }
 
 .admin-sidebar__iconbtn:hover {
-  background: #374151;
+  background: rgba(51, 65, 85, 0.95);
   color: #f9fafb;
-  border-color: #4b5563;
+  border-color: rgba(148, 163, 184, 0.48);
   transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(2, 6, 23, 0.35);
 }
 
 .admin-sidebar__iconbtn--active {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border-color: rgba(59, 130, 246, 0.3);
+  background: linear-gradient(180deg, rgba(29, 78, 216, 0.4) 0%, rgba(30, 58, 138, 0.3) 100%);
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.7);
+  box-shadow: 0 10px 20px rgba(30, 64, 175, 0.28), inset 0 0 0 1px rgba(147, 197, 253, 0.2);
 }
 
 .admin-sidebar__iconbtn--active:hover {
-  background: rgba(59, 130, 246, 0.25);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.45) 0%, rgba(30, 64, 175, 0.35) 100%);
   color: #93c5fd;
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: rgba(147, 197, 253, 0.85);
 }
 
 /* ============================================
