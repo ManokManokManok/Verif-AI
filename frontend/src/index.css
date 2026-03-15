@@ -1371,20 +1371,29 @@ button {
   min-height: 120px;
 }
 
+
 .detect__plus {
+  width: 36px;
+  height: 36px;
+  margin-left: 10px;
+  margin-right: 10px;
+  padding: 0;
   background: transparent;
   color: #c7d2fe;
   font-size: 28px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.3s ease;
   border-radius: 50%;
+  border: none;
+  outline: none;
 }
 
 .detect__plus:hover {
   color: #e0e7ff;
-  background: rgba(255, 255, 255, 0.08);
-  transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.08);
 }
 
 .detect__input {

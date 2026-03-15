@@ -241,9 +241,6 @@ function Landing() {
                 onClick={() => swiperRef.current && swiperRef.current.slideNext()}
               />
             </div>
-            <button className="landing__admin-btn" type="button" onClick={handleAdminClick}>
-              Admin Panel
-            </button>
           </div>
 
           <section className="landing__right">
@@ -302,9 +299,11 @@ function Landing() {
             <button type="button" className="landing__footer-link" onClick={() => navigate('/chatbot')}>
               AI Chatbot
             </button>
-            <button type="button" className="landing__footer-link" onClick={() => navigate('/login')}>
-              Login
-            </button>
+            {!isLoggedIn && (
+              <button type="button" className="landing__footer-link" onClick={() => navigate('/login')}>
+                Login
+              </button>
+            )}
           </nav>
           <p className="landing__footer-tagline">Know what’s real. VerifAI.</p>
           <p className="landing__footer-copy">

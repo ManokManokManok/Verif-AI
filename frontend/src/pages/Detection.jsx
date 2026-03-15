@@ -555,7 +555,7 @@ function Detection() {
 
       <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
         <header className="nav nav--detect">
-          <div className="brand brand--small">[INSERT LOGO / Verf AI] Fraud Detection</div>
+          <div className="brand brand--small">Verif-AI Detection</div>
           <nav className="nav__links">
             <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>
               About us
@@ -612,7 +612,7 @@ function Detection() {
         <main className={`detect__content ${detectionResult ? 'detect__content--results' : ''}`}>
           {!detectionResult ? (
             <>
-              <h1 className="detect__title">Welcome to VerfAI fraud detection</h1>
+              <h1 className="detect__title">Welcome to VerifAI</h1>
               <p className="detect__subtitle">
                 Write the promo/message you want to analyze, or press the plus button to submit a file
               </p>
