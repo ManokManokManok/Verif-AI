@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import './Settings.css';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { updateUsernameRequest, deleteAccountRequest } from '../api/client';

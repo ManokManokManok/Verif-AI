@@ -1,3 +1,18 @@
+.nav__login:active {
+  animation: navProfileClick 0.18s cubic-bezier(0.4,0,0.2,1);
+}
+
+@keyframes navProfileClick {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.93);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
 /* Animate right-side text to swipe in */
 .carousel-text-anim {
   animation: carouselTextSwipeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
@@ -218,6 +233,19 @@ button {
   padding: 8px 0;
   z-index: 100;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  animation: navDropdownPop 0.22s cubic-bezier(0.4,0,0.2,1);
+  transform-origin: top right;
+}
+
+@keyframes navDropdownPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .nav__dropdown-item {

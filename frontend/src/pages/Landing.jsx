@@ -174,9 +174,9 @@ function Landing() {
                 <button
                   className="nav__dropdown-item"
                   type="button"
-                  onClick={() => { navigate('/detection'); setShowUserMenu(false); }}
+                  onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
                 >
-                  Home
+                  Settings
                 </button>
                 {isAdmin && (
                   <button
