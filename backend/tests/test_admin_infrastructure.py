@@ -217,9 +217,9 @@ class TestAdminRepository:
         
         # Mock aggregation result
         mock_result = [
-            {"_id": "Phishing", "count": 50},
-            {"_id": "Financial Fraud", "count": 30},
-            {"_id": "Romance Scam", "count": 20},
+            {"_id": "Prize, Raffle & Reward", "count": 50, "avg_risk_bps": 8100},
+            {"_id": "Mobile and Digital", "count": 30, "avg_risk_bps": 5200},
+            {"_id": "Legal and Document", "count": 20, "avg_risk_bps": 2500},
         ]
         mock_mongo_client["test_db"].analysis_results.aggregate.return_value = iter(mock_result)
         
@@ -227,9 +227,31 @@ class TestAdminRepository:
         categories = repo.get_top_scam_categories()
         
         assert len(categories) == 3
-        assert categories[0].category == "Phishing"
+        assert categories[0].category == "Prize, Raffle & Reward"
         assert categories[0].count == 50
         assert categories[0].percentage == 50.0  # 50/100 * 100
+        assert categories[0].avg_risk_percent == 81.0
+        assert categories[0].severity == "high"
+        assert categories[1].avg_risk_percent == 52.0
+        assert categories[1].severity == "medium"
+        assert categories[2].avg_risk_percent == 25.0
+        assert categories[2].severity == "low"
+
+    def test_get_top_scam_categories_severity_threshold_edge(self, mock_mongo_client):
+        """Test top category severity classification at threshold boundary."""
+        from src.infrastructure.mongodb.admin_repository import AdminRepository
+
+        mock_result = [
+            {"_id": "Unknown Category", "count": 10, "avg_risk_bps": 7000},
+        ]
+        mock_mongo_client["test_db"].analysis_results.aggregate.return_value = iter(mock_result)
+
+        repo = AdminRepository(mock_mongo_client, "test_db")
+        categories = repo.get_top_scam_categories()
+
+        assert len(categories) == 1
+        assert categories[0].avg_risk_percent == 70.0
+        assert categories[0].severity == "high"
     
     def test_create_report(self, mock_mongo_client):
         """Test creating a user report."""
@@ -285,6 +307,38 @@ class TestAdminRepository:
         assert total == 1
         assert len(reports) == 1
         assert reports[0].status == ReportStatus.PENDING
+
+    def test_get_reports_with_legacy_report_type(self, mock_mongo_client):
+        """Test getting reports when legacy report types exist in storage."""
+        from src.infrastructure.mongodb.admin_repository import AdminRepository
+
+        mock_docs = [
+            {
+                "_id": "id2",
+                "report_id": "report2",
+                "user_id": "user2",
+                "report_type": "low_confidence",
+                "title": "Legacy Report",
+                "description": "Legacy report type value",
+                "status": "pending",
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+        ]
+
+        mock_cursor = MagicMock()
+        mock_cursor.sort.return_value = mock_cursor
+        mock_cursor.skip.return_value = mock_cursor
+        mock_cursor.limit.return_value = iter(mock_docs)
+        mock_mongo_client["test_db"].user_reports.find.return_value = mock_cursor
+        mock_mongo_client["test_db"].user_reports.count_documents.return_value = 1
+
+        repo = AdminRepository(mock_mongo_client, "test_db")
+        reports, total = repo.get_reports(status=ReportStatus.PENDING)
+
+        assert total == 1
+        assert len(reports) == 1
+        assert reports[0].report_type == ReportType.OTHER
     
     def test_update_report_status(self, mock_mongo_client):
         """Test updating report status."""
@@ -354,6 +408,7 @@ class TestAdminRepository:
     def test_get_user_statistics(self, mock_mongo_client):
         """Test getting user statistics."""
         from src.infrastructure.mongodb.admin_repository import AdminRepository
+        from src.domain.admin_entities import StatisticsPeriod
         
         # Mock count_documents
         mock_mongo_client["test_db"].users.count_documents.side_effect = [
@@ -361,22 +416,45 @@ class TestAdminRepository:
             80,   # verified_users
             10,   # new_users (with date filter)
         ]
+        mock_mongo_client["test_db"].analysis_results.count_documents.return_value = 250
         
-        # Mock aggregate for active users
-        mock_mongo_client["test_db"].analysis_results.aggregate.return_value = iter([
-            {"active_users": 50}
-        ])
+        # Mock aggregate pipelines (active users, power users, top power user)
+        mock_mongo_client["test_db"].analysis_results.aggregate.side_effect = [
+            iter([{"active_users": 50}]),
+            iter([{"power_users": 3}]),
+            iter([{"_id": "user-123", "total_detections": 75}]),
+        ]
         
         # Mock visits
         mock_mongo_client["test_db"].website_visits.count_documents.return_value = 1000
+        mock_mongo_client["test_db"].website_visits.aggregate.side_effect = [
+            iter([{"unique": 300}]),
+            iter([]),
+        ]
+        mock_mongo_client["test_db"].users.aggregate.return_value = iter([])
+        mock_mongo_client["test_db"].users.find_one.return_value = {
+            "user_id": "user-123",
+            "username": "power_user",
+            "email": "power@test.com",
+        }
         
         repo = AdminRepository(mock_mongo_client, "test_db")
-        stats = repo.get_user_statistics()
+        stats = repo.get_user_statistics(period=StatisticsPeriod.MONTH)
         
         assert isinstance(stats, UserStatistics)
         assert stats.total_users == 100
         assert stats.verified_users_count == 80
         assert stats.unverified_users_count == 20
+        assert stats.new_users_count == 10
+        assert stats.power_users == 3
+        assert stats.top_power_user is not None
+        assert stats.top_power_user["username"] == "power_user"
+        assert stats.top_power_user["total_detections"] == 75
+
+        new_users_filter = mock_mongo_client["test_db"].users.count_documents.call_args_list[2][0][0]
+        assert "created_at" in new_users_filter
+        assert "$gte" in new_users_filter["created_at"]
+        assert "$lte" in new_users_filter["created_at"]
 
 
 class TestUserRepositoryAdminExtensions:

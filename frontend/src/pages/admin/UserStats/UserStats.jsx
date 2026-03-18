@@ -97,7 +97,7 @@ export default function UserStats({ onNotify }) {
     { 
       key: 'reported_by', 
       label: 'Reporter',
-      render: (value) => value?.username || 'Anonymous'
+      render: (value, row) => value?.username || value?.email || row?.user_email || value?.user_id || row?.user_id || 'Anonymous'
     },
     { 
       key: 'report_type', 
@@ -178,6 +178,14 @@ export default function UserStats({ onNotify }) {
 
   const userStats = stats || {};
   const reports = reportsData?.reports || [];
+  const topPowerUser = userStats.top_power_user || null;
+  const topUserLabel = topPowerUser
+    ? (topPowerUser.username || topPowerUser.email || 'Unknown User')
+    : 'No activity yet';
+  const topUserDetections = Number(topPowerUser?.total_detections || 0);
+  const topUserPeriodLabel = period === 'all_time'
+    ? 'All Time'
+    : `This ${period.charAt(0).toUpperCase()}${period.slice(1)}`;
 
   return (
     <div className="admin-section">
@@ -235,10 +243,10 @@ export default function UserStats({ onNotify }) {
           subtitle="Analyses average"
         />
         <StatCard
-          title="Power Users"
-          value={userStats.power_users?.toLocaleString() || '0'}
+          title="Power User"
+          value={topUserLabel}
           variant="warning"
-          subtitle=">50 analyses"
+          subtitle={`Top User (${topUserPeriodLabel}) • ${topUserDetections.toLocaleString()} detections`}
         />
       </div>
 

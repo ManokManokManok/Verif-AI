@@ -131,6 +131,10 @@ export function useUserStats(dateRange = {}, period = 'all_time') {
         endDate: dateRange.endDate,
         period,
       });
+
+      if (import.meta.env.DEV) {
+        console.debug('[useUserStats] raw API response:', res);
+      }
       
       if (res.success) setStats(res.data);
     } catch (err) {

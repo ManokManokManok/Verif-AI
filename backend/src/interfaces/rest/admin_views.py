@@ -12,7 +12,7 @@ from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 from django.http import HttpResponse
 import csv
 import io
@@ -157,6 +157,60 @@ def parse_period_param(period_str: str) -> StatisticsPeriod:
         'all_time': StatisticsPeriod.ALL_TIME,
     }
     return period_map.get(period_str.lower(), StatisticsPeriod.ALL_TIME) if period_str else StatisticsPeriod.ALL_TIME
+
+
+def _resolve_reporter_info(report_data: Dict[str, Any], admin_repo: AdminRepository) -> Dict[str, Optional[str]]:
+    """Resolve reporter identity details for a user report payload."""
+    user_id = report_data.get('user_id')
+    user_email = report_data.get('user_email')
+
+    reporter: Dict[str, Optional[str]] = {
+        'user_id': user_id,
+        'email': user_email,
+        'username': None,
+    }
+
+    query_conditions = []
+    if user_id:
+        query_conditions.extend([
+            {'user_id': user_id},
+            {'id': user_id},
+        ])
+    if user_email:
+        query_conditions.append({'email': user_email})
+
+    user_doc: Optional[Dict[str, Any]] = None
+    if query_conditions:
+        lookup_result = admin_repo.users_collection.find_one(
+            {'$or': query_conditions},
+            {'username': 1, 'email': 1, 'user_id': 1, 'id': 1},
+        )
+        if isinstance(lookup_result, dict):
+            user_doc = lookup_result
+
+    if isinstance(user_doc, dict):
+        reporter['username'] = user_doc.get('username') or user_doc.get('email')
+        reporter['email'] = reporter['email'] or user_doc.get('email')
+        reporter['user_id'] = (
+            reporter['user_id']
+            or user_doc.get('user_id')
+            or user_doc.get('id')
+            or (str(user_doc.get('_id')) if user_doc.get('_id') is not None else None)
+        )
+
+    if not reporter['username'] and reporter['email']:
+        reporter['username'] = str(reporter['email']).split('@')[0]
+    if not reporter['username'] and reporter['user_id']:
+        reporter['username'] = str(reporter['user_id'])
+
+    return reporter
+
+
+def _enrich_report_payload(report_data: Dict[str, Any], admin_repo: AdminRepository) -> Dict[str, Any]:
+    """Attach computed reporter object to a report payload."""
+    enriched = dict(report_data)
+    enriched['reported_by'] = _resolve_reporter_info(enriched, admin_repo)
+    return enriched
 
 
 def _format_period_for_filename(period: StatisticsPeriod) -> str:
@@ -391,6 +445,7 @@ def analysis_stats(request: Request) -> Response:
         )
         
         if result.success:
+            logger.debug("User stats API response payload: %s", result.statistics.to_dict())
             return Response({
                 'success': True,
                 'data': result.statistics.to_dict()
@@ -683,10 +738,11 @@ def list_reports(request: Request) -> Response:
         )
         
         if result.success:
+            report_payloads = [_enrich_report_payload(r.to_dict(), admin_repo) for r in result.reports]
             return Response({
                 'success': True,
                 'data': {
-                    'reports': [r.to_dict() for r in result.reports],
+                    'reports': report_payloads,
                     'total': result.total_count,
                     'page': page,
                     'limit': limit,
@@ -747,9 +803,10 @@ def get_report(request: Request, report_id: str) -> Response:
         result = use_case.execute(report_id=report_id)
         
         if result.success:
+            report_payload = _enrich_report_payload(result.report.to_dict(), admin_repo)
             return Response({
                 'success': True,
-                'data': result.report.to_dict()
+                'data': report_payload
             }, status=status.HTTP_200_OK)
         else:
             error_status_code = status.HTTP_404_NOT_FOUND if 'not found' in result.error_message.lower() else status.HTTP_400_BAD_REQUEST
@@ -829,9 +886,10 @@ def update_report(request: Request, report_id: str) -> Response:
         )
         
         if result.success:
+            report_payload = _enrich_report_payload(result.report.to_dict(), admin_repo)
             return Response({
                 'success': True,
-                'data': result.report.to_dict()
+                'data': report_payload
             }, status=status.HTTP_200_OK)
         else:
             error_status = status.HTTP_404_NOT_FOUND if 'not found' in result.error_message.lower() else status.HTTP_400_BAD_REQUEST

@@ -147,8 +147,24 @@ export default function AnalysisStats({ onNotify }) {
       }
     },
     {
+      key: 'avg_risk_percent',
+      label: 'Avg Risk',
+      render: (value) => `${Number(value || 0).toFixed(1)}%`
+    },
+    {
       key: 'severity',
-      label: 'Risk Level',
+      label: (
+        <span className="analysis-stats__header-label">
+          Risk Level
+          <span
+            className="analysis-stats__header-help"
+            title="Thresholds: High ≥ 70%, Medium 40–69%, Low < 40%"
+            aria-label="Risk level thresholds: High greater than or equal to 70 percent, Medium 40 to 69 percent, Low below 40 percent"
+          >
+            ⓘ
+          </span>
+        </span>
+      ),
       render: (value) => (
         <StatusBadge 
           status={value || 'unknown'} 
