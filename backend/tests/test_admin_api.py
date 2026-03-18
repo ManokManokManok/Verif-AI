@@ -669,6 +669,7 @@ class TestUserReportsEndpoint:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['success'] is True
         assert len(response.data['data']['reports']) == 1
+        assert response.data['data']['reports'][0]['reported_by']['username'] == sample_user_report.user_id
         assert response.data['data']['total'] == 1
         assert response.data['data']['page'] == 1
     

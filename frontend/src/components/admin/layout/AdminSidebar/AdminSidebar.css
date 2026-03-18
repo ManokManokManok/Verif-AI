@@ -111,6 +111,11 @@
   gap: 8px;
 }
 
+.admin-sidebar__footer {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
 .admin-sidebar__item {
   margin: 0;
 }
@@ -131,6 +136,7 @@
   transition: all 0.2s ease-in-out;
   text-align: left;
   border: 1px solid rgba(148, 163, 184, 0.18);
+  text-decoration: none;
 }
 
 .admin-sidebar__button:hover {
@@ -150,6 +156,18 @@
 .admin-sidebar__button--active:hover {
   background: linear-gradient(90deg, rgba(37, 99, 235, 0.3) 0%, rgba(37, 99, 235, 0.12) 100%);
   color: #93c5fd;
+}
+
+.admin-sidebar__button--logout {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.22);
+}
+
+.admin-sidebar__button--logout:hover {
+  color: #fee2e2;
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(153, 27, 27, 0.34);
 }
 
 .admin-sidebar__icon {
@@ -207,6 +225,7 @@
   transition: all 0.2s ease-in-out;
   flex-shrink: 0;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .admin-sidebar__iconbtn:hover {
@@ -228,6 +247,19 @@
   background: linear-gradient(180deg, rgba(37, 99, 235, 0.45) 0%, rgba(30, 64, 175, 0.35) 100%);
   color: #93c5fd;
   border-color: rgba(147, 197, 253, 0.85);
+}
+
+.admin-sidebar__iconbtn--logout {
+  margin-top: auto;
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.38);
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.admin-sidebar__iconbtn--logout:hover {
+  color: #fee2e2;
+  border-color: rgba(248, 113, 113, 0.6);
+  background: rgba(153, 27, 27, 0.36);
 }
 
 /* ============================================

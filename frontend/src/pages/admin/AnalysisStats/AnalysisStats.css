@@ -156,6 +156,19 @@
   text-align: right;
 }
 
+.analysis-stats__header-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.analysis-stats__header-help {
+  color: var(--admin-text-muted);
+  cursor: help;
+  font-size: 0.85em;
+  line-height: 1;
+}
+
 /* ── Rate Summary Banner ── */
 .analysis-stats__rate-banner {
   display: flex;

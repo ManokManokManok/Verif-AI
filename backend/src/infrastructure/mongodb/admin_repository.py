@@ -6,7 +6,7 @@ user statistics, user reports, and admin activity logs.
 """
 
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo import MongoClient, DESCENDING, ASCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -107,6 +107,14 @@ class AdminRepository:
         if end_date:
             date_filter["$lte"] = end_date
         return date_filter
+
+    def _to_utc_naive(self, value: Optional[datetime]) -> Optional[datetime]:
+        """Convert datetime to UTC-naive for Mongo comparisons."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
 
     def _get_summary_counts(
         self,
@@ -307,13 +315,22 @@ class AdminRepository:
         date_filter = self._build_created_at_filter(effective_start_date, effective_end_date)
         if date_filter:
             match_stage["created_at"] = date_filter
+
+        risk_bps_expression: Dict[str, Any] = {
+            "$cond": [
+                {"$gt": [{"$ifNull": ["$confidence_bps", 0]}, 0]},
+                {"$ifNull": ["$confidence_bps", 0]},
+                {"$multiply": [{"$ifNull": ["$scam_score", 0]}, 10000]},
+            ]
+        }
         
         pipeline = [
             {"$match": match_stage},
             {
                 "$group": {
                     "_id": "$scam_type",
-                    "count": {"$sum": 1}
+                    "count": {"$sum": 1},
+                    "avg_risk_bps": {"$avg": risk_bps_expression},
                 }
             },
             {"$sort": {"count": -1}},
@@ -325,21 +342,17 @@ class AdminRepository:
         # Calculate total for percentages
         total = sum(r["count"] for r in results) if results else 1
         
-        # Severity mapping based on category type
-        high_severity_categories = {'phishing', 'financial_fraud', 'malware', 'identity_theft', 'ransomware'}
-        medium_severity_categories = {'spam', 'scam', 'fake_news', 'misleading', 'suspicious'}
-        
         categories = []
         for r in results:
             category = r["_id"] or "Unknown"
             count = r["count"]
             percentage = (count / total) * 100 if total > 0 else 0
-            
-            # Determine severity based on category
-            category_lower = category.lower().replace('_', ' ').replace('-', ' ')
-            if any(h in category_lower for h in high_severity_categories):
+
+            avg_risk_bps = float(r.get("avg_risk_bps") or 0)
+            avg_risk_percent = max(0.0, min(100.0, avg_risk_bps / 100.0))
+            if avg_risk_bps >= 7000:
                 severity = "high"
-            elif any(m in category_lower for m in medium_severity_categories):
+            elif avg_risk_bps >= 4000:
                 severity = "medium"
             else:
                 severity = "low"
@@ -348,6 +361,7 @@ class AdminRepository:
                 category=category,
                 count=count,
                 percentage=percentage,
+                avg_risk_percent=avg_risk_percent,
                 severity=severity
             ))
         
@@ -523,6 +537,19 @@ class AdminRepository:
         Returns:
             UserStatistics entity with aggregated data
         """
+        effective_start_date, effective_end_date = self._resolve_statistics_date_range(
+            start_date=self._to_utc_naive(start_date),
+            end_date=self._to_utc_naive(end_date),
+            period=period,
+        )
+
+        logger.debug(
+            "Computing user statistics with period=%s, start=%s, end=%s",
+            period.value,
+            effective_start_date.isoformat() if effective_start_date else None,
+            effective_end_date.isoformat() if effective_end_date else None,
+        )
+
         # Total users count
         total_users = self.users_collection.count_documents({})
         
@@ -532,33 +559,41 @@ class AdminRepository:
         
         # New users in period
         new_users_filter = {}
-        if start_date or end_date:
+        if effective_start_date or effective_end_date:
             new_users_filter["created_at"] = {}
-            if start_date:
-                new_users_filter["created_at"]["$gte"] = start_date
-            if end_date:
-                new_users_filter["created_at"]["$lte"] = end_date
+            if effective_start_date:
+                new_users_filter["created_at"]["$gte"] = effective_start_date
+            if effective_end_date:
+                new_users_filter["created_at"]["$lte"] = effective_end_date
         
         new_users_count = self.users_collection.count_documents(new_users_filter) if new_users_filter else 0
+        logger.debug(
+            "User statistics new-users query=%s result_count=%s",
+            new_users_filter,
+            new_users_count,
+        )
         
         # Active users (users who have analyses in the period)
-        active_users_count = self._get_active_users_count(start_date, end_date)
+        active_users_count = self._get_active_users_count(effective_start_date, effective_end_date)
         
         # Website visits
-        visits, unique_visitors = self._get_visit_stats(start_date, end_date)
+        visits, unique_visitors = self._get_visit_stats(effective_start_date, effective_end_date)
         
         # Total analyses by users
-        total_analyses = self._get_total_analyses_count(start_date, end_date)
+        total_analyses = self._get_total_analyses_count(effective_start_date, effective_end_date)
         avg_analyses = total_analyses / total_users if total_users > 0 else 0
         
         # Power users (>50 analyses)
         power_users_count = self._get_power_users_count()
+
+        # Top power user in current period (highest detection usage)
+        top_power_user = self._get_top_power_user(effective_start_date, effective_end_date)
         
         # Daily signups trend
-        daily_signups = self._get_daily_signups(start_date, end_date)
+        daily_signups = self._get_daily_signups(effective_start_date, effective_end_date)
         
         # Daily visits trend
-        daily_visits = self._get_daily_visits(start_date, end_date)
+        daily_visits = self._get_daily_visits(effective_start_date, effective_end_date)
         
         return UserStatistics(
             total_users=total_users,
@@ -571,13 +606,72 @@ class AdminRepository:
             total_analyses_by_users=total_analyses,
             avg_analyses_per_user=avg_analyses,
             power_users=power_users_count,
+            top_power_user=top_power_user,
             period=period,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=effective_start_date,
+            end_date=effective_end_date,
             daily_signups=daily_signups,
             daily_visits=daily_visits,
             calculated_at=datetime.utcnow(),
         )
+
+    def _get_top_power_user(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Get the single top user by detection usage in the selected timeframe."""
+        match_stage: Dict[str, Any] = {"user_id": {"$exists": True, "$ne": None}}
+        date_filter = self._build_created_at_filter(start_date, end_date)
+        if date_filter:
+            match_stage["created_at"] = date_filter
+
+        pipeline = [
+            {"$match": match_stage},
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "total_detections": {"$sum": 1},
+                }
+            },
+            {"$sort": {"total_detections": -1}},
+            {"$limit": 1},
+        ]
+
+        top_results = list(self.analysis_collection.aggregate(pipeline))
+        logger.debug("Top power user aggregation result=%s", top_results)
+        if not top_results or "_id" not in top_results[0]:
+            return None
+
+        top_result = top_results[0]
+        user_id = str(top_result.get("_id"))
+        total_detections = int(top_result.get("total_detections", 0))
+
+        user_doc = self.users_collection.find_one(
+            {
+                "$or": [
+                    {"user_id": user_id},
+                    {"id": user_id},
+                ]
+            },
+            {"username": 1, "email": 1, "user_id": 1},
+        )
+
+        if not user_doc:
+            try:
+                user_doc = self.users_collection.find_one(
+                    {"_id": ObjectId(user_id)},
+                    {"username": 1, "email": 1, "user_id": 1},
+                )
+            except Exception:
+                user_doc = None
+
+        return {
+            "user_id": user_id,
+            "username": user_doc.get("username") if user_doc else None,
+            "email": user_doc.get("email") if user_doc else None,
+            "total_detections": total_detections,
+        }
     
     def _get_active_users_count(
         self,
@@ -889,12 +983,28 @@ class AdminRepository:
     
     def _document_to_report(self, doc: Dict[str, Any]) -> UserReport:
         """Convert MongoDB document to UserReport entity."""
+        report_type_raw = str(doc.get("report_type", "other")).strip().lower()
+        report_type_aliases = {
+            "low_confidence": ReportType.OTHER,
+            "high_confidence": ReportType.OTHER,
+        }
+        try:
+            report_type = ReportType(report_type_raw)
+        except ValueError:
+            report_type = report_type_aliases.get(report_type_raw, ReportType.OTHER)
+            logger.warning(
+                "Unknown report_type '%s' for report_id=%s. Falling back to '%s'.",
+                report_type_raw,
+                doc.get("report_id", str(doc.get("_id", "unknown"))),
+                report_type.value,
+            )
+
         return UserReport(
             id=str(doc["_id"]),
             report_id=doc.get("report_id", str(doc["_id"])),
             user_id=doc.get("user_id", ""),
             user_email=doc.get("user_email"),
-            report_type=ReportType(doc.get("report_type", "other")),
+            report_type=report_type,
             title=doc.get("title", ""),
             description=doc.get("description", ""),
             analysis_id=doc.get("analysis_id"),

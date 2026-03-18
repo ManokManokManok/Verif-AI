@@ -190,6 +190,7 @@ class ScamCategoryBreakdown:
     category: str
     count: int
     percentage: float  # 0-100
+    avg_risk_percent: float = 0.0  # 0-100
     severity: str = "medium"  # high, medium, low
     
     def to_dict(self) -> Dict[str, Any]:
@@ -197,6 +198,7 @@ class ScamCategoryBreakdown:
             "category": self.category,
             "count": self.count,
             "percentage": round(self.percentage, 2),
+            "avg_risk_percent": round(self.avg_risk_percent, 2),
             "severity": self.severity,
         }
 
@@ -300,6 +302,7 @@ class UserStatistics:
     total_analyses_by_users: int = 0
     avg_analyses_per_user: float = 0.0
     power_users: int = 0  # Users with >50 analyses
+    top_power_user: Optional[Dict[str, Any]] = None  # Most active user by detections in period
     
     # Time period
     period: StatisticsPeriod = StatisticsPeriod.ALL_TIME
@@ -342,6 +345,7 @@ class UserStatistics:
             "total_analyses_by_users": self.total_analyses_by_users,
             "avg_analyses_per_user": round(self.avg_analyses_per_user, 2),
             "power_users": self.power_users,
+            "top_power_user": self.top_power_user,
             "period": self.period.value,
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,
