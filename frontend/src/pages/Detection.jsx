@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail, deleteAnalysisHistoryItem, deleteAllAnalysisHistory } from '../api/analysis';
-import { anchorAnalysis, verifyAnalysis } from '../api/blockchain';
 import { getAnalysisConversation } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
@@ -38,9 +37,6 @@ function Detection() {
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [graphScamWidth, setGraphScamWidth] = useState(0);
   const [graphLegitWidth, setGraphLegitWidth] = useState(0);
-  const [isAnchoring, setIsAnchoring] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState(null);
   const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -418,46 +414,6 @@ function Detection() {
     return () => cancelAnimationFrame(t);
   }, [detectionResult]);
 
-  const handleAnchor = async () => {
-    if (!detectionResult?.ref_id || isAnchoring) return;
-
-    setIsAnchoring(true);
-    try {
-      const result = await anchorAnalysis(detectionResult.ref_id);
-      console.log('[ANCHOR RESULT]', result);
-      // Update the detection result with anchored status
-      setDetectionResult(prev => ({
-        ...prev,
-        is_anchored: true,
-        tx_hash: result.tx_hash,
-        block_number: result.block_number
-      }));
-      alert('Analysis anchored to blockchain successfully!');
-    } catch (error) {
-      console.error('[ANCHOR ERROR]', error);
-      alert(`Error anchoring: ${error.message || 'Failed to anchor'}`);
-    } finally {
-      setIsAnchoring(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    if (!detectionResult?.ref_id || isVerifying) return;
-
-    setIsVerifying(true);
-    setVerificationResult(null);
-    try {
-      const result = await verifyAnalysis(detectionResult.ref_id);
-      console.log('[VERIFY RESULT]', result);
-      setVerificationResult(result);
-    } catch (error) {
-      console.error('[VERIFY ERROR]', error);
-      setVerificationResult({ verified: false, error: error.message });
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   const handleAskAIGuidance = async () => {
     if (!detectionResult?.ref_id || !isLoggedIn || isOpeningGuidance) return;
 
@@ -575,7 +531,7 @@ function Detection() {
               <button
                 className="nav__link nav__btn"
                 type="button"
-                onClick={() => navigate('/blockchain')}
+                onClick={() => navigate('/admin')}
               >
                 Admin
               </button>

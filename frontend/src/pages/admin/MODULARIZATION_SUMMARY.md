@@ -219,15 +219,11 @@ To complete the modularization initiative:
    - Extract chart components
    - Move helper functions to utilities
 
-2. **BlockchainVerification.jsx** (464 lines)
-   - Extract verification table components
-   - Separate modal logic
-
-3. **ModelHealth.jsx** (406 lines)
+2. **ModelHealth.jsx** (406 lines)
    - Extract health metric components
    - Separate chart visualizations
 
-4. **UserStats.jsx** (403 lines)
+3. **UserStats.jsx** (403 lines)
    - Extract statistics components
    - Move calculation utilities
 

@@ -42,7 +42,6 @@ This document summarizes the comprehensive documentation improvements made to th
 - User management endpoints
 - Admin endpoints (10 endpoints documented)
 - Scam detection API
-- Blockchain endpoints
 - System health endpoints
 - Error response formats and codes
 - Rate limiting documentation
@@ -69,7 +68,6 @@ This document summarizes the comprehensive documentation improvements made to th
 - Email configuration (SendGrid, SMTP)
 - Rate limiting configuration (12+ categories)
 - Security configuration options
-- Blockchain configuration
 - LLM model configuration
 - Development vs Production comparison
 - Security checklist
@@ -241,8 +239,6 @@ backend/docs/
 ├── SECURITY.md                    ✅ EXISTING (previously created)
 ├── SECURITY_BEST_PRACTICES.md     ✅ NEW - Security guidelines
 ├── admin/                         📁 (placeholder)
-└── blockchain/
-    └── BLOCKCHAIN_INTEGRATION.md  ✅ EXISTING
 ```
 
 ---
