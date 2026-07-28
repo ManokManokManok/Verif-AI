@@ -124,7 +124,7 @@ class TestSensitiveDataFilter(unittest.TestCase):
         self.assertIn("***REDACTED***:***REDACTED***@", output)
     
     def test_private_key_redacted(self):
-        """Test blockchain private keys are redacted."""
+        """Test private keys are redacted."""
         self.logger.info("private_key: 0x1234567890abcdef1234567890abcdef1234567890abcdef")
         output = self.get_log_output()
         

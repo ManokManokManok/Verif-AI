@@ -17,7 +17,7 @@ A logging filter that scans log messages and redacts sensitive patterns before t
 - ✅ JWT Bearer tokens
 - ✅ API keys
 - ✅ MongoDB connection strings with credentials
-- ✅ Private keys (blockchain, SSH)
+- ✅ Private keys (SSH, deployment credentials)
 - ✅ Session tokens
 - ✅ Credit card numbers
 - ✅ Phone numbers (international format)

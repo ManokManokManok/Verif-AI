@@ -28,7 +28,7 @@ Security Categories:
     - JWT Bearer tokens
     - API keys
     - MongoDB connection strings
-    - Private keys (blockchain)
+    - Private keys
     - Session tokens
     - Credit card numbers (future)
 """
@@ -94,7 +94,7 @@ class SensitiveDataFilter(logging.Filter):
             r'\1="***REDACTED***"'
         ),
         
-        # Private keys (blockchain, SSH, etc.)
+        # Private keys (SSH, deployment credentials, etc.)
         'private_key': (
             r'(private[_-]?key|privatekey)["\']?\s*[:=]\s*["\']?([0-9a-fA-Fx]{40,})',
             r'\1="***REDACTED***"'

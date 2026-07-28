@@ -11,7 +11,6 @@ Welcome to the Verif-AI backend documentation! This folder contains comprehensiv
   - User management APIs
   - Admin endpoints
   - Scam detection API
-  - Blockchain integration
   - Error codes and rate limiting
 
 - **[SECURITY_BEST_PRACTICES.md](SECURITY_BEST_PRACTICES.md)** - Security guidelines for development
@@ -58,13 +57,6 @@ Welcome to the Verif-AI backend documentation! This folder contains comprehensiv
   - RBAC guidelines
   - Incident response plan
 
-### For Blockchain Integration
-
-- **[blockchain/BLOCKCHAIN_INTEGRATION.md](blockchain/BLOCKCHAIN_INTEGRATION.md)** - Blockchain features
-  - Smart contract integration
-  - Analysis anchoring
-  - Verification procedures
-
 ## 🚀 Quick Start
 
 ### New Developer?
@@ -96,8 +88,6 @@ docs/
 ├── SECURITY.md                - Security implementation overview
 ├── SECURITY_BEST_PRACTICES.md - Security guidelines & standards
 ├── admin/                     - (Reserved for admin features)
-└── blockchain/
-    └── BLOCKCHAIN_INTEGRATION.md - Blockchain features
 ```
 
 ## 🔍 Common Tasks

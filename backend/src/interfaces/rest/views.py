@@ -1466,7 +1466,7 @@ def detect_scam(request: Request) -> Response:
     Detect if a message is a scam using multi-head BERT + Gemma LLM analysis.
     
     Analysis results are automatically saved to the database for optional
-    blockchain anchoring by administrators.
+    administrative review workflows.
     
     Request body:
     {
@@ -1476,8 +1476,7 @@ def detect_scam(request: Request) -> Response:
     Response:
     {
         "message": "original user input text",
-        "ref_id": "uuid-for-blockchain-anchoring",
-        "is_anchored": false,
+        "ref_id": "uuid-for-analysis-record",
         "scam_score": 85.5,
         "legit_score": 14.5,
         "is_scam": true,
@@ -1583,7 +1582,7 @@ def detect_scam(request: Request) -> Response:
                 'key_markers': []
             }
         
-        # Step 3: Save analysis result to database for blockchain anchoring
+        # Step 3: Save analysis result to database for optional audit metadata
         import hashlib
         try:
             # Create message hash for lookup (privacy: we don't store raw message)
@@ -1665,9 +1664,8 @@ def detect_scam(request: Request) -> Response:
 
             logger.info(f"[DB] Analysis saved: ref_id={saved_analysis.ref_id}")
 
-            # Include ref_id in response for blockchain anchoring
+            # Include ref_id in response for record linkage
             ref_id = saved_analysis.ref_id
-            is_anchored = saved_analysis.is_anchored
             needs_review = saved_analysis.needs_review
             review_reason = saved_analysis.review_reason
             
@@ -1678,15 +1676,13 @@ def detect_scam(request: Request) -> Response:
             logger.error(f"[DB] Error saving analysis: {str(db_error)}")
             # Don't fail the request if DB save fails
             ref_id = None
-            is_anchored = False
             needs_review = False
             review_reason = None
         
         # Combine results
         combined_result = {
             'message': message,  # Include original message for display
-            'ref_id': ref_id,  # For blockchain anchoring
-            'is_anchored': is_anchored,  # Blockchain status
+            'ref_id': ref_id,  # For record linkage
             'created_at': (saved_analysis.created_at.isoformat() if saved_analysis and hasattr(saved_analysis, 'created_at') and saved_analysis.created_at else None),
             **bert_result,
             **llm_result,

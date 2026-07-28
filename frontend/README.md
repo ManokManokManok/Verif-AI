@@ -1,6 +1,6 @@
 # Verif-AI Frontend
 
-Modern React-based frontend for the Verif-AI scam detection platform. Features AI-powered scam detection, blockchain verification, real-time analytics, and comprehensive admin management tools.
+Modern React-based frontend for the Verif-AI scam detection platform. Features AI-powered scam detection, real-time analytics, and comprehensive admin management tools.
 
 ## 🚀 Tech Stack
 
@@ -19,7 +19,6 @@ frontend/
 │   ├── api/                    # API client and endpoints
 │   │   ├── client.js           # Core API client with auth
 │   │   ├── detection.js        # Scam detection endpoints
-│   │   ├── blockchain.js       # Blockchain verification endpoints
 │   │   ├── admin.js            # Admin management endpoints
 │   │   └── analytics.js        # Analytics endpoints
 │   │
@@ -32,7 +31,6 @@ frontend/
 │   │   │   ├── modals/         # Modal components (ConfirmModal, UserModal, etc.)
 │   │   │   └── tables/         # Table components (DataTable, Pagination, etc.)
 │   │   ├── auth/               # Auth-specific components (SessionExpiredModal)
-│   │   ├── blockchain/         # Blockchain components (shared between user/admin)
 │   │   ├── reports/            # Report-related components
 │   │   └── ChatBot.jsx         # AI chatbot component
 │   │
@@ -48,7 +46,6 @@ frontend/
 │   │   ├── admin/              # Admin pages (modular structure)
 │   │   │   ├── AdminDashboard/ # Main admin container
 │   │   │   ├── AnalysisStats/  # Analysis statistics & trends
-│   │   │   ├── BlockchainVerification/ # Blockchain anchoring
 │   │   │   ├── ModelHealth/    # System health monitoring
 │   │   │   ├── UserManagement/ # User CRUD operations
 │   │   │   ├── UserStats/      # User analytics & reports
@@ -82,121 +79,42 @@ frontend/
 ## 🎨 Features & Pages
 
 ### Public Pages
-
-#### 1. **Landing Page** (`/`)
-- Hero section with platform introduction
-- Feature highlights
 - Call-to-action buttons
 - Responsive design
-
-#### 2. **Detection Page** (`/detection`)
-- Multi-input scam detection (URL, Email, Message, Phone)
-- Real-time AI analysis
-- Risk level classification (Low, Medium, High, Critical)
 - Detailed scam analysis reports
-- Blockchain verification integration
 - Export reports as PDF/JSON
-
-#### 3. **AI Chatbot** (`/chatbot`)
-- Interactive AI assistant for scam queries
-- Context-aware responses
-- Chat history management
 - Real-time typing indicators
 - Markdown support for responses
-
-#### 4. **Authentication Flow**
-- **Login** (`/login`): Email/password authentication
-- **Signup** (`/signup`): User registration with email verification
-- **Verify Email** (`/verify-email`): Email confirmation handler
 - **Forgot Password** (`/forgot-password`): Password recovery flow
 - **Reset Password** (`/reset-password`): New password setup
 
 ### Admin Pages (`/admin`)
 
 Comprehensive admin dashboard with 6 modular sections:
-
-#### 1. **AdminDashboard** (Container)
-- Collapsible sidebar navigation
-- Section routing
-- Notification system
 - Mobile-responsive layout
 - Role-based access control
-
-#### 2. **Model Health** (`/admin#model-health`)
-- Real-time system metrics (CPU, GPU, Memory)
-- System information display
-- Performance gauges with thresholds
 - 30-second auto-refresh
 - Uptime tracking
-
-**Components:**
 - `SystemGaugeCard`: Metric gauge with details
 - `SystemInfoCard`: System information grid
-
-#### 3. **Analysis Stats** (`/admin#analysis-stats`)
-- Total analyses breakdown
-- Risk level distribution
-- Daily activity charts (14-day trend)
 - Scam type analytics
 - Growth trends & percentages
-
-**Components:**
 - `RiskBreakdownCard`: Risk level progress bars
 - `DailyActivityChart`: Activity visualization
-
-#### 4. **User Stats** (`/admin#user-stats`)
-- User growth metrics
-- Role distribution analysis
-- User activity reports
 - Registration trends
 - Report filtering (All/Active/Inactive)
-
 **Components:**
 - `RoleDistributionCard`: Role breakdown display
-
-#### 5. **User Management** (`/admin#user-management`)
-- User CRUD operations
-- Role management (Admin, Analyst, User)
-- Account status control (Active/Inactive)
-- Search & filtering
 - Pagination
 - Bulk operations
-
-**Components:**
-- `UserTable`: Data table with actions
-- `UserModal`: User create/edit form
 - `RoleManagementModal`: Role assignment
 - `UserStatsModal`: Individual user statistics
-
-#### 6. **Website Analytics** (`/admin#website-analytics`)
-- Page visit tracking
-- Device breakdown (Desktop, Mobile, Tablet)
-- Hourly traffic patterns
 - Recent visits log
 - Geographic analytics (if enabled)
-
-**Components:**
-- `PageVisitsChart`: Top pages bar chart
-- `DeviceBreakdown`: Device distribution
 - `HourlyPattern`: 24-hour activity chart
 - `RecentVisits`: Real-time visit log
-
-#### 7. **Blockchain Verification** (`/admin#blockchain`)
-- Analysis anchoring to blockchain
-- Verification status tracking
 - Force re-anchor capability
 - Transaction hash display
-- Blockchain network status
-- Filter by status (All/Anchored/Pending)
-
-**Components:**
-- `BlockchainStatsCard`: Quick statistics
-- `BlockchainFilters`: Filter controls
-
-## 🧩 Component Architecture
-
-### Admin Component System
-
 Located in `src/components/admin/`, organized by category:
 
 #### Data Display
@@ -226,18 +144,9 @@ Located in `src/components/admin/`, organized by category:
 - **Pagination**: Page navigation controls
 - **SortableHeader**: Table header with sorting
 - **ActionMenu**: Dropdown action menu for rows
-
-### Shared Utilities (`pages/admin/shared/`)
-
-- **formatters.js**: Data formatting utilities
   - `formatRole()`: Format user roles
   - `formatDate()`: Date formatting
   - `formatNumber()`: Number formatting with locale
-  - `formatPercentage()`: Percentage display
-  - `formatBytes()`: File size formatting
-  - `truncate()`: String truncation
-  - `getTrend()`: Calculate trend with percentage
-  - `getPercentage()`: Calculate percentage
 
 - **validators.js**: Input validation
   - `validateEmail()`: Email format validation
@@ -251,7 +160,6 @@ Located in `src/components/admin/`, organized by category:
 Centralized HTTP client with:
 - Authentication token management
 - Automatic token refresh
-- Request/response interceptors
 - Error handling
 - CSRF protection
 - Session management
@@ -272,12 +180,6 @@ apiClient.get('/endpoint'); // Includes Authorization header
   - `analyzeContent()`: Submit detection request
   - `getAnalysis()`: Fetch analysis results
   - `getAnalysisHistory()`: User analysis history
-
-- **blockchain.js**: Blockchain operations
-  - `getBlockchainStatus()`: Network status
-  - `verifyAnalysis()`: Verify blockchain record
-  - `anchorAnalysis()`: Anchor to blockchain
-  - `listAnalyses()`: Get all analyses
 
 - **admin.js**: Admin operations
   - `getUsers()`: List users with pagination
@@ -423,7 +325,6 @@ All admin pages refactored into modular folder structure:
 | ModelHealth | 406 lines | ~200 lines | 51% |
 | AnalysisStats | 425 lines | ~200 lines | 53% |
 | UserStats | 440 lines | ~250 lines | 43% |
-| BlockchainVerification | 521 lines | ~220 lines | 58% |
 | AdminDashboard | 127 lines | ~127 lines | Organized |
 
 **Total:** ~1,792 lines → ~870 lines (51% reduction)
@@ -514,7 +415,6 @@ Create `.env` file in root:
 ```env
 VITE_API_URL=http://localhost:8000
 VITE_WS_URL=ws://localhost:8000/ws
-VITE_BLOCKCHAIN_ENABLED=true
 ```
 
 ### Development Server
@@ -595,14 +495,7 @@ Component.propTypes = {
 - Streaming AI responses
 - Auto-save analysis history
 
-### 2. Blockchain Integration
-
-- Ethereum/Polygon network support
-- Transaction hash verification
-- Immutable analysis records
-- Gas estimation & optimization
-
-### 3. Admin Analytics
+### 2. Admin Analytics
 
 - Real-time metrics with auto-refresh
 - Interactive charts & visualizations

@@ -157,12 +157,6 @@ RATE_LIMIT_AUTH_REGISTER_REQUESTS=2
 RATE_LIMIT_AUTH_REGISTER_WINDOW=3600
 RATE_LIMIT_AUTH_REGISTER_BLOCK=7200
 
-# =============================================================================
-# BLOCKCHAIN (if using)
-# =============================================================================
-WEB3_PROVIDER_URL=https://mainnet.infura.io/v3/YOUR_PROJECT_ID
-CONTRACT_ADDRESS=0x...
-PRIVATE_KEY=0x...
 ```
 
 ---
