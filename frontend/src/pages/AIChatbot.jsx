@@ -209,14 +209,11 @@ function AIChatbot() {
       let response;
       
       // Use different API based on conversation type
-      if (conversationType === 'analysis_guided') {
+      if (conversationType === 'analysis_guided' && currentConversationId && accessToken) {
         // Analysis-guided conversation
-        if (!currentConversationId) {
-          throw new Error('Analysis conversation ID required');
-        }
         response = await sendAnalysisGuidedMessage(currentConversationId, userMessage, accessToken);
       } else {
-        // General conversation
+        // General conversation (supports both logged-in and guest users)
         response = await sendChatMessage(userMessage, accessToken, currentConversationId);
         
         if (response.disclaimer) {

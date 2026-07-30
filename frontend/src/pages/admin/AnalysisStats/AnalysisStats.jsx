@@ -206,7 +206,13 @@ export default function AnalysisStats({ onNotify }) {
       </div>
 
       {/* Overview Stats */}
-      <div className="admin-grid admin-grid--4">
+      <div className="admin-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        <StatCard
+          title="Platform Users"
+          value={(stats.total_users || 0).toLocaleString()}
+          subtitle="Total accounts"
+          variant="primary"
+        />
         <StatCard
           title="Total Analyses"
           value={totalAnalyses.toLocaleString()}

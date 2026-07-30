@@ -251,7 +251,7 @@ function Landing() {
               <p className="landing__body">
                 {CAROUSEL_SLIDES[activeIndex]?.description}
               </p>
-              <button type="button" className="landing__cta" onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}>
+              <button type="button" className="landing__cta" onClick={() => navigate('/detection')}>
                 Get Started
               </button>
             </div>
