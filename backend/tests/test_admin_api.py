@@ -32,6 +32,7 @@ from src.interfaces.rest.admin_views import (
     model_health_summary,
     analysis_stats,
     top_scam_categories,
+    export_analysis_stats,
     user_stats,
     list_reports,
     update_report,
@@ -555,6 +556,56 @@ class TestAnalysisStatsEndpoint:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data['error']['code'] == 'INVALID_INPUT'
 
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    @patch('src.interfaces.rest.admin_views.get_admin_repository')
+    @patch('src.interfaces.rest.admin_views.GetTopScamCategoriesUseCase')
+    @patch('src.interfaces.rest.admin_views.GetAnalysisStatisticsUseCase')
+    def test_export_analysis_stats_success(
+        self,
+        mock_stats_use_case_class,
+        mock_categories_use_case_class,
+        mock_get_repo,
+        mock_require_admin,
+        api_factory,
+        sample_analysis_statistics,
+        sample_scam_categories,
+    ):
+        """Should export analysis stats as downloadable CSV."""
+        mock_require_admin.return_value = None
+
+        stats_result = Mock(success=True, statistics=sample_analysis_statistics)
+        stats_use_case = Mock()
+        stats_use_case.execute.return_value = stats_result
+        mock_stats_use_case_class.return_value = stats_use_case
+
+        categories_result = Mock(success=True, categories=sample_scam_categories)
+        categories_use_case = Mock()
+        categories_use_case.execute.return_value = categories_result
+        mock_categories_use_case_class.return_value = categories_use_case
+
+        request = api_factory.get('/api/admin/analysis-stats/export/?period=month&format=csv',
+                                   HTTP_AUTHORIZATION='Bearer token')
+        response = export_analysis_stats(request)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert 'text/csv' in response['Content-Type']
+        assert 'attachment; filename=' in response['Content-Disposition']
+        body = response.content.decode('utf-8')
+        assert 'Summary Metric,Value' in body
+        assert 'Top Scam Categories' in body
+
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    def test_export_analysis_stats_invalid_format(self, mock_require_admin, api_factory):
+        """Should reject unsupported export formats."""
+        mock_require_admin.return_value = None
+
+        request = api_factory.get('/api/admin/analysis-stats/export/?format=pdf',
+                                   HTTP_AUTHORIZATION='Bearer token')
+        response = export_analysis_stats(request)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error']['code'] == 'INVALID_INPUT'
+
 
 # ==================== User Statistics Endpoint Tests ====================
 
@@ -618,6 +669,7 @@ class TestUserReportsEndpoint:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['success'] is True
         assert len(response.data['data']['reports']) == 1
+        assert response.data['data']['reports'][0]['reported_by']['username'] == sample_user_report.user_id
         assert response.data['data']['total'] == 1
         assert response.data['data']['page'] == 1
     

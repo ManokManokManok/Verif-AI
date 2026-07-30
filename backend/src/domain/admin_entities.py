@@ -87,7 +87,15 @@ class ModelHealthMetrics:
     # System Uptime
     uptime_seconds: int = 0
     last_model_reload: Optional[datetime] = None
-    
+
+    # System info (collected once at startup)
+    platform: str = ''
+    python_version: str = ''
+    django_version: str = ''
+    load_average: Optional[float] = None
+    database_connected: bool = True
+    cache_connected: bool = True
+
     # Timestamp
     collected_at: datetime = field(default_factory=datetime.utcnow)
     
@@ -150,6 +158,7 @@ class ModelHealthMetrics:
             "cache": {
                 "hit_rate": self.cache_hit_rate,
                 "size_mb": self.cache_size_mb,
+                "connected": self.cache_connected,
             },
             "model": {
                 "name": self.model_name,
@@ -163,6 +172,13 @@ class ModelHealthMetrics:
                 "uptime_seconds": self.uptime_seconds,
                 "uptime_formatted": self.uptime_formatted,
                 "last_model_reload": self.last_model_reload.isoformat() if self.last_model_reload else None,
+                "platform": self.platform,
+                "python_version": self.python_version,
+                "django_version": self.django_version,
+                "load_average": self.load_average,
+            },
+            "database": {
+                "connected": self.database_connected,
             },
             "collected_at": self.collected_at.isoformat(),
         }
@@ -174,6 +190,7 @@ class ScamCategoryBreakdown:
     category: str
     count: int
     percentage: float  # 0-100
+    avg_risk_percent: float = 0.0  # 0-100
     severity: str = "medium"  # high, medium, low
     
     def to_dict(self) -> Dict[str, Any]:
@@ -181,6 +198,7 @@ class ScamCategoryBreakdown:
             "category": self.category,
             "count": self.count,
             "percentage": round(self.percentage, 2),
+            "avg_risk_percent": round(self.avg_risk_percent, 2),
             "severity": self.severity,
         }
 
@@ -198,6 +216,11 @@ class AnalysisStatistics:
     medium_risk_count: int  # is_scam = True with confidence 40-69%
     low_risk_count: int  # is_scam = True with confidence < 40% OR is_scam = False
     legitimate_count: int  # is_scam = False
+    previous_total_count: int = 0
+    previous_scam_count: int = 0
+    
+    # Platform-wide user count (for context on the analysis dashboard)
+    total_users: int = 0
     
     # Scam categories breakdown
     scam_categories_breakdown: List[ScamCategoryBreakdown] = field(default_factory=list)
@@ -209,6 +232,8 @@ class AnalysisStatistics:
     
     # Trends (optional, for time-series data)
     daily_counts: List[Dict[str, Any]] = field(default_factory=list)
+    previous_daily_counts: List[Dict[str, Any]] = field(default_factory=list)
+    confidence_distribution: List[Dict[str, Any]] = field(default_factory=list)
     
     # Timestamp
     calculated_at: datetime = field(default_factory=datetime.utcnow)
@@ -236,11 +261,14 @@ class AnalysisStatistics:
         """Convert to dictionary for API responses."""
         return {
             "total_count": self.total_count,
+            "total_users": self.total_users,
+            "previous_total_count": self.previous_total_count,
             "high_risk_count": self.high_risk_count,
             "medium_risk_count": self.medium_risk_count,
             "low_risk_count": self.low_risk_count,
             "legitimate_count": self.legitimate_count,
             "scam_count": self.scam_count,
+            "previous_scam_count": self.previous_scam_count,
             "scam_rate_percent": round(self.scam_rate_percent, 2),
             "top_scam_category": self.top_scam_category,
             "scam_categories_breakdown": [
@@ -250,6 +278,8 @@ class AnalysisStatistics:
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,
             "daily_counts": self.daily_counts,
+            "previous_daily_counts": self.previous_daily_counts,
+            "confidence_distribution": self.confidence_distribution,
             "calculated_at": self.calculated_at.isoformat(),
         }
 
@@ -264,9 +294,10 @@ class UserStatistics:
     # User counts
     total_users: int
     new_users_count: int  # New users in the period
-    active_users_count: int  # Users who performed analyses in the period
+    active_users_count: int  # Accounts with is_active=True (not suspended/deactivated)
     verified_users_count: int
     unverified_users_count: int
+    engaged_users_count: int = 0  # Users who performed analyses in the period
     
     # Website activity
     website_visits: int = 0
@@ -276,6 +307,8 @@ class UserStatistics:
     total_analyses_by_users: int = 0
     avg_analyses_per_user: float = 0.0
     power_users: int = 0  # Users with >50 analyses
+    top_power_user: Optional[Dict[str, Any]] = None  # Most active user by detections in period
+    top_susceptive_users: List[Dict[str, Any]] = field(default_factory=list)  # Top 10 users targeted by scams
     
     # Time period
     period: StatisticsPeriod = StatisticsPeriod.ALL_TIME
@@ -309,6 +342,7 @@ class UserStatistics:
             "total_users": self.total_users,
             "new_users_count": self.new_users_count,
             "active_users_count": self.active_users_count,
+            "engaged_users_count": self.engaged_users_count,
             "verified_users_count": self.verified_users_count,
             "unverified_users_count": self.unverified_users_count,
             "user_growth_rate": round(self.user_growth_rate, 2),
@@ -318,6 +352,8 @@ class UserStatistics:
             "total_analyses_by_users": self.total_analyses_by_users,
             "avg_analyses_per_user": round(self.avg_analyses_per_user, 2),
             "power_users": self.power_users,
+            "top_power_user": self.top_power_user,
+            "top_susceptive_users": self.top_susceptive_users,
             "period": self.period.value,
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,

@@ -8,14 +8,18 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import './AdminSidebar.css';
+import modelHealthIcon from '../../../../../assets/image/modelhealthPage.svg';
+import analysisStatsIcon from '../../../../../assets/image/analysisstatspage.svg';
+import userStatsIcon from '../../../../../assets/image/userstatsPage.svg';
+import userManagementIcon from '../../../../../assets/image/usermanagementPage.svg';
+import websiteAnalyticsIcon from '../../../../../assets/image/websiteanalyticsPage.svg';
 
 const ADMIN_SECTIONS = [
-  { id: 'model-health', label: 'Model Health', icon: '🖥️' },
-  { id: 'analysis-stats', label: 'Analysis Stats', icon: '📊' },
-  { id: 'user-stats', label: 'User Stats', icon: '👥' },
-  { id: 'user-management', label: 'User Management', icon: '⚙️' },
-  { id: 'website-analytics', label: 'Website Analytics', icon: '📈' },
-  { id: 'blockchain', label: 'Blockchain', icon: '⛓️' },
+  { id: 'model-health', label: 'Model Health', icon: modelHealthIcon },
+  { id: 'analysis-stats', label: 'Analysis Stats', icon: analysisStatsIcon },
+  { id: 'user-stats', label: 'User Stats', icon: userStatsIcon },
+  { id: 'user-management', label: 'User Management', icon: userManagementIcon },
+  { id: 'website-analytics', label: 'Website Analytics', icon: websiteAnalyticsIcon },
 ];
 
 export default function AdminSidebar({ 
@@ -23,8 +27,11 @@ export default function AdminSidebar({
   onToggle, 
   activeSection, 
   onSectionChange,
-  onClose 
+  onClose,
+  onLogout,
 }) {
+  const getSectionHref = (sectionId) => `/admin?section=${encodeURIComponent(sectionId)}`;
+
   const handleSectionClick = (sectionId) => {
     onSectionChange(sectionId);
     
@@ -32,6 +39,22 @@ export default function AdminSidebar({
     if (window.innerWidth <= 768 && onClose) {
       onClose();
     }
+  };
+
+  const handleSectionLinkClick = (event, sectionId) => {
+    const isPlainLeftClick =
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey;
+
+    if (!isPlainLeftClick) {
+      return;
+    }
+
+    event.preventDefault();
+    handleSectionClick(sectionId);
   };
 
   return (
@@ -63,18 +86,37 @@ export default function AdminSidebar({
             <ul className="admin-sidebar__list">
               {ADMIN_SECTIONS.map((section) => (
                 <li key={section.id} className="admin-sidebar__item">
-                  <button
+                  <a
                     className={`admin-sidebar__button ${
                       activeSection === section.id ? 'admin-sidebar__button--active' : ''
                     }`}
-                    onClick={() => handleSectionClick(section.id)}
+                    href={getSectionHref(section.id)}
+                    onClick={(event) => handleSectionLinkClick(event, section.id)}
+                    aria-current={activeSection === section.id ? 'page' : undefined}
                   >
-                    <span className="admin-sidebar__icon">{section.icon}</span>
+                    <span className="admin-sidebar__icon">
+                      <img
+                        src={section.icon}
+                        alt={`${section.label} icon`}
+                        className="admin-sidebar__icon-image"
+                      />
+                    </span>
                     <span className="admin-sidebar__label">{section.label}</span>
-                  </button>
+                  </a>
                 </li>
               ))}
             </ul>
+
+            <div className="admin-sidebar__footer">
+              <button
+                className="admin-sidebar__button admin-sidebar__button--logout"
+                type="button"
+                onClick={onLogout}
+              >
+                <span className="admin-sidebar__icon" aria-hidden="true">↩</span>
+                <span className="admin-sidebar__label">Logout</span>
+              </button>
+            </div>
           </nav>
         )}
 
@@ -82,19 +124,34 @@ export default function AdminSidebar({
         {!isOpen && (
           <>
             {ADMIN_SECTIONS.map((section) => (
-              <button
+              <a
                 key={section.id}
                 className={`admin-sidebar__iconbtn ${
                   activeSection === section.id ? 'admin-sidebar__iconbtn--active' : ''
                 }`}
-                type="button"
                 aria-label={section.label}
                 title={section.label}
-                onClick={() => handleSectionClick(section.id)}
+                href={getSectionHref(section.id)}
+                onClick={(event) => handleSectionLinkClick(event, section.id)}
+                aria-current={activeSection === section.id ? 'page' : undefined}
               >
-                {section.icon}
-              </button>
+                <img
+                  src={section.icon}
+                  alt={`${section.label} icon`}
+                  className="admin-sidebar__icon-image"
+                />
+              </a>
             ))}
+
+            <button
+              className="admin-sidebar__iconbtn admin-sidebar__iconbtn--logout"
+              type="button"
+              aria-label="Logout"
+              title="Logout"
+              onClick={onLogout}
+            >
+              ↩
+            </button>
           </>
         )}
       </aside>
@@ -108,4 +165,5 @@ AdminSidebar.propTypes = {
   activeSection: PropTypes.string.isRequired,
   onSectionChange: PropTypes.func.isRequired,
   onClose: PropTypes.func,
+  onLogout: PropTypes.func.isRequired,
 };

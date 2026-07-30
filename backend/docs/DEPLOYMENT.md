@@ -157,12 +157,6 @@ RATE_LIMIT_AUTH_REGISTER_REQUESTS=2
 RATE_LIMIT_AUTH_REGISTER_WINDOW=3600
 RATE_LIMIT_AUTH_REGISTER_BLOCK=7200
 
-# =============================================================================
-# BLOCKCHAIN (if using)
-# =============================================================================
-WEB3_PROVIDER_URL=https://mainnet.infura.io/v3/YOUR_PROJECT_ID
-CONTRACT_ADDRESS=0x...
-PRIVATE_KEY=0x...
 ```
 
 ---
@@ -187,9 +181,123 @@ PRIVATE_KEY=0x...
 
 ### 3. Configure Network Access
 
+#### IP Whitelist Configuration
+
+**IMPORTANT:** Restrict MongoDB access to known IP addresses for security.
+
 1. **Network Access** → **Add IP Address**
-   - **Option 1**: Whitelist your server IPs (most secure)
-   - **Option 2**: Allow access from anywhere `0.0.0.0/0` (less secure, use VPC peering instead)
+
+**Recommended Approach - Whitelist Specific IPs:**
+
+| Environment | IP Address | Description | Status |
+|-------------|------------|-------------|--------|
+| **Production** | `[YOUR_SERVER_IP]` | Production application server | ⚠️ Configure |
+| **Staging** | `[YOUR_STAGING_IP]` | Staging environment server | ⚠️ Configure |
+| **CI/CD** | `[YOUR_CI_IP]` | GitHub Actions/Jenkins runner | Optional |
+| **Development** | `[YOUR_DEV_IP]` | Developer machine (temporary) | Temporary only |
+
+**Example Configuration:**
+```
+Production Server:    52.12.34.56/32     (AWS EC2 us-west-2)
+Staging Server:       192.0.2.100/32     (Azure westus)
+Office Network:       203.0.113.0/24     (Company VPN)
+Developer (Temp):     198.51.100.45/32   (Home IP - expires in 7 days)
+```
+
+**Security Best Practices:**
+
+✅ **DO:**
+- Use specific IP addresses (`/32` CIDR for single IPs)
+- Document each IP with purpose and expiration
+- Use VPC peering for cloud deployments (AWS, Azure, GCP)
+- Set temporary IPs with expiration dates
+- Remove developer IPs after development
+- Use corporate VPN IPs for office access
+- Audit IP whitelist monthly
+
+❌ **DON'T:**
+- Use `0.0.0.0/0` (allows access from anywhere) in production
+- Whitelist public Wi-Fi or shared networks
+- Leave temporary developer IPs indefinitely
+- Share credentials with whitelisted IPs
+
+**For Local Development ONLY:**
+- `0.0.0.0/0` - Allow access from anywhere
+- ⚠️ **NEVER use in production!**
+- Remove before deployment
+
+**Cloud-Specific Recommendations:**
+
+**AWS:**
+```
+Use VPC Peering:
+1. MongoDB Atlas → Network Access → Peering
+2. Select AWS region matching your EC2 instances
+3. Configure VPC peering connection
+4. No public IP whitelist needed
+```
+
+**Azure:**
+```
+Use Private Endpoint:
+1. MongoDB Atlas → Network Access → Private Endpoint
+2. Select Azure region
+3. Configure Azure Private Link
+```
+
+**Google Cloud:**
+```
+Use Private Service Connect:
+1. MongoDB Atlas → Network Access → Private Endpoint
+2. Select GCP region
+3. Configure endpoints
+```
+
+**IP Whitelist Update Procedure:**
+
+1. **Adding New IP:**
+   - Document purpose and owner
+   - Set expiration date (if temporary)
+   - Notify team via Slack/email
+   - Update this documentation
+
+2. **Removing IP:**
+   - Verify IP is no longer needed
+   - Notify affected parties 24h in advance
+   - Remove from MongoDB Atlas
+   - Update documentation
+
+3. **Emergency Access:**
+   - Contact MongoDB Atlas support
+   - Temporary IP can be added within 5 minutes
+   - Must provide business justification
+   - Auto-expires in 24 hours
+
+**Current IP Whitelist (Update Regularly):**
+
+```markdown
+Last Updated: [DATE]
+
+Production IPs:
+- [IP_ADDRESS] - [DESCRIPTION] - Added: [DATE] - Owner: [NAME]
+
+Staging IPs:
+- [IP_ADDRESS] - [DESCRIPTION] - Added: [DATE] - Owner: [NAME]
+
+Temporary IPs:
+- [IP_ADDRESS] - [DESCRIPTION] - Added: [DATE] - Expires: [DATE] - Owner: [NAME]
+```
+
+**Monitoring:**
+- Enable MongoDB Atlas alerts for unauthorized access attempts
+- Review access logs weekly
+- Audit IP whitelist monthly
+- Remove stale temporary IPs
+
+**Alternative - For Local/Development Only:**
+   - ⚠️ Use `0.0.0.0/0` (allow all) **ONLY for local development**
+   - **Never use in production!**
+   - Switch to IP whitelist or VPC peering for production
 
 ### 4. Get Connection String
 

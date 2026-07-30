@@ -61,8 +61,8 @@ def history_detail(request: Request, analysis_id: str) -> Response:
             }, status=status.HTTP_401_UNAUTHORIZED)
 
         repository = get_analysis_repository()
-        result = repository.get_by_id(analysis_id)
-        if not result or str(result.user_id) != str(user_id):
+        result = repository.get_by_id_for_user(analysis_id, user_id)
+        if not result:
             return Response({'error': {'code': 'NOT_FOUND', 'message': 'Analysis not found'}}, status=status.HTTP_404_NOT_FOUND)
 
         # Return all fields for the analysis result
@@ -81,7 +81,8 @@ def history_detail(request: Request, analysis_id: str) -> Response:
             'type_confidence': result.type_confidence,
             'key_markers': result.key_markers,
             'message': result.message,
-            # Add any other fields you want to expose
+            'needs_review': result.needs_review,
+            'review_reason': result.review_reason,
         }, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"[HISTORY_DETAIL] Error: {str(e)}", exc_info=True)
@@ -101,7 +102,7 @@ import logging
 
 from ...use_cases.auth import (
     SignupUseCase, LoginUseCase, GetUserProfileUseCase,
-    CheckPermissionUseCase
+    CheckPermissionUseCase, UpdateUsernameUseCase, DeleteAccountUseCase
 )
 from ...use_cases.security_auth import (
     EmailVerificationUseCase, PasswordResetUseCase, LogoutUseCase,
@@ -109,6 +110,7 @@ from ...use_cases.security_auth import (
 )
 from ...use_cases.ai.scam_detection import ScamDetectionUseCase
 from ...use_cases.ai.llm_analysis import LLMAnalysisUseCase
+from ...use_cases.ai.low_confidence_review import check_confidence, check_confidence_and_report
 from ...domain.services import (
     BCryptPasswordHasher, EmailValidator, PasswordValidator,
     TokenGenerator,
@@ -128,7 +130,8 @@ from ...infrastructure.validators import (
     get_login_validator, get_signup_validator, get_detect_scam_validator,
     get_email_only_validator, get_token_only_validator,
     get_password_reset_validator, get_refresh_token_validator,
-    get_check_permission_validator, sanitize_for_logging
+    get_check_permission_validator, sanitize_for_logging,
+    validate_username
 )
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
 
@@ -184,6 +187,8 @@ def history(request: Request) -> Response:
                 "type_confidence": result.type_confidence,
                 "key_markers": result.key_markers,
                 "message": result.message,
+                "needs_review": result.needs_review,
+                "review_reason": result.review_reason,
             })
         return Response({"history": history}, status=status.HTTP_200_OK)
 
@@ -193,6 +198,130 @@ def history(request: Request) -> Response:
             'error': {
                 'code': 'INTERNAL_ERROR',
                 'message': 'Failed to fetch chat history'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@rate_limit('api_write')
+def delete_history_detail(request: Request, analysis_id: str) -> Response:
+    """
+    Hide one detection record from a user's history.
+
+    Data retention:
+    - Keeps analysis metadata for admin/audit workflows
+    - Redacts raw message text from the record
+    - Removes the record from user-visible history APIs
+    """
+    if not analysis_id or len(analysis_id) > 50:
+        return Response({
+            'error': {
+                'code': 'INVALID_INPUT',
+                'message': 'Invalid analysis ID format'
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                jwt_service = get_jwt_service()
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[JWT] Could not extract user_id for delete_history_detail: {jwt_error}")
+
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'AUTHENTICATION_REQUIRED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        repository = get_analysis_repository()
+        deleted = repository.soft_delete_for_user(analysis_id, user_id)
+
+        if not deleted:
+            return Response({
+                'error': {
+                    'code': 'NOT_FOUND',
+                    'message': 'Analysis not found'
+                }
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        logger.info(f"[HISTORY_DELETE] User {user_id} deleted analysis {analysis_id}")
+        return Response({
+            'message': 'Detection history item deleted successfully',
+            'analysis_id': analysis_id,
+            'retention': {
+                'metadata_retained': True,
+                'raw_message_redacted': True,
+            }
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"[HISTORY_DELETE] Error deleting analysis item: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'Failed to delete history item'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@rate_limit('api_write')
+def delete_history(request: Request) -> Response:
+    """
+    Hide all detection history records for the authenticated user.
+
+    Data retention:
+    - Keeps analysis metadata for admin/audit workflows
+    - Redacts raw message text
+    - Removes records from user-visible history APIs
+    """
+    try:
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            try:
+                jwt_service = get_jwt_service()
+                payload = jwt_service.verify_access_token(token)
+                user_id = payload.get('user_id')
+            except Exception as jwt_error:
+                logger.warning(f"[JWT] Could not extract user_id for delete_history: {jwt_error}")
+
+        if not user_id:
+            return Response({
+                'error': {
+                    'code': 'AUTHENTICATION_REQUIRED',
+                    'message': 'Authentication required'
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        repository = get_analysis_repository()
+        deleted_count = repository.soft_delete_all_for_user(user_id)
+
+        logger.info(f"[HISTORY_DELETE_ALL] User {user_id} deleted {deleted_count} analysis records")
+        return Response({
+            'message': 'Detection history deleted successfully',
+            'deleted_count': deleted_count,
+            'retention': {
+                'metadata_retained': True,
+                'raw_message_redacted': True,
+            }
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"[HISTORY_DELETE_ALL] Error deleting history: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'Failed to delete history'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -532,6 +661,121 @@ def profile(request: Request) -> Response:
                 'code': 'INTERNAL_ERROR',
                 'message': 'An unexpected error occurred'
             }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PATCH'])
+@rate_limit('api_write')
+def update_username(request: Request) -> Response:
+    """
+    Update the authenticated user's username.
+    
+    Request body:
+    {
+        "username": "new_username"
+    }
+    """
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return Response({
+                'error': {'code': 'AUTHENTICATION_REQUIRED', 'message': 'Authentication required'}
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        new_username = (request.data.get('username') or '').strip()
+        if not new_username:
+            return Response({
+                'error': {'code': 'VALIDATION_ERROR', 'message': 'Username is required'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_repo = get_user_repository()
+        use_case = UpdateUsernameUseCase(user_repository=user_repo)
+        user = use_case.execute(user_id, new_username)
+        
+        get_audit_logger().log_event(
+            event_type=AuditEventType.USER_UPDATED,
+            user_id=user_id,
+            ip_address=_get_client_ip(request),
+            metadata={'field': 'username', 'new_value': new_username},
+        )
+        
+        return Response({
+            'message': 'Username updated successfully',
+            'user': user_to_dict(user)
+        }, status=status.HTTP_200_OK)
+    
+    except ValueError as e:
+        return Response({
+            'error': {'code': 'VALIDATION_ERROR', 'message': str(e)}
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except UserNotFoundError as e:
+        return Response({
+            'error': {'code': 'USER_NOT_FOUND', 'message': str(e)}
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception:
+        return Response({
+            'error': {'code': 'INTERNAL_ERROR', 'message': 'An unexpected error occurred'}
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@rate_limit('auth_login')
+def delete_account(request: Request) -> Response:
+    """
+    Delete the authenticated user's own account. Requires password confirmation.
+    
+    Request body:
+    {
+        "password": "current_password"
+    }
+    """
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return Response({
+                'error': {'code': 'AUTHENTICATION_REQUIRED', 'message': 'Authentication required'}
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        password = request.data.get('password', '')
+        if not password:
+            return Response({
+                'error': {'code': 'VALIDATION_ERROR', 'message': 'Password is required to delete your account'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_repo = get_user_repository()
+        password_hasher = BCryptPasswordHasher()
+        use_case = DeleteAccountUseCase(
+            user_repository=user_repo,
+            password_hasher=password_hasher
+        )
+        success = use_case.execute(user_id, password)
+        
+        if success:
+            get_audit_logger().log_event(
+                event_type=AuditEventType.USER_DELETED,
+                user_id=user_id,
+                ip_address=_get_client_ip(request),
+                metadata={'reason': 'self_delete'},
+            )
+            return Response({
+                'message': 'Account deleted successfully'
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'error': {'code': 'DELETE_FAILED', 'message': 'Failed to delete account'}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    except InvalidCredentialsError as e:
+        return Response({
+            'error': {'code': 'INVALID_PASSWORD', 'message': str(e)}
+        }, status=status.HTTP_403_FORBIDDEN)
+    except UserNotFoundError as e:
+        return Response({
+            'error': {'code': 'USER_NOT_FOUND', 'message': str(e)}
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception:
+        return Response({
+            'error': {'code': 'INTERNAL_ERROR', 'message': 'An unexpected error occurred'}
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -936,6 +1180,126 @@ def reset_password(request: Request) -> Response:
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('api_read')
+def password_reset_token_status(request: Request) -> Response:
+    """
+    Check reset token state without consuming it.
+
+    Request body:
+    {
+        "token": "reset_token_here"
+    }
+    """
+    try:
+        validator = get_token_only_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
+
+        if not is_valid:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        token = cleaned_data['token']
+        token_repo = get_token_repository()
+        token_status = token_repo.get_password_reset_token_status(token)
+        status_value = token_status.get('status', 'invalid')
+
+        if status_value == 'valid':
+            return Response({'status': 'valid'}, status=status.HTTP_200_OK)
+
+        if status_value in ('expired', 'used'):
+            return Response({
+                'status': 'expired',
+                'message': 'This password reset link has expired.'
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            'status': 'invalid',
+            'message': 'Invalid password reset link.'
+        }, status=status.HTTP_200_OK)
+
+    except Exception:
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('password_reset')
+def resend_password_reset_link(request: Request) -> Response:
+    """
+    Resend password reset email based on an existing reset token.
+
+    Request body:
+    {
+        "token": "expired_or_old_token"
+    }
+
+    Security:
+    - Generic response to avoid user enumeration
+    - Rate limited
+    - Old token invalidated before issuing a new one
+    """
+    generic_response = {
+        'message': 'If this request is valid, a new password reset email has been sent.'
+    }
+
+    try:
+        validator = get_token_only_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
+
+        if not is_valid:
+            return Response(generic_response, status=status.HTTP_200_OK)
+
+        token = cleaned_data['token']
+        token_repo = get_token_repository()
+        user_repo = get_user_repository()
+        email_service = get_email_service()
+        token_generator = TokenGenerator()
+
+        token_status = token_repo.get_password_reset_token_status(token)
+        user_id = token_status.get('user_id')
+
+        if not user_id:
+            return Response(generic_response, status=status.HTTP_200_OK)
+
+        user = user_repo.get_by_id(user_id)
+        email = getattr(user, 'email', None) if user else None
+        if not email:
+            return Response(generic_response, status=status.HTTP_200_OK)
+
+        token_repo.invalidate_password_reset_token(token)
+
+        from datetime import datetime, timedelta
+        new_token = token_generator.generate_password_reset_token()
+        expires_at = datetime.utcnow() + timedelta(hours=1)
+        token_repo.create_password_reset_token(user_id, new_token, expires_at)
+        email_service.send_password_reset_email(email, new_token)
+
+        get_audit_logger().log_event(
+            event_type=AuditEventType.PASSWORD_RESET_REQUESTED,
+            user_id=user_id,
+            email=email,
+            ip_address=_get_client_ip(request),
+            metadata={'source': 'expired_link_resend'}
+        )
+
+        return Response(generic_response, status=status.HTTP_200_OK)
+
+    except Exception:
+        return Response(generic_response, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
 @rate_limit('api_write')
 def logout(request: Request) -> Response:
     """
@@ -1102,7 +1466,7 @@ def detect_scam(request: Request) -> Response:
     Detect if a message is a scam using multi-head BERT + Gemma LLM analysis.
     
     Analysis results are automatically saved to the database for optional
-    blockchain anchoring by administrators.
+    administrative review workflows.
     
     Request body:
     {
@@ -1112,8 +1476,7 @@ def detect_scam(request: Request) -> Response:
     Response:
     {
         "message": "original user input text",
-        "ref_id": "uuid-for-blockchain-anchoring",
-        "is_anchored": false,
+        "ref_id": "uuid-for-analysis-record",
         "scam_score": 85.5,
         "legit_score": 14.5,
         "is_scam": true,
@@ -1219,7 +1582,7 @@ def detect_scam(request: Request) -> Response:
                 'key_markers': []
             }
         
-        # Step 3: Save analysis result to database for blockchain anchoring
+        # Step 3: Save analysis result to database for optional audit metadata
         import hashlib
         try:
             # Create message hash for lookup (privacy: we don't store raw message)
@@ -1253,6 +1616,10 @@ def detect_scam(request: Request) -> Response:
             # Create analysis result entity (store full details for authenticated users only)
             # Always set user_id from user_account.id if available, else None
             resolved_user_id = str(user_account.id) if user_account and getattr(user_account, 'id', None) else None
+            
+            # First check confidence (without auto-report yet)
+            preliminary_check = check_confidence(bert_result=bert_result)
+            
             analysis = AnalysisResult.create(
                 scam_class=scam_class,
                 scam_type=bert_result.get('scam_type') or 'Not Scam',
@@ -1269,7 +1636,20 @@ def detect_scam(request: Request) -> Response:
                 type_confidence=bert_result.get('type_confidence'),
                 summary=llm_result.get('summary'),
                 key_markers=llm_result.get('key_markers'),
+                needs_review=preliminary_check.needs_review,
+                review_reason=preliminary_check.review_reason,
             )
+            
+            # Now auto-report if needed (we have ref_id now)
+            if preliminary_check.needs_review:
+                review_check = check_confidence_and_report(
+                    bert_result=bert_result,
+                    analysis_ref_id=analysis.ref_id,
+                    user_id=resolved_user_id,
+                    message_preview=message[:200] if message else None
+                )
+            else:
+                review_check = preliminary_check
 
             # Log the analysis entity before saving
             logger.debug(f"[DEBUG] AnalysisResult entity before save: {{'ref_id': {analysis.ref_id}, 'user_id': {analysis.user_id}, 'scam_class': {analysis.scam_class}, 'scam_type': {analysis.scam_type}, 'confidence_bps': {analysis.confidence_bps}, 'is_scam': {analysis.is_scam}, 'analyzer_type': {analysis.analyzer_type}, 'analyzer_version': {analysis.analyzer_version}, 'message_hash': {analysis.message_hash}, 'created_at': {analysis.created_at}}}")
@@ -1284,24 +1664,31 @@ def detect_scam(request: Request) -> Response:
 
             logger.info(f"[DB] Analysis saved: ref_id={saved_analysis.ref_id}")
 
-            # Include ref_id in response for blockchain anchoring
+            # Include ref_id in response for record linkage
             ref_id = saved_analysis.ref_id
-            is_anchored = saved_analysis.is_anchored
+            needs_review = saved_analysis.needs_review
+            review_reason = saved_analysis.review_reason
+            
+            if needs_review:
+                logger.info(f"[LOW_CONFIDENCE] Result flagged for review: {review_reason}")
 
         except Exception as db_error:
             logger.error(f"[DB] Error saving analysis: {str(db_error)}")
             # Don't fail the request if DB save fails
             ref_id = None
-            is_anchored = False
+            needs_review = False
+            review_reason = None
         
         # Combine results
         combined_result = {
             'message': message,  # Include original message for display
-            'ref_id': ref_id,  # For blockchain anchoring
-            'is_anchored': is_anchored,  # Blockchain status
+            'ref_id': ref_id,  # For record linkage
             'created_at': (saved_analysis.created_at.isoformat() if saved_analysis and hasattr(saved_analysis, 'created_at') and saved_analysis.created_at else None),
             **bert_result,
             **llm_result,
+            # Low confidence review info (persisted to DB)
+            'needs_review': needs_review,
+            'review_reason': review_reason,
             # Debug info for browser console
             'jwt_debug': {
                 'payload': payload if 'payload' in locals() else None,
@@ -1320,6 +1707,113 @@ def detect_scam(request: Request) -> Response:
             'error': {
                 'code': 'DETECTION_ERROR',
                 'message': f'Error during scam detection: {str(e)}'
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =========================================================================
+# Image Classification & OCR Endpoints
+# =========================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('api_write')
+def extract_text_from_image(request: Request) -> Response:
+    """
+    Extract text from uploaded image using high-accuracy PaddleOCR.
+    Text is automatically cleaned and organized for scam detection.
+    
+    Request: multipart/form-data
+    {
+        "image": <image file>
+    }
+    
+    Response:
+    {
+        "text": "Extracted and cleaned text ready for detection",
+        "confidence": 0.92,
+        "raw_text": "Raw OCR output (for debugging)",
+        "metadata": {
+            "emails": [...],
+            "urls": [...],
+            "phone_numbers": [...],
+            "has_urls": true,
+            "has_emails": false,
+            "length": 245
+        }
+    }
+    
+    Security:
+    - Rate limited (api_write: 30 requests per minute)
+    - File validation and size limits
+    """
+    try:
+        # Validate file input
+        if 'image' not in request.FILES:
+            return Response({
+                'error': {
+                    'code': 'MISSING_FILE',
+                    'message': 'Missing "image" field in request'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        image_file = request.FILES['image']
+        
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024
+        if image_file.size > max_size:
+            return Response({
+                'error': {
+                    'code': 'FILE_TOO_LARGE',
+                    'message': f'Image must be less than 10MB (got {image_file.size / 1024 / 1024:.1f}MB)'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate file type
+        allowed_formats = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+        if image_file.content_type not in allowed_formats:
+            return Response({
+                'error': {
+                    'code': 'INVALID_FORMAT',
+                    'message': f'Unsupported image format: {image_file.content_type}'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"[OCR] Processing image: {image_file.name} ({image_file.size / 1024:.1f}KB)")
+        
+        # Process image through OCR pipeline
+        from src.use_cases.ai.image_classification import ImageClassificationUseCase
+        
+        image_classifier = ImageClassificationUseCase(use_gpu=False)
+        result = image_classifier.process_image(image_file.read(), return_metadata=True)
+        
+        if 'error' in result:
+            return Response({
+                'error': {
+                    'code': 'OCR_FAILED',
+                    'message': result['error']
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(
+            f"[OCR] Text extracted successfully: "
+            f"{result['metadata']['length']} chars, "
+            f"confidence: {int(result['confidence'] * 100)}%"
+        )
+        
+        return Response({
+            'text': result['text'],
+            'confidence': result['confidence'],
+            'raw_text': result['raw_text'],
+            'metadata': result.get('metadata', {})
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"[OCR] Image text extraction failed: {str(e)}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'OCR_ERROR',
+                'message': f'Error extracting text from image: {str(e)}'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1409,6 +1903,27 @@ def send_mfa_code(request: Request) -> Response:
             }, status=status.HTTP_403_FORBIDDEN)
 
         # --- generate & store MFA code ---
+        from django.conf import settings
+        
+        # Development bypass: Use static code if MFA is disabled
+        if not getattr(settings, 'MFA_ENABLED', True):
+            code = getattr(settings, 'MFA_DEV_BYPASS_CODE', '000000')
+            logger.warning(f"[MFA] Development mode: MFA disabled. Use code: {code}")
+            # Return immediately without storing or sending
+            audit.log_event(
+                event_type=AuditEventType.MFA_CODE_SENT,
+                user_id=user.user_id if hasattr(user, 'user_id') else user.id,
+                email=email,
+                ip_address=ip,
+                user_agent=ua,
+                result="dev_bypass",
+            )
+            return Response({
+                'message': f'Development mode: MFA disabled. Use code: {code}',
+                'expires_in_seconds': 300,
+                'dev_bypass': True,
+            }, status=status.HTTP_200_OK)
+        
         code, expires_at = MFACodeGenerator.generate_code_with_expiry(5)
         mfa_repo = get_mfa_repository()
         stored = mfa_repo.create_mfa_code(
@@ -1516,8 +2031,16 @@ def verify_mfa_code(request: Request) -> Response:
         user_id = user.user_id if hasattr(user, 'user_id') else user.id
 
         # --- verify MFA code ---
-        mfa_repo = get_mfa_repository()
-        is_valid_code, error_msg = mfa_repo.verify_mfa_code(user_id, code)
+        from django.conf import settings
+        
+        # Development bypass: Accept any 6-digit code if MFA is disabled
+        if not getattr(settings, 'MFA_ENABLED', True):
+            logger.warning(f"[MFA] Development mode: MFA disabled. Accepting any code.")
+            is_valid_code = len(code) == 6 and code.isdigit()
+            error_msg = 'Invalid code format (must be 6 digits)' if not is_valid_code else None
+        else:
+            mfa_repo = get_mfa_repository()
+            is_valid_code, error_msg = mfa_repo.verify_mfa_code(user_id, code)
 
         if not is_valid_code:
             audit.log_event(
@@ -1556,6 +2079,9 @@ def verify_mfa_code(request: Request) -> Response:
             roles=roles,
             permissions=list(set(permissions)),
         )
+
+        # Update last login timestamp
+        user_repo.update_last_login(user_id)
 
         audit.log_event(
             event_type=AuditEventType.MFA_CODE_VERIFIED,

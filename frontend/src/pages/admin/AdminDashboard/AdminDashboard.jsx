@@ -4,15 +4,16 @@
  * Main container for all admin sections with modular sidebar navigation.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Alert, AdminSidebar } from '../../../components/admin';
+import LogoutConfirmModal from '../../../components/auth/LogoutConfirmModal';
 import { useAuth } from '../../../context/AuthContext';
 import ModelHealth from '../ModelHealth';
 import AnalysisStats from '../AnalysisStats';
 import UserStats from '../UserStats';
 import UserManagement from '../UserManagement';
 import WebsiteAnalytics from '../WebsiteAnalytics';
-import BlockchainVerification from '../BlockchainVerification';
 import './AdminDashboard.css';
 import '../WebsiteAnalytics/WebsiteAnalytics.css';
 
@@ -22,19 +23,58 @@ const SECTION_LABELS = {
   'user-stats': 'User Stats',
   'user-management': 'User Management',
   'website-analytics': 'Website Analytics',
-  'blockchain': 'Blockchain',
 };
 
 export default function AdminDashboard() {
-  const { user, isAdmin } = useAuth();
-  const [activeSection, setActiveSection] = useState('model-health');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, isAdmin, logout } = useAuth();
+  const validSectionIds = useMemo(() => new Set(Object.keys(SECTION_LABELS)), []);
+  const resolveSection = (sectionId) => (
+    sectionId && validSectionIds.has(sectionId) ? sectionId : 'model-health'
+  );
+
+  const [activeSection, setActiveSection] = useState(() => {
+    const initialSection = new URLSearchParams(window.location.search).get('section');
+    return resolveSection(initialSection);
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  useEffect(() => {
+    const sectionFromQuery = new URLSearchParams(location.search).get('section');
+    setActiveSection(resolveSection(sectionFromQuery));
+  }, [location.search]);
+
+  const handleSectionChange = (sectionId) => {
+    const nextSection = resolveSection(sectionId);
+    setActiveSection(nextSection);
+
+    const currentSection = new URLSearchParams(location.search).get('section');
+    if (currentSection !== nextSection) {
+      navigate(`/admin?section=${encodeURIComponent(nextSection)}`, { replace: true });
+    }
+  };
 
   // Show notification and auto-dismiss after 5 seconds
   const showNotification = (type, message) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 5000);
+  };
+
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
+    await logout();
+    navigate('/');
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   // Render access denied if not admin
@@ -64,22 +104,21 @@ export default function AdminDashboard() {
         return <UserManagement onNotify={showNotification} />;
       case 'website-analytics':
         return <WebsiteAnalytics onNotify={showNotification} />;
-      case 'blockchain':
-        return <BlockchainVerification onNotify={showNotification} />;
       default:
         return null;
     }
   };
 
   return (
-    <div className="admin-dashboard">
+    <div className="admin-dashboard page-enter">
       {/* Sidebar Navigation Component */}
       <AdminSidebar
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         activeSection={activeSection}
-        onSectionChange={setActiveSection}
+        onSectionChange={handleSectionChange}
         onClose={() => setSidebarOpen(false)}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
@@ -119,6 +158,12 @@ export default function AdminDashboard() {
           <main className="admin-dashboard__content">
             {renderSectionContent()}
           </main>
+
+          <LogoutConfirmModal
+            isOpen={showLogoutModal}
+            onConfirm={confirmLogout}
+            onCancel={cancelLogout}
+          />
         </div>
       </div>
     </div>

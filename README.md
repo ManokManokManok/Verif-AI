@@ -1,6 +1,6 @@
 # Verif-AI — AI-Powered Scam Detection Platform
 
-> Leveraging machine learning and blockchain technology to protect users from scams
+> Leveraging machine learning and secure audit trails to protect users from scams
 > Last updated: February 18, 2026
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -29,7 +29,7 @@
 
 ## Overview
 
-**Verif-AI** is an intelligent scam detection platform that combines advanced machine learning models with blockchain technology to identify and verify potentially fraudulent messages, emails, and communications. The platform provides real-time analysis with tamper-proof verification through blockchain anchoring.
+**Verif-AI** is an intelligent scam detection platform that combines advanced machine learning models with strong security controls to identify and verify potentially fraudulent messages, emails, and communications. The platform provides real-time analysis with reliable auditability.
 
 ### Mission
 
@@ -54,12 +54,6 @@ Protect users from increasingly sophisticated scam attempts by providing accessi
 - **Rate Limiting**: Intelligent rate limiting per endpoint category
 - **Input Validation**: Schema-based validation with XSS protection
 
-### Blockchain Verification
-- **Tamper-Proof Records**: Ethereum smart contract for immutable analysis storage
-- **Privacy-First**: Only metadata on-chain (payload hash, classification, confidence)
-- **Verifiable Results**: Cryptographic verification of analysis integrity
-- **Chain Metadata**: Transaction hashes and block confirmations
-
 ### Admin Dashboard
 - **User Management**: View, activate/deactivate, and manage user accounts
 - **Role Management**: Assign and modify user roles and permissions
@@ -78,7 +72,6 @@ Protect users from increasingly sophisticated scam attempts by providing accessi
 - **Database**: MongoDB Atlas (NoSQL)
 - **Architecture**: Clean Architecture (domain/use_cases/infrastructure/interfaces)
 - **ML Models**: Transformers, scikit-learn, PyTorch
-- **Blockchain**: Web3.py + Ethereum (Ganache for development)
 
 **Frontend**
 - **Framework**: React 18+ with Vite
@@ -117,9 +110,8 @@ Protect users from increasingly sophisticated scam attempts by providing accessi
                    │
 ┌──────────────────▼──────────────────────────────────────────┐
 │                 Infrastructure Layer                         │
-│  (External services, database, blockchain, email)            │
+│  (External services, database, email)                        │
 │  • backend/src/infrastructure/mongodb/                       │
-│  • backend/src/infrastructure/blockchain/                    │
 │  • backend/src/infrastructure/email/                         │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -141,7 +133,7 @@ For detailed setup instructions, see [backend/SETUP_TEAM.md](backend/SETUP_TEAM.
 
 ```powershell
 # 1. Clone the repository
-git clone https://github.com/your-org/verif-ai.git
+git clone https://github.com/ManokManokManok/Verif-AI.git
 cd verif-ai
 
 # 2. Create and activate virtual environment
@@ -211,7 +203,7 @@ verif-ai/
 │   ├── src/
 │   │   ├── domain/          # Business entities & rules (framework-agnostic)
 │   │   ├── use_cases/       # Application logic & interactors
-│   │   ├── infrastructure/  # External services (MongoDB, blockchain, email)
+│   │   ├── infrastructure/  # External services (MongoDB, email)
 │   │   ├── interfaces/      # REST API adapters
 │   │   └── apps/            # Django apps (core, auth, admin, etc.)
 │   ├── tests/               # Comprehensive test suite (84+ tests)
@@ -296,17 +288,10 @@ verif-ai/
 - Pattern detection and explanation
 - Rate limits: 30/min (authenticated), 10/min (anonymous)
 
-### Blockchain Integration
-
-**Endpoints**:
-- `POST /api/blockchain/anchor/` - Anchor analysis to blockchain
-- `POST /api/blockchain/verify/` - Verify blockchain integrity
-- `GET /api/blockchain/status/` - Get blockchain service status
-
 **Workflow**:
 1. User performs scam analysis
 2. Results stored in MongoDB with unique analysis ID
-3. User requests blockchain anchoring
+3. User reviews analysis history and reports
 4. Canonical payload created (hash + metadata, no PII)
 5. Smart contract called to store payload hash
 6. Transaction hash stored in MongoDB
@@ -369,7 +354,6 @@ npm test                                    # Run contract tests
 cd backend
 python -m pytest tests/                     # Run all tests
 python -m pytest tests/test_admin_*.py      # Run admin tests
-python -m pytest tests/test_blockchain_*.py # Run blockchain tests
 ```
 
 ### Branch Strategy
@@ -427,7 +411,7 @@ python -m pytest tests/test_blockchain_*.py # Run blockchain tests
 
 **Backend**: 84+ comprehensive tests
 - Unit tests: Domain entities, use cases
-- Integration tests: Database, blockchain, API
+- Integration tests: Database and API
 - Security tests: Auth, authorization, input validation
 - Performance tests: Rate limiting, concurrent requests
 - E2E tests: Full user workflows
@@ -453,8 +437,6 @@ python -m pytest tests/ -v
 # Backend - Specific test categories
 python tests/test_admin_api.py              # Admin API tests
 python tests/test_admin_security.py         # Admin security tests
-python tests/test_canonical_payload.py      # Blockchain payload tests (36)
-python tests/test_blockchain_service.py     # Blockchain service tests (15)
 python tests/test_integration_verification.py  # Integration tests (14)
 python tests/test_api.py                    # API tests (10)
 
@@ -527,6 +509,14 @@ EMAIL_BACKEND=sendgrid
 SENDGRID_API_KEY=SG.your-api-key
 SENDGRID_FROM_EMAIL=noreply@yourdomain.com
 
+# Or use Nodemailer bridge
+# EMAIL_BACKEND=nodemailer
+# NODEMAILER_HOST=smtp.gmail.com
+# NODEMAILER_PORT=587
+# NODEMAILER_SECURE=False
+# NODEMAILER_USER=your-smtp-user
+# NODEMAILER_PASS=your-smtp-password
+
 # Security
 VALIDATE_SECURITY_CONFIG=true
 
@@ -555,16 +545,12 @@ All documentation is located in [backend/docs/](backend/docs/):
 - [SECURITY.md](backend/docs/SECURITY.md) - Security implementation overview
 - [SECURITY_BEST_PRACTICES.md](backend/docs/SECURITY_BEST_PRACTICES.md) - Security standards
 
-**Blockchain**:
-- [BLOCKCHAIN_INTEGRATION.md](backend/docs/blockchain/BLOCKCHAIN_INTEGRATION.md) - Blockchain features
-
 ### Quick Links
 
 - [API Reference](backend/docs/API_REFERENCE.md) - All endpoints with examples
 - [Security Guide](backend/docs/SECURITY.md) - Security features and best practices
 - [Deployment Guide](backend/docs/DEPLOYMENT.md) - Step-by-step deployment
 - [Environment Variables](backend/docs/ENVIRONMENT_VARIABLES.md) - Configuration reference
-- [Blockchain Integration](backend/docs/blockchain/BLOCKCHAIN_INTEGRATION.md) - Blockchain setup and usage
 
 ---
 
@@ -639,14 +625,6 @@ See [SECURITY.md](backend/docs/SECURITY.md) for full security documentation.
 ## License
 
 [MIT License](LICENSE) - See LICENSE file for details
-
----
-
-## Support
-
-- Documentation: [backend/docs/](backend/docs/)
-- Issues: [GitHub Issues](https://github.com/your-org/verif-ai/issues)
-- Discussions: [GitHub Discussions](https://github.com/your-org/verif-ai/discussions)
 
 ---
 

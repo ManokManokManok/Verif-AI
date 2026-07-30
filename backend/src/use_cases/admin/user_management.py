@@ -38,7 +38,7 @@ class UserRepository(Protocol):
     
     def admin_reset_password(self, user_id: str, new_password_hash: str) -> bool: ...
     
-    def update_user_status(self, user_id: str, is_active: bool) -> bool: ...
+    def update_user_status(self, user_id: str, is_active: bool = None, status: str = None) -> bool: ...
     
     def update_user_roles(self, user_id: str, roles: List[str]) -> bool: ...
     
@@ -85,6 +85,7 @@ class ListUsersResult:
             "roles": user.roles,
             "is_active": user.is_active,
             "is_verified": user.is_verified,
+            "status": user.status,
             "created_at": user.created_at.isoformat() if user.created_at else None,
             "last_login": user.last_login.isoformat() if user.last_login else None,
         }
@@ -355,7 +356,7 @@ class DeleteUserUseCase:
                 )
                 self._admin_repository.log_admin_activity(log)
             
-            action_text = "permanently deleted" if hard_delete else "deactivated"
+            action_text = "permanently deleted" if hard_delete else "archived"
             return OperationResult(
                 success=True,
                 message=f"User {user.email} has been {action_text}"
@@ -466,10 +467,14 @@ class AdminResetPasswordUseCase:
 
 class UpdateUserStatusUseCase:
     """
-    Use case for enabling/disabling user accounts.
+    Use case for updating user account status.
     
-    Allows administrators to activate or deactivate user accounts.
+    Allows administrators to activate, deactivate, or suspend user accounts.
+    Supports both the new `status` string ('active', 'inactive', 'suspended')
+    and the legacy `is_active` boolean for backward compatibility.
     """
+    
+    VALID_STATUSES = {"active", "inactive", "suspended"}
     
     def __init__(
         self,
@@ -489,26 +494,47 @@ class UpdateUserStatusUseCase:
     def execute(
         self,
         user_id: str,
-        is_active: bool,
-        admin_user_id: str
+        admin_user_id: str,
+        status: Optional[str] = None,
+        is_active: Optional[bool] = None
     ) -> OperationResult:
         """
         Execute the use case to update user status.
         
         Args:
             user_id: ID of the user
-            is_active: New active status
             admin_user_id: ID of the admin performing the action
+            status: New status string ('active', 'inactive', 'suspended')
+            is_active: Legacy boolean active status (deprecated)
             
         Returns:
             OperationResult indicating success or failure
         """
         try:
-            # Prevent self-deactivation
-            if user_id == admin_user_id and not is_active:
+            # Validate input
+            if status is None and is_active is None:
                 return OperationResult(
                     success=False,
-                    error_message="Cannot deactivate your own account"
+                    error_message="Either status or is_active must be provided"
+                )
+            
+            # Validate status if provided
+            if status is not None:
+                status = status.lower()
+                if status not in self.VALID_STATUSES:
+                    return OperationResult(
+                        success=False,
+                        error_message=f"Invalid status: {status}. Must be one of {sorted(self.VALID_STATUSES)}"
+                    )
+            
+            # Determine the effective is_active for protection checks
+            effective_is_active = (status == "active") if status is not None else is_active
+            
+            # Prevent self-deactivation/suspension
+            if user_id == admin_user_id and not effective_is_active:
+                return OperationResult(
+                    success=False,
+                    error_message="Cannot deactivate or suspend your own account"
                 )
             
             # Get user
@@ -516,22 +542,33 @@ class UpdateUserStatusUseCase:
             if not user:
                 raise UserNotFoundError(f"User {user_id} not found")
             
-            # Prevent deactivating super admins
-            if "super_admin" in user.roles and not is_active:
+            # Prevent deactivating/suspending super admins
+            if "super_admin" in user.roles and not effective_is_active:
                 return OperationResult(
                     success=False,
-                    error_message="Cannot deactivate super admin accounts"
+                    error_message="Cannot deactivate or suspend super admin accounts"
                 )
             
             # Update status
-            success = self._user_repository.update_user_status(user_id, is_active)
+            success = self._user_repository.update_user_status(
+                user_id,
+                is_active=is_active if status is None else None,
+                status=status
+            )
             
             if not success:
                 raise AdminOperationError("Failed to update user status")
             
+            # Determine status text for logging and response
+            if status is not None:
+                status_text = status
+                action = f"set_user_{status}"
+            else:
+                status_text = "activated" if is_active else "deactivated"
+                action = "enable_user" if is_active else "disable_user"
+            
             # Log the action
             if self._admin_repository:
-                action = "enable_user" if is_active else "disable_user"
                 log = AdminActivityLog(
                     admin_user_id=admin_user_id,
                     action=action,
@@ -539,15 +576,15 @@ class UpdateUserStatusUseCase:
                     resource_id=user_id,
                     details={
                         "user_email": user.email,
-                        "new_status": is_active,
+                        "new_status": status or ("active" if is_active else "inactive"),
+                        "is_active": effective_is_active,
                     }
                 )
                 self._admin_repository.log_admin_activity(log)
             
-            status_text = "activated" if is_active else "deactivated"
             return OperationResult(
                 success=True,
-                message=f"User {user.email} has been {status_text}"
+                message=f"User {user.email} status has been set to {status_text}"
             )
         except (UserNotFoundError, AdminOperationError) as e:
             return OperationResult(

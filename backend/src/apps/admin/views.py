@@ -9,10 +9,12 @@ from ...interfaces.rest.admin_views import (
     # Analysis Statistics
     analysis_stats,
     top_scam_categories,
+    export_analysis_stats,
     # User Statistics
     user_stats,
     # User Reports
     list_reports,
+    get_report,
     update_report,
     # User Management
     list_users,
@@ -28,8 +30,10 @@ __all__ = [
     'model_health_summary',
     'analysis_stats',
     'top_scam_categories',
+    'export_analysis_stats',
     'user_stats',
     'list_reports',
+    'get_report',
     'update_report',
     'list_users',
     'get_user',

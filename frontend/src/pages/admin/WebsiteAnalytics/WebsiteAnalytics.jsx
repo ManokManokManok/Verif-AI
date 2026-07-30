@@ -14,6 +14,7 @@ import {
   ErrorMessage,
 } from '../../../components/admin';
 import { useAnalytics } from '../../../hooks/useAdminData';
+import { exportWebsiteAnalytics } from '../../../api/analytics';
 import BarChart from './components/BarChart';
 import DeviceBreakdown from './components/DeviceBreakdown';
 import HourlyPattern from './components/HourlyPattern';
@@ -22,6 +23,7 @@ import './WebsiteAnalytics.css';
 
 export default function WebsiteAnalytics({ onNotify }) {
   const [period, setPeriod] = useState('week');
+  const [exportingFormat, setExportingFormat] = useState(null);
   
   const { 
     data: analytics, 
@@ -36,15 +38,6 @@ export default function WebsiteAnalytics({ onNotify }) {
     return analytics.top_pages.map(page => ({
       label: page.path,
       value: page.visit_count,
-    }));
-  }, [analytics]);
-
-  // Format referrers data for bar chart  
-  const referrersData = useMemo(() => {
-    if (!analytics?.referrers) return [];
-    return analytics.referrers.map(ref => ({
-      label: ref.referrer || 'Direct',
-      value: ref.count,
     }));
   }, [analytics]);
 
@@ -75,6 +68,44 @@ export default function WebsiteAnalytics({ onNotify }) {
   const hourlyPattern = analytics?.hourly_pattern || {};
   const recentVisits = analytics?.recent || [];
 
+  const totalVisits = visits.total_visits || 0;
+  const authRate = totalVisits > 0
+    ? (((visits.authenticated_visits || 0) / totalVisits) * 100).toFixed(1)
+    : '0.0';
+  const anonRate = totalVisits > 0
+    ? (((visits.anonymous_visits || 0) / totalVisits) * 100).toFixed(1)
+    : '0.0';
+  const uniqueRate = totalVisits > 0
+    ? (((visits.unique_visitors || 0) / totalVisits) * 100).toFixed(1)
+    : '0.0';
+
+  const handleExport = (format) => {
+    try {
+      setExportingFormat(format);
+      const { blob, filename } = exportWebsiteAnalytics({
+        analytics,
+        period,
+        format,
+        generatedBy: 'admin',
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      onNotify?.('success', `Website analytics exported as ${format.toUpperCase()}`);
+    } catch (err) {
+      onNotify?.('error', err.message || 'Failed to export website analytics');
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
   return (
     <div className="admin-section website-analytics">
       {/* Header */}
@@ -82,6 +113,20 @@ export default function WebsiteAnalytics({ onNotify }) {
         <h2 className="admin-section__title">Website Analytics</h2>
         <div className="admin-section__actions">
           <PeriodSelector value={period} onChange={setPeriod} />
+          <button
+            className="admin-btn admin-btn--primary admin-btn--sm"
+            onClick={() => handleExport('csv')}
+            disabled={loading || exportingFormat !== null}
+          >
+            {exportingFormat === 'csv' ? 'Exporting CSV...' : 'Export CSV'}
+          </button>
+          <button
+            className="admin-btn admin-btn--secondary admin-btn--sm"
+            onClick={() => handleExport('excel')}
+            disabled={loading || exportingFormat !== null}
+          >
+            {exportingFormat === 'excel' ? 'Exporting Excel...' : 'Export Excel'}
+          </button>
           <button 
             className="admin-btn admin-btn--secondary admin-btn--sm"
             onClick={refresh}
@@ -119,6 +164,35 @@ export default function WebsiteAnalytics({ onNotify }) {
         />
       </div>
 
+      {/* Rate Summary Banner */}
+      <div className="analytics-rate-banner admin-mt-4">
+        <div className="analytics-rate-item">
+          <span className="analytics-rate-label">Auth Rate</span>
+          <span className="analytics-rate-value analytics-rate-value--success">{authRate}%</span>
+        </div>
+        <div className="analytics-rate-divider" />
+        <div className="analytics-rate-item">
+          <span className="analytics-rate-label">Anonymous Rate</span>
+          <span className="analytics-rate-value analytics-rate-value--warning">{anonRate}%</span>
+        </div>
+        <div className="analytics-rate-divider" />
+        <div className="analytics-rate-item">
+          <span className="analytics-rate-label">Unique Visitor Rate</span>
+          <span className="analytics-rate-value analytics-rate-value--info">{uniqueRate}%</span>
+        </div>
+        {topPagesData.length > 0 && (
+          <>
+            <div className="analytics-rate-divider" />
+            <div className="analytics-rate-item">
+              <span className="analytics-rate-label">Top Page</span>
+              <span className="analytics-rate-value analytics-rate-value--page">
+                {topPagesData[0].label}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Charts Row */}
       <div className="admin-grid admin-grid--2 text-gray-200 admin-mt-4">
         <div className="admin-card text-gray-200">
@@ -133,18 +207,9 @@ export default function WebsiteAnalytics({ onNotify }) {
         </div>
       </div>
 
-      {/* Second Row */}
-      <div className="admin-grid admin-grid--2 admin-mt-4">
-        <div className="admin-card">
-          <HourlyPattern data={hourlyPattern} />
-        </div>
-        <div className="admin-card">
-          <BarChart 
-            data={referrersData}
-            title="Top Referrers"
-            maxItems={5}
-          />
-        </div>
+      {/* Hourly Pattern */}
+      <div className="admin-card admin-mt-4">
+        <HourlyPattern data={hourlyPattern} />
       </div>
 
       {/* Recent Visits */}

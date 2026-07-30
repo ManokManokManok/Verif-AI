@@ -4,6 +4,7 @@ Use case for scam detection using the multi-head BERT model.
 import torch
 import torch.nn.functional as F
 import re
+import os
 from typing import Dict, Any
 import logging
 
@@ -25,8 +26,11 @@ class ScamDetectionUseCase:
         self.tokenizer = tokenizer
         self.model = model
         self.scam_types = scam_types
-        self.temperature = 1.2
-        self.bias_penalty = 3.0
+        # Optional calibration knobs. Keep conservative defaults.
+        self.temperature = float(os.getenv("SCAM_DETECTION_TEMPERATURE", "1.2"))
+        # Legacy behavior used a hardcoded penalty of 3.0 for text without URLs.
+        # That can suppress obvious text-only scams, so default is now disabled.
+        self.bias_penalty = float(os.getenv("SCAM_NO_LINK_BIAS_PENALTY", "0.0"))
     
     def detect(self, message: str) -> Dict[str, Any]:
         """
@@ -52,9 +56,9 @@ class ScamDetectionUseCase:
             # Get model predictions
             scam_logits, type_logits = self.model(**inputs)
             
-            # Apply bias penalty if no suspicious links found
+            # Optional: apply penalty when no suspicious link is found.
             link_patterns = r'https?://|www\.|bit\.ly|t\.co|goo\.gl|tinyurl\.com'
-            if not re.search(link_patterns, message, re.IGNORECASE):
+            if self.bias_penalty > 0 and not re.search(link_patterns, message, re.IGNORECASE):
                 logger.debug(f"No suspicious link found. Applying logit penalty of -{self.bias_penalty}")
                 scam_logits[:, 1] -= self.bias_penalty
             
@@ -63,6 +67,9 @@ class ScamDetectionUseCase:
             calibrated_type_logits = type_logits / self.temperature
             
             # Calculate probabilities
+
+            # !!! Alter softmax calculation based on variable presence
+            # !!! Use bias calculations (maybe enforce scraping)
             scam_probs = F.softmax(calibrated_scam_logits, dim=1).squeeze()
             type_probs = F.softmax(calibrated_type_logits, dim=1).squeeze()
         

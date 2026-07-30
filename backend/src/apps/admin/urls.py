@@ -17,10 +17,12 @@ urlpatterns = [
     # Analysis Statistics - Tab 2
     path('analysis-stats/', views.analysis_stats, name='analysis_stats'),
     path('analysis-stats/top-categories/', views.top_scam_categories, name='top_scam_categories'),
+    path('analysis-stats/export/', views.export_analysis_stats, name='export_analysis_stats'),
     
     # User Statistics - Tab 3
     path('user-stats/', views.user_stats, name='user_stats'),
     path('reports/', views.list_reports, name='list_reports'),
+    path('reports/<str:report_id>/detail/', views.get_report, name='get_report'),
     path('reports/<str:report_id>/', views.update_report, name='update_report'),
     
     # User Management - Tab 4

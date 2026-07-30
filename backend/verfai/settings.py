@@ -66,6 +66,16 @@ MIDDLEWARE = [
 # Analytics settings
 ANALYTICS_ENABLED = True
 
+# =============================================================================
+# MFA (Multi-Factor Authentication) SETTINGS
+# =============================================================================
+# In development, you can bypass MFA email verification by setting MFA_ENABLED=False
+# When disabled, the system will:
+# - Skip sending actual email codes
+# - Accept any 6-digit code (e.g., "000000") during verification
+MFA_ENABLED = os.getenv('MFA_ENABLED', 'False').lower() in ('1', 'true', 'yes')
+MFA_DEV_BYPASS_CODE = '000000'  # Static code accepted when MFA_ENABLED=False
+
 ROOT_URLCONF = 'verfai.urls'
 
 TEMPLATES = [
@@ -106,10 +116,17 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Configuration
+# Add your frontend URLs here. For development, you may use CORS_ALLOW_ALL_ORIGINS = True for flexibility.
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost:3000',  # Add Vite/React default port if needed
+    'http://127.0.0.1:3000',
 ]
+
+# Allow all origins in development for easier testing (disable in production!)
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -180,10 +197,16 @@ LOGGING = {
             'style': '{',
         },
     },
+    'filters': {
+        'sensitive_data': {
+            '()': 'src.infrastructure.logging.sensitive_filter.SensitiveDataFilter',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
+            'filters': ['sensitive_data'],
         },
         'security_file': {
             'class': 'logging.handlers.RotatingFileHandler',
@@ -191,6 +214,7 @@ LOGGING = {
             'maxBytes': 10485760,  # 10MB
             'backupCount': 5,
             'formatter': 'security',
+            'filters': ['sensitive_data'],
         },
     },
     'loggers': {

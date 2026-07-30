@@ -97,7 +97,10 @@ export default function DataTable({
 DataTable.propTypes = {
   columns: PropTypes.arrayOf(PropTypes.shape({
     key: PropTypes.string.isRequired,
-    label: PropTypes.string.isRequired,
+    label: PropTypes.oneOfType([
+      PropTypes.string,
+      PropTypes.node,
+    ]).isRequired,
     render: PropTypes.func,
   })).isRequired,
   data: PropTypes.array.isRequired,

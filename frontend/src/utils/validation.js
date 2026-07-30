@@ -31,12 +31,46 @@ export const CONSTRAINTS = {
     minLength: 3,
     maxLength: 32,
     pattern: /^[a-zA-Z0-9_-]+$/,
+    requireLetter: true,
   },
   message: {
     minLength: 1,
     maxLength: 10000, // 10KB limit for scam detection
   },
 };
+
+// Common password blacklist (matches backend common_passwords.txt)
+const COMMON_PASSWORDS = new Set([
+  'password', '123456', '12345678', '123456789', '1234567890',
+  'qwerty', 'abc123', 'password1', 'password123', 'iloveyou',
+  'admin', 'letmein', 'welcome', 'monkey', 'dragon',
+  'master', 'login', 'princess', 'football', 'shadow',
+  'sunshine', 'trustno1', '123123', '654321', 'superman',
+  'qwerty123', 'michael', 'charlie', 'ashley', 'jessica',
+  '121212', '000000', 'access', 'flower', 'whatever',
+  'passw0rd', 'hello', 'donald', 'password1!', 'baseball',
+  'soccer', 'hockey', 'killer', 'pepper', 'thomas',
+  'summer', 'george', 'harley', 'batman', 'andrew',
+  'ranger', 'daniel', 'starwars', 'klaster', '112233',
+  'jordan', 'mustang', 'robert', 'taylor', 'jennifer',
+  '123qwe', 'qwerty1', 'welcome1', '1q2w3e4r', 'qwertyuiop',
+  'computer', 'internet', 'samsung', '1234qwer', 'nothing',
+  'secret', 'zaq12wsx', 'pa$$w0rd', 'p@ssw0rd', 'p@ssword1',
+  'qwerty123', 'password1!', 'welcome1!', 'changeme1!', 'admin123!',
+  'letmein1!', 'test1234!', 'abc12345!', 'hello123!', 'pass1234',
+  '12345qwert', '123abc', 'test123!', 'mypass123', 'user1234!',
+  'default1!', 'temp1234!', 'guest123!',
+]);
+
+/**
+ * Check if a password is in the common passwords blacklist.
+ * @param {string} password
+ * @returns {boolean}
+ */
+export function isCommonPassword(password) {
+  if (!password) return false;
+  return COMMON_PASSWORDS.has(password.toLowerCase());
+}
 
 // =============================================================================
 // SANITIZATION FUNCTIONS
@@ -172,7 +206,29 @@ export function validatePassword(password) {
     errors.push('Password must contain at least one special character');
   }
   
+  if (isCommonPassword(password)) {
+    errors.push('This password is too common. Please choose a stronger password.');
+  }
+  
   return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Get individual password requirement statuses for real-time UI feedback.
+ * @param {string} password - Current password value
+ * @returns {Array<{label: string, met: boolean}>}
+ */
+export function getPasswordRequirements(password) {
+  const pw = password || '';
+  return [
+    { key: 'minLength', label: `At least ${CONSTRAINTS.password.minLength} characters`, met: pw.length >= CONSTRAINTS.password.minLength },
+    { key: 'uppercase', label: 'At least one uppercase letter', met: /[A-Z]/.test(pw) },
+    { key: 'lowercase', label: 'At least one lowercase letter', met: /[a-z]/.test(pw) },
+    { key: 'digit', label: 'At least one digit', met: /\d/.test(pw) },
+    { key: 'special', label: 'At least one special character', met: /[!@#$%^&*(),.?":{}|<>\[\]\\;'`~_+=/\-]/.test(pw) },
+    { key: 'noWhitespace', label: 'No spaces or whitespace', met: pw.length > 0 && !/\s/.test(pw) },
+    { key: 'notCommon', label: 'Not a commonly used password', met: pw.length > 0 && !isCommonPassword(pw) },
+  ];
 }
 
 /**
@@ -198,6 +254,10 @@ export function validateUsername(username) {
   
   if (!CONSTRAINTS.username.pattern.test(trimmed)) {
     return { valid: false, error: 'Username may only contain letters, numbers, underscores, and hyphens' };
+  }
+  
+  if (!/[a-zA-Z]/.test(trimmed)) {
+    return { valid: false, error: 'Username must contain at least one letter' };
   }
   
   return { valid: true };

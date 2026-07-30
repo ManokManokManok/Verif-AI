@@ -1,4 +1,5 @@
 import bcrypt
+import os
 import re
 import secrets
 import string
@@ -73,6 +74,11 @@ class PasswordValidator:
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
             errors.append("Password must contain at least one special character")
         
+        # Check against common password blacklist
+        from ..infrastructure.validators import is_common_password
+        if is_common_password(password):
+            errors.append("This password is too common. Please choose a stronger password.")
+        
         return len(errors) == 0, errors
 
 
@@ -95,6 +101,14 @@ class EmailValidator:
 
 
 class TokenGenerator:
+    # !!!!! TESTING ENVIRONMENT ONLY ON EVENT OF SENDGRID SLOWDOWN !!!!!
+    # Set this to True to bypass verification and use a fixed token for testing.
+    # MUST be False in production.
+    BYPASS_VERIFICATION_CODE = False  # Set True to bypass
+
+    # Fixed bypass token — 32 hex chars so it passes the TOKEN min_length validator.
+    _BYPASS_TOKEN = 'deadbeefdeadbeefdeadbeefdeadbeef'
+
     @staticmethod
     def generate_secure_token(length: int = 32) -> str:
         """
@@ -112,10 +126,12 @@ class TokenGenerator:
     def generate_verification_token() -> str:
         """
         Generate email verification token.
-        
+        If BYPASS_VERIFICATION_CODE is True, always return a fixed token for testing.
         Returns:
-            32-character verification token
+            32-character verification token (or fixed bypass token if bypassed)
         """
+        if TokenGenerator.BYPASS_VERIFICATION_CODE or os.environ.get('BYPASS_VERIFICATION_CODE') == '1':
+            return TokenGenerator._BYPASS_TOKEN
         return TokenGenerator.generate_secure_token(16)
     
     @staticmethod
@@ -176,6 +192,8 @@ class MockEmailService:
 
 
 class MFACodeGenerator:
+    # Set this to True to bypass MFA code and always return '000000' for testing
+    BYPASS_MFA_CODE = False  # Set True to bypass
     """
     Multi-Factor Authentication code generator.
 
@@ -194,6 +212,8 @@ class MFACodeGenerator:
         Returns:
             Zero-padded numeric string, e.g. "042917".
         """
+        if MFACodeGenerator.BYPASS_MFA_CODE or os.environ.get('BYPASS_MFA_CODE') == '1':
+            return '000000'
         return ''.join(secrets.choice(string.digits) for _ in range(length))
 
     @staticmethod

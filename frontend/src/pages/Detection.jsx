@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
-import { getAnalysisDetail } from '../api/analysis';
-import { anchorAnalysis, verifyAnalysis } from '../api/blockchain';
+import { getAnalysisDetail, deleteAnalysisHistoryItem, deleteAllAnalysisHistory } from '../api/analysis';
 import { getAnalysisConversation } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
@@ -9,6 +8,9 @@ import { useAuth } from '../context/AuthContext';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 import { ReportModal } from '../components/reports';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
+import ReactCrop from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
+import Tesseract from 'tesseract.js';
 
 const ANALYSIS_STEPS = [
   'Analyzing message...',
@@ -19,6 +21,7 @@ const ANALYSIS_STEPS = [
 function Detection() {
   const navigate = useNavigate();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -26,36 +29,54 @@ function Detection() {
   const [detectionResult, setDetectionResult] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const [isDeletingHistoryId, setIsDeletingHistoryId] = useState(null);
+  const [isDeletingAllHistory, setIsDeletingAllHistory] = useState(false);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
   const [analysisStep, setAnalysisStep] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [graphScamWidth, setGraphScamWidth] = useState(0);
   const [graphLegitWidth, setGraphLegitWidth] = useState(0);
-  const [isAnchoring, setIsAnchoring] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState(null);
   const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const progressIntervalRef = useRef(null);
   const stepIntervalRef = useRef(null);
+  
+  // Image OCR states
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isExtractingText, setIsExtractingText] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [crop, setCrop] = useState({ unit: '%', x: 5, y: 5, width: 90, height: 90 });
+  const [completedCrop, setCompletedCrop] = useState(null);
+  const [cropImageElement, setCropImageElement] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const refreshHistory = async () => {
+    if (!isLoggedIn) {
+      setChatHistory([]);
+      return;
+    }
+
+    try {
+      const res = await getChatHistory();
+      if (Array.isArray(res?.history)) {
+        // For authenticated users, respect empty history (do not fall back to mock data).
+        setChatHistory(res.history);
+        return;
+      }
+    } catch (err) {
+      // Fall through to fallback behavior below.
+    }
+
+    setChatHistory([]);
+  };
 
   useEffect(() => {
-    async function fetchHistory() {
-      try {
-        const res = await getChatHistory();
-        if (res.history && res.history.length > 0) {
-          setChatHistory(res.history);
-        } else {
-          setChatHistory(mockChatHistory);
-        }
-      } catch (err) {
-        setChatHistory(mockChatHistory);
-      }
-    }
-    fetchHistory();
-  }, []);
+    refreshHistory();
+  }, [isLoggedIn]);
 
   // Analyzing animation: step labels + simulated progress
   useEffect(() => {
@@ -94,10 +115,50 @@ function Detection() {
   const handleChatClick = async (chat) => {
     try {
       const detail = await getAnalysisDetail(chat.id);
+      console.log('[HISTORY DETAIL]', detail);
+      console.log('[HISTORY DETAIL needs_review]', detail.needs_review);
       setDetectionResult(detail);
       setSidebarOpen(false);
     } catch (err) {
       alert('Failed to load analysis details.');
+    }
+  };
+
+  const handleDeleteHistoryItem = async (analysisId) => {
+    if (!isLoggedIn || !analysisId || isDeletingHistoryId === analysisId) return;
+
+    const confirmed = window.confirm('Delete this detection history item?');
+    if (!confirmed) return;
+
+    setIsDeletingHistoryId(analysisId);
+    try {
+      await deleteAnalysisHistoryItem(analysisId);
+      if (detectionResult?.id === analysisId) {
+        setDetectionResult(null);
+      }
+      await refreshHistory();
+    } catch (err) {
+      alert('Failed to delete history item. Please try again.');
+    } finally {
+      setIsDeletingHistoryId(null);
+    }
+  };
+
+  const handleDeleteAllHistory = async () => {
+    if (!isLoggedIn || isDeletingAllHistory) return;
+
+    const confirmed = window.confirm('Delete all detection history? This will remove it from your view.');
+    if (!confirmed) return;
+
+    setIsDeletingAllHistory(true);
+    try {
+      await deleteAllAnalysisHistory();
+      setDetectionResult(null);
+      await refreshHistory();
+    } catch (err) {
+      alert('Failed to delete detection history. Please try again.');
+    } finally {
+      setIsDeletingAllHistory(false);
     }
   };
 
@@ -155,6 +216,9 @@ function Detection() {
       const result = await detectScamRequest(text);
       console.log('[DETECTION RESULT]', result);
       setDetectionResult(result);
+      
+      // Refresh history list to include the new detection
+      await refreshHistory();
     } catch (error) {
       console.error('[DETECTION ERROR]', error);
 
@@ -179,6 +243,166 @@ function Detection() {
     setRateLimitError(null);
     setGraphScamWidth(0);
     setGraphLegitWidth(0);
+    // Clear image states
+    setSelectedImage(null);
+    setImagePreview(null);
+    setIsExtractingText(false);
+    setOcrProgress(0);
+    setShowCropModal(false);
+    setCropImageElement(null);
+    setCompletedCrop(null);
+  };
+
+  // Handle image file selection
+  const handleImageSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setValidationError('Please select a valid image file (PNG, JPG, etc.)');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setValidationError('Image file is too large. Maximum size is 10MB.');
+      return;
+    }
+
+    setSelectedImage(file);
+    setValidationError(null);
+    setRateLimitError(null);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImagePreview(event.target.result);
+      setCrop({ unit: '%', x: 5, y: 5, width: 90, height: 90 });
+      setCompletedCrop(null);
+      setShowCropModal(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const getCroppedImageBlob = async () => {
+    if (!selectedImage) return null;
+
+    if (!cropImageElement || !completedCrop?.width || !completedCrop?.height) {
+      return selectedImage;
+    }
+
+    const scaleX = cropImageElement.naturalWidth / cropImageElement.width;
+    const scaleY = cropImageElement.naturalHeight / cropImageElement.height;
+    const canvas = document.createElement('canvas');
+
+    canvas.width = Math.max(1, Math.floor(completedCrop.width * scaleX));
+    canvas.height = Math.max(1, Math.floor(completedCrop.height * scaleY));
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return selectedImage;
+
+    ctx.drawImage(
+      cropImageElement,
+      completedCrop.x * scaleX,
+      completedCrop.y * scaleY,
+      completedCrop.width * scaleX,
+      completedCrop.height * scaleY,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        reject(new Error('Failed to crop image'));
+      }, 'image/png');
+    });
+  };
+
+  const handleCropAndExtract = async () => {
+    if (!selectedImage) return;
+
+    try {
+      const croppedBlob = await getCroppedImageBlob();
+      setShowCropModal(false);
+      await extractTextFromImage(croppedBlob || selectedImage);
+    } catch (error) {
+      console.error('[CROP ERROR]', error);
+      setValidationError('Failed to crop image. Please try again.');
+      setShowCropModal(false);
+    }
+  };
+
+  // Extract text from image using Tesseract.js
+  const extractTextFromImage = async (imageFile) => {
+    setIsExtractingText(true);
+    setOcrProgress(0);
+    setText(''); // Clear existing text
+
+    try {
+      const result = await Tesseract.recognize(
+        imageFile,
+        'eng', // Language
+        {
+          logger: (m) => {
+            // Update progress
+            if (m.status === 'recognizing text') {
+              setOcrProgress(Math.round(m.progress * 100));
+            }
+          },
+        }
+      );
+
+      const extractedText = (result.data.text || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      if (!extractedText) {
+        setValidationError('No text found in the image. Please try another image or enter text manually.');
+        setIsExtractingText(false);
+        return;
+      }
+
+      // Set the extracted text
+      setText(extractedText);
+      setIsExpanded(true);
+      setIsExtractingText(false);
+      setOcrProgress(100);
+      
+      console.log('[OCR] Extracted text:', extractedText);
+    } catch (error) {
+      console.error('[OCR ERROR]', error);
+      setValidationError('Failed to extract text from image. Please try again or enter text manually.');
+      setIsExtractingText(false);
+      setOcrProgress(0);
+    }
+  };
+
+  // Trigger file input click
+  const handlePlusButtonClick = () => {
+    if (isDetecting || isExtractingText) return;
+    fileInputRef.current?.click();
+  };
+
+  // Remove selected image
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    setIsExtractingText(false);
+    setOcrProgress(0);
+    setShowCropModal(false);
+    setCropImageElement(null);
+    setCompletedCrop(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   // Animate graph bar from 0 to result values when result appears
@@ -195,74 +419,65 @@ function Detection() {
     return () => cancelAnimationFrame(t);
   }, [detectionResult]);
 
-  const handleAnchor = async () => {
-    if (!detectionResult?.ref_id || isAnchoring) return;
-
-    setIsAnchoring(true);
-    try {
-      const result = await anchorAnalysis(detectionResult.ref_id);
-      console.log('[ANCHOR RESULT]', result);
-      // Update the detection result with anchored status
-      setDetectionResult(prev => ({
-        ...prev,
-        is_anchored: true,
-        tx_hash: result.tx_hash,
-        block_number: result.block_number
-      }));
-      alert('Analysis anchored to blockchain successfully!');
-    } catch (error) {
-      console.error('[ANCHOR ERROR]', error);
-      alert(`Error anchoring: ${error.message || 'Failed to anchor'}`);
-    } finally {
-      setIsAnchoring(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    if (!detectionResult?.ref_id || isVerifying) return;
-
-    setIsVerifying(true);
-    setVerificationResult(null);
-    try {
-      const result = await verifyAnalysis(detectionResult.ref_id);
-      console.log('[VERIFY RESULT]', result);
-      setVerificationResult(result);
-    } catch (error) {
-      console.error('[VERIFY ERROR]', error);
-      setVerificationResult({ verified: false, error: error.message });
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   const handleAskAIGuidance = async () => {
-    if (!detectionResult?.ref_id || !isLoggedIn || isOpeningGuidance) return;
+    if (!detectionResult || isOpeningGuidance) return;
 
     setIsOpeningGuidance(true);
     try {
-      // Get or create the analysis-guided conversation
-      const conversation = await getAnalysisConversation(detectionResult.ref_id, accessToken);
-      console.log('[GUIDANCE CONVERSATION]', conversation);
-      
-      // Navigate to chatbot page with conversation ID and analysis context
-      navigate('/chatbot', {
-        state: {
-          conversationId: conversation.conversation_id,
-          conversationType: 'analysis_guided',
-          analysisContext: conversation.analysis_context,
-          isNew: conversation.is_new
-        }
-      });
+      if (isLoggedIn && accessToken && detectionResult.ref_id) {
+        // Get or create the analysis-guided conversation for authenticated user
+        const conversation = await getAnalysisConversation(detectionResult.ref_id, accessToken);
+        console.log('[GUIDANCE CONVERSATION]', conversation);
+        
+        navigate('/chatbot', {
+          state: {
+            conversationId: conversation.conversation_id,
+            conversationType: 'analysis_guided',
+            analysisContext: conversation.analysis_context,
+            isNew: conversation.is_new
+          }
+        });
+      } else {
+        // Guest mode: Navigate directly to chatbot page with analysis context
+        navigate('/chatbot', {
+          state: {
+            conversationType: 'analysis_guided',
+            analysisContext: {
+              ref_id: detectionResult.ref_id || 'guest-temp-ref',
+              is_scam: detectionResult.is_scam,
+              scam_type: detectionResult.scam_type || 'Scam Detection',
+              scam_score: detectionResult.scam_score,
+              legit_score: detectionResult.legit_score,
+              summary: detectionResult.summary,
+              key_markers: detectionResult.key_markers || [],
+            }
+          }
+        });
+      }
     } catch (error) {
       console.error('[GUIDANCE ERROR]', error);
-      alert(`Error opening guidance: ${error.message || 'Failed to open AI guidance'}`);
+      // Fallback: navigate directly with context
+      navigate('/chatbot', {
+        state: {
+          conversationType: 'analysis_guided',
+          analysisContext: {
+            ref_id: detectionResult.ref_id || 'guest-temp-ref',
+            is_scam: detectionResult.is_scam,
+            scam_type: detectionResult.scam_type || 'Scam Detection',
+            scam_score: detectionResult.scam_score,
+            legit_score: detectionResult.legit_score,
+            summary: detectionResult.summary,
+            key_markers: detectionResult.key_markers || [],
+          }
+        }
+      });
     } finally {
       setIsOpeningGuidance(false);
     }
   };
 
   return (
-    <div className="detect">
+    <div className="detect page-enter">
       <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
         <button
           className="detect__sidebtn detect__sidebtn--menu"
@@ -275,20 +490,65 @@ function Detection() {
         {sidebarOpen && (
           <div className="detect__chat-history">
             <div className="detect__chat-title">Chat History</div>
-            <div className="detect__chat-list">
-              {chatHistory.map((chat) => (
-                <div
-                  className="detect__chat-item"
-                  key={chat.id}
-                  onClick={() => handleChatClick(chat)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="detect__chat-item-title">{chat.title}</div>
-                  <div className="detect__chat-item-preview">{chat.description}</div>
-                  <div className="detect__chat-item-time">{chat.timestamp}</div>
+            {isLoggedIn ? (
+              <>
+                {chatHistory.length > 0 && (
+                  <div className="detect__chat-actions">
+                    <button
+                      className="detect__chat-clear"
+                      type="button"
+                      onClick={handleDeleteAllHistory}
+                      disabled={isDeletingAllHistory}
+                    >
+                      {isDeletingAllHistory ? 'Deleting...' : 'Clear All'}
+                    </button>
+                  </div>
+                )}
+                <div className="detect__chat-list">
+                  {chatHistory.map((chat) => (
+                    <div
+                      className="detect__chat-item"
+                      key={chat.id}
+                      onClick={() => handleChatClick(chat)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="detect__chat-item-header">
+                        <div className="detect__chat-item-title">{chat.title}</div>
+                        {chat.id && (
+                          <button
+                            className="detect__chat-delete"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteHistoryItem(chat.id);
+                            }}
+                            disabled={isDeletingHistoryId === chat.id}
+                          >
+                            {isDeletingHistoryId === chat.id ? '...' : 'Delete'}
+                          </button>
+                        )}
+                      </div>
+                      <div className="detect__chat-item-preview">{chat.description}</div>
+                      <div className="detect__chat-item-time">{chat.timestamp}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="chatbot__anonymous-box" style={{ margin: '15px' }}>
+                <div className="chatbot__anonymous-icon">🛡️</div>
+                <div className="chatbot__anonymous-text">
+                  You are using guest mode. Log in to save your analysis history across devices.
+                </div>
+                <button
+                  className="chatbot__anonymous-login"
+                  type="button"
+                  onClick={() => navigate('/login')}
+                >
+                  Login / Sign Up
+                </button>
+              </div>
+            )}
           </div>
         )}
         {!sidebarOpen && (
@@ -297,7 +557,7 @@ function Detection() {
               ✎
             </button>
             <div className="detect__spacer" />
-            <button className="detect__sidebtn" type="button" aria-label="Settings">
+            <button className="detect__sidebtn" type="button" aria-label="Settings" onClick={() => navigate('/settings')}>
               ⚙
             </button>
           </>
@@ -306,7 +566,7 @@ function Detection() {
 
       <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
         <header className="nav nav--detect">
-          <div className="brand brand--small">[INSERT LOGO / Verf AI] Fraud Detection</div>
+          <div className="brand brand--small">Verif-AI Detection</div>
           <nav className="nav__links">
             <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>
               About us
@@ -325,22 +585,48 @@ function Detection() {
               <button
                 className="nav__link nav__btn"
                 type="button"
-                onClick={() => navigate('/blockchain')}
+                onClick={() => navigate('/admin')}
               >
                 Admin
               </button>
             )}
           </nav>
           {isLoggedIn ? (
-            <div className="nav__user-actions">
-              <span className="nav__username">{user?.username || user?.email}</span>
+            <div className="nav__user-menu" onClick={e => e.stopPropagation()}>
               <button
                 className="nav__login"
                 type="button"
-                onClick={handleLogout}
+                onClick={() => setShowUserMenu(v => !v)}
               >
-                Logout
+                {user?.username || user?.email || 'Profile'}
               </button>
+              {showUserMenu && (
+                <div className="nav__dropdown">
+                  <button
+                    className="nav__dropdown-item"
+                    type="button"
+                    onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
+                  >
+                    Settings
+                  </button>
+                  {isAdmin && (
+                    <button
+                      className="nav__dropdown-item nav__dropdown-item--admin"
+                      type="button"
+                      onClick={() => { navigate('/admin'); setShowUserMenu(false); }}
+                    >
+                      Admin Panel
+                    </button>
+                  )}
+                  <button
+                    className="nav__dropdown-item nav__dropdown-item--logout"
+                    type="button"
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <button
@@ -356,7 +642,7 @@ function Detection() {
         <main className={`detect__content ${detectionResult ? 'detect__content--results' : ''}`}>
           {!detectionResult ? (
             <>
-              <h1 className="detect__title">Welcome to VerfAI fraud detection</h1>
+              <h1 className="detect__title">Welcome to VerifAI</h1>
               <p className="detect__subtitle">
                 Write the promo/message you want to analyze, or press the plus button to submit a file
               </p>
@@ -373,11 +659,112 @@ function Detection() {
                 </div>
               )}
 
+              {/* Image preview */}
+              {imagePreview && (
+                <div className="detect__imagePreview">
+                  <div className="detect__imagePreview-header">
+                    <span className="detect__imagePreview-title">📷 Selected Image</span>
+                    <div className="detect__imagePreview-actions">
+                      <button
+                        className="detect__imagePreview-crop"
+                        onClick={() => setShowCropModal(true)}
+                        type="button"
+                        disabled={isExtractingText}
+                      >
+                        {showCropModal ? 'Cropping...' : 'Crop'}
+                      </button>
+                      <button
+                        className="detect__imagePreview-remove"
+                        onClick={handleRemoveImage}
+                        type="button"
+                        disabled={isExtractingText}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  {showCropModal ? (
+                    <div className="detect__cropInline">
+                      <div className="detect__cropHeader">
+                        <h3 className="detect__cropTitle">Crop Before OCR</h3>
+                        <p className="detect__cropHint">Select only the text area for better extraction quality.</p>
+                      </div>
+                      <div className="detect__cropBody">
+                        <ReactCrop
+                          crop={crop}
+                          onChange={(nextCrop) => setCrop(nextCrop)}
+                          onComplete={(nextCompletedCrop) => setCompletedCrop(nextCompletedCrop)}
+                          keepSelection
+                        >
+                          <img
+                            src={imagePreview}
+                            alt="Crop selection"
+                            className="detect__cropImage"
+                            onLoad={(event) => setCropImageElement(event.currentTarget)}
+                          />
+                        </ReactCrop>
+                      </div>
+                      <div className="detect__cropActions">
+                        <button
+                          type="button"
+                          className="detect__cropBtn detect__cropBtn--ghost"
+                          onClick={() => setShowCropModal(false)}
+                          disabled={isExtractingText}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="detect__cropBtn detect__cropBtn--primary"
+                          onClick={handleCropAndExtract}
+                          disabled={isExtractingText}
+                        >
+                          {isExtractingText ? 'Extracting...' : 'Crop & Extract'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <img src={imagePreview} alt="Selected for OCR" className="detect__imagePreview-img" />
+                  )}
+
+                  {isExtractingText && (
+                    <div className="detect__imagePreview-progress">
+                      <div className="detect__imagePreview-progressBar">
+                        <div 
+                          className="detect__imagePreview-progressFill"
+                          style={{ width: `${ocrProgress}%` }}
+                        />
+                      </div>
+                      <p className="detect__imagePreview-progressText">
+                        Extracting text... {ocrProgress}%
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div
                 className={`detect__inputRow ${isFocused ? 'detect__inputRow--focused' : ''} ${isExpanded ? 'detect__inputRow--expanded' : ''}`}
               >
-                <button className="detect__plus" type="button" aria-label="Upload">
-                  +
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  style={{ display: 'none' }}
+                />
+                
+                <button 
+                  className="detect__plus" 
+                  type="button" 
+                  aria-label="Upload image"
+                  onClick={handlePlusButtonClick}
+                  disabled={isDetecting || isExtractingText}
+                  title="Upload image to extract text"
+                >
+                  {isExtractingText ? '⏳' : '+'}
                 </button>
                 <textarea
                   className="detect__input"
@@ -385,14 +772,15 @@ function Detection() {
                   onChange={handleTextChange}
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
-                  placeholder="Paste suspicious message or email here..."
+                  placeholder={isExtractingText ? 'Extracting text from image...' : 'Paste suspicious message or email here, or click + to upload an image...'}
                   rows={1}
                   maxLength={CONSTRAINTS.message.maxLength}
+                  disabled={isExtractingText}
                 />
                 <button
                   className={`detect__cta ${text.trim() && !validationError ? 'detect__cta--active' : ''}`}
                   type="button"
-                  disabled={!text.trim() || isDetecting || validationError}
+                  disabled={!text.trim() || isDetecting || validationError || isExtractingText}
                   onClick={handleDetect}
                 >
                   {isDetecting ? 'Analyzing...' : 'Detect'}
@@ -433,37 +821,53 @@ function Detection() {
                 <h2 className="detect__resultsTitle">Analysis Results</h2>
                 <div className="detect__resultsActions">
                   {isLoggedIn && (
-                    <>
-                      <button 
-                        className="detect__reportBtn" 
-                        type="button"
-                        onClick={() => setIsReportModalOpen(true)}
-                        title="Report an issue with this analysis"
-                      >
-                        🚩 Report Issue
-                      </button>
-                      <button
-                        className="detect__newAnalysis"
-                        type="button"
-                        onClick={handleAskAIGuidance}
-                        disabled={isOpeningGuidance}
-                        title="Get personalized guidance based on this analysis"
-                      >
-                        {isOpeningGuidance ? 'Opening...' : '💬 Ask AI for Guidance'}
-                      </button>
-                    </>
+                    <button 
+                      className="detect__reportBtn" 
+                      type="button"
+                      onClick={() => setIsReportModalOpen(true)}
+                      title="Report an issue with this analysis"
+                    >
+                      Report Issue
+                    </button>
                   )}
+                  <button
+                    className="detect__newAnalysis"
+                    type="button"
+                    onClick={handleAskAIGuidance}
+                    disabled={isOpeningGuidance}
+                    title="Get personalized guidance based on this analysis"
+                  >
+                    {isOpeningGuidance ? 'Opening...' : 'Ask AI for Guidance'}
+                  </button>
                   <button 
                     className="detect__newAnalysis" 
                     type="button"
                     onClick={handleNewAnalysis}
                   >
-                    ✨ New Analysis
+                    New Analysis
                   </button>
                 </div>
               </div>
 
               <div className="detect__resultsGrid">
+                {/* Low Confidence Review Notice */}
+                {detectionResult.needs_review && (
+                  <div className="detect__resultCard detect__resultCard--review detect__resultCard--animate">
+                    <div className="detect__reviewBanner">
+                      <div className="detect__reviewIcon">🔍</div>
+                      <div className="detect__reviewContent">
+                        <h3 className="detect__reviewTitle">This result is under review</h3>
+                        <p className="detect__reviewText">
+                          Our AI model wasn&apos;t fully confident about this analysis. We&apos;ve flagged it for human review to ensure accuracy.
+                        </p>
+                        <p className="detect__reviewNote">
+                          Verif-AI is constantly learning and improving. Your patience helps us achieve even more accurate scam detection for everyone.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Summary & Original Message */}
                 <div className="detect__resultCard detect__resultCard--summary detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Summary</h3>
@@ -501,7 +905,7 @@ function Detection() {
                   </div>
                   <div className="detect__verdict detect__verdict--animate">
                     <span className={`detect__verdictLabel ${detectionResult.is_scam ? 'detect__verdictLabel--scam' : 'detect__verdictLabel--legit'}`}>
-                      {detectionResult.label}
+                      {detectionResult.is_scam ? 'Likely to be a scam' : 'Likely to be legit'}
                     </span>
                   </div>
                 </div>

@@ -336,6 +336,12 @@ class TestUserStatistics:
             verified_users_count=400,
             unverified_users_count=100,
             website_visits=10000,
+            top_power_user={
+                "user_id": "user-1",
+                "username": "top_user",
+                "email": "top@example.com",
+                "total_detections": 77,
+            },
             period=StatisticsPeriod.WEEK,
         )
         
@@ -345,6 +351,7 @@ class TestUserStatistics:
         assert data["user_growth_rate"] == 10.0
         assert data["verification_rate"] == 80.0
         assert data["period"] == "week"
+        assert data["top_power_user"]["username"] == "top_user"
 
 
 class TestUserReport:
@@ -538,6 +545,7 @@ class TestScamCategoryBreakdown:
         assert breakdown.category == "Phishing"
         assert breakdown.count == 150
         assert breakdown.percentage == 30.5
+        assert breakdown.avg_risk_percent == 0.0
     
     def test_scam_category_breakdown_to_dict(self):
         """Test conversion to dictionary."""
@@ -552,6 +560,7 @@ class TestScamCategoryBreakdown:
         assert data["category"] == "Financial Fraud"
         assert data["count"] == 200
         assert data["percentage"] == 40.12  # Rounded to 2 decimal places
+        assert data["avg_risk_percent"] == 0.0
 
 
 class TestEnums:

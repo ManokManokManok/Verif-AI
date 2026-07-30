@@ -6,8 +6,10 @@ CPU, memory, GPU usage, and model performance statistics.
 """
 
 import os
+import sys
 import time
 import logging
+import platform as platform_lib
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from functools import lru_cache
@@ -115,7 +117,16 @@ class SystemMetricsCollector:
             
             # Calculate uptime
             uptime = int(time.time() - _APP_START_TIME)
-            
+
+            # Collect static system info
+            sys_platform, py_version, dj_version = self._collect_system_info()
+
+            # Load average (Unix only)
+            load_avg = self._collect_load_average()
+
+            # Check database connectivity
+            db_connected = self._check_database()
+
             return ModelHealthMetrics(
                 # GPU
                 gpu_usage_percent=gpu_percent,
@@ -138,6 +149,7 @@ class SystemMetricsCollector:
                 # Cache
                 cache_hit_rate=cache_hit_rate,
                 cache_size_mb=self._cache_stats.get("size_mb", 0),
+                cache_connected=True,
                 # Model
                 model_name=self.model_name,
                 token_count_today=model_metrics["token_count_today"],
@@ -148,6 +160,11 @@ class SystemMetricsCollector:
                 # System
                 uptime_seconds=uptime,
                 last_model_reload=model_metrics.get("last_model_reload"),
+                platform=sys_platform,
+                python_version=py_version,
+                django_version=dj_version,
+                load_average=load_avg,
+                database_connected=db_connected,
                 collected_at=datetime.utcnow(),
             )
         except Exception as e:
@@ -181,6 +198,46 @@ class SystemMetricsCollector:
             return 0.0
         return (self._cache_stats["hits"] / total) * 100
     
+    def _collect_system_info(self) -> Tuple[str, str, str]:
+        """Collect static system information: platform, Python version, Django version."""
+        try:
+            sys_platform = platform_lib.system() or sys.platform
+        except Exception:
+            sys_platform = sys.platform
+
+        py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
+        try:
+            import django
+            dj_version = django.__version__
+        except Exception:
+            dj_version = 'Unknown'
+
+        return sys_platform, py_version, dj_version
+
+    def _collect_load_average(self) -> Optional[float]:
+        """Collect 1-minute load average (Unix only)."""
+        try:
+            if hasattr(os, 'getloadavg'):
+                return round(os.getloadavg()[0], 2)
+        except Exception:
+            pass
+        if self._psutil:
+            try:
+                return round(self._psutil.getloadavg()[0], 2)
+            except Exception:
+                pass
+        return None
+
+    def _check_database(self) -> bool:
+        """Ping the primary database to confirm connectivity."""
+        try:
+            from django.db import connection
+            connection.ensure_connection()
+            return True
+        except Exception:
+            return False
+
     def update_active_sessions(self, count: int) -> None:
         """Update active session count."""
         self._active_sessions = count

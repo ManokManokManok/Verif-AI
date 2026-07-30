@@ -14,7 +14,6 @@
 - [Email Configuration](#email-configuration)
 - [Rate Limiting Configuration](#rate-limiting-configuration)
 - [Security Configuration](#security-configuration)
-- [Blockchain Configuration](#blockchain-configuration)
 - [LLM Model Configuration](#llm-model-configuration)
 - [Development vs Production](#development-vs-production)
 
@@ -248,20 +247,90 @@ JWT_REFRESH_TOKEN_LIFETIME=2592000  # 30 days
 **Required:** No  
 **Type:** String  
 **Default:** `mock`  
-**Values:** `mock`, `sendgrid`, `smtp`
+**Values:** `mock`, `sendgrid`, `nodemailer`, `smtp`
 
 Email service provider to use.
 
 **Options:**
 - `mock`: Console/log output only (development)
 - `sendgrid`: SendGrid email service (recommended for production)
+- `nodemailer`: Node.js Nodemailer transport (SMTP via Node bridge)
 - `smtp`: Standard SMTP server
 
 **Example:**
 ```env
 EMAIL_BACKEND=mock      # Development
 EMAIL_BACKEND=sendgrid  # Production with SendGrid
+EMAIL_BACKEND=nodemailer  # Production with Nodemailer transport
 EMAIL_BACKEND=smtp      # Production with custom SMTP
+```
+
+---
+
+### Nodemailer Configuration
+
+Required when `EMAIL_BACKEND=nodemailer`:
+
+#### `NODE_EXECUTABLE`
+**Required:** No  
+**Default:** `node`
+
+Node.js executable used to run the Nodemailer bridge script.
+
+```env
+NODE_EXECUTABLE=node
+```
+
+---
+
+#### `NODEMAILER_SCRIPT_PATH`
+**Required:** No  
+**Default:** `backend/scripts/nodemailer_sender.js`
+
+Absolute path to Nodemailer bridge script. Leave empty to use the default script in this repository.
+
+```env
+NODEMAILER_SCRIPT_PATH=
+```
+
+---
+
+#### `NODEMAILER_TIMEOUT_SECONDS`
+**Required:** No  
+**Default:** `15`
+
+Timeout for Nodemailer send operation.
+
+```env
+NODEMAILER_TIMEOUT_SECONDS=15
+```
+
+---
+
+#### `NODEMAILER_HOST`, `NODEMAILER_PORT`, `NODEMAILER_SECURE`, `NODEMAILER_USER`, `NODEMAILER_PASS`
+**Required:** Usually yes (unless your transport does not require auth)
+
+SMTP transport settings for Nodemailer.
+
+If any are omitted, the service falls back to equivalent SMTP variables:
+- `NODEMAILER_HOST` → `EMAIL_HOST`
+- `NODEMAILER_PORT` → `EMAIL_PORT`
+- `NODEMAILER_USER` → `EMAIL_HOST_USER`
+- `NODEMAILER_PASS` → `EMAIL_HOST_PASSWORD`
+
+```env
+NODEMAILER_HOST=smtp.gmail.com
+NODEMAILER_PORT=587
+NODEMAILER_SECURE=False
+NODEMAILER_USER=yourapp@gmail.com
+NODEMAILER_PASS=your-app-password
+```
+
+Before using Nodemailer, install dependencies:
+
+```bash
+cd backend
+npm install
 ```
 
 ---
@@ -450,22 +519,6 @@ RATE_LIMIT_API_WRITE_BLOCK=120    # 2 min block
 
 ---
 
-### Blockchain Rate Limits
-
-#### Blockchain Read
-```env
-RATE_LIMIT_BLOCKCHAIN_READ_REQUESTS=50  # Default: 50
-RATE_LIMIT_BLOCKCHAIN_READ_WINDOW=60    # 1 minute
-RATE_LIMIT_BLOCKCHAIN_READ_BLOCK=60     # 1 min block
-```
-
-#### Blockchain Write
-```env
-RATE_LIMIT_BLOCKCHAIN_WRITE_REQUESTS=10  # Default: 10
-RATE_LIMIT_BLOCKCHAIN_WRITE_WINDOW=60    # 1 minute
-RATE_LIMIT_BLOCKCHAIN_WRITE_BLOCK=300    # 5 min block
-```
-
 ---
 
 ## Security Configuration
@@ -483,7 +536,6 @@ Run security configuration validation on startup.
 - Debug mode settings
 - CORS configuration
 - JWT configuration
-- Blockchain settings
 
 **Example:**
 ```env
@@ -494,54 +546,71 @@ VALIDATE_SECURITY_CONFIG=true  # Recommended
 
 ---
 
-## Blockchain Configuration
-
-### `WEB3_PROVIDER_URL`
-**Required:** Only if using blockchain features  
-**Type:** URL  
-
-Ethereum node provider URL (Infura, Alchemy, etc.)
-
-**Example:**
-```env
-WEB3_PROVIDER_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
-WEB3_PROVIDER_URL=https://eth-mainnet.alchemyapi.io/v2/YOUR_API_KEY
-```
-
----
-
-### `CONTRACT_ADDRESS`
-**Required:** Only if using blockchain features  
-**Type:** Ethereum address  
-
-Deployed smart contract address for analysis anchoring.
-
-**Example:**
-```env
-CONTRACT_ADDRESS=0x1234567890123456789012345678901234567890
-```
-
----
-
-### `PRIVATE_KEY`
-**Required:** Only if using blockchain features  
-**Type:** Private key (hex)  
-
-Private key for contract interaction (admin operations).
-
-**Security:**
-- Never commit to version control
-- Use deployment wallet with minimal funds
-- Rotate regularly
-
-**Example:**
-```env
-PRIVATE_KEY=0xabcdef123456...
-```
 
 ---
 
 ## LLM Model Configuration
+
+### `LLM_MULTIHEAD_MODEL_ID`
+**Required:** No  
+**Type:** Hugging Face repository ID  
+**Default:** `ManokManokManok/bimBert_Scam-Detection`
+
+Repository containing the scam-classifier artifacts.
+
+**Example:**
+```env
+LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
+```
+
+---
+
+### `LLM_MULTIHEAD_SUBFOLDER`
+**Required:** No  
+**Type:** String  
+**Default:** empty (auto-detect)
+
+Optional subfolder inside `LLM_MULTIHEAD_MODEL_ID` where model files are stored.
+
+**Behavior:**
+- Empty value: tries repo root, then `mk5`, then `mk4`
+- `mk5` or `mk4`: force loading from that subfolder
+- `root` or `.`: force loading from repository root
+
+**Example:**
+```env
+LLM_MULTIHEAD_SUBFOLDER=mk5
+```
+
+---
+
+### `LLM_GEMMA_MODEL_ID`
+**Required:** No  
+**Type:** Hugging Face repository ID  
+**Default:** `lmstudio-community/gemma-3-4B-it-qat-GGUF`
+
+Repository containing the GGUF model used by `llama_cpp`.
+
+**Example:**
+```env
+LLM_GEMMA_MODEL_ID=lmstudio-community/gemma-3-4B-it-qat-GGUF
+```
+
+---
+
+### `LLM_GGUF_FILENAME`
+**Required:** No  
+**Type:** String  
+**Default:** `gemma-3-4B-it-QAT-Q4_0.gguf`
+
+File name of the GGUF model in `LLM_GEMMA_MODEL_ID`.
+
+**Example:**
+```env
+LLM_GGUF_FILENAME=gemma-3-4B-it-QAT-Q4_0.gguf
+```
+
+---
 
 ### `LLM_WARMUP_ON_START`
 **Required:** No  
@@ -592,6 +661,8 @@ VALIDATE_SECURITY_CONFIG=false
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # Models
+LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
+LLM_MULTIHEAD_SUBFOLDER=mk5
 LLM_WARMUP_ON_START=false
 ```
 
@@ -627,6 +698,8 @@ VALIDATE_SECURITY_CONFIG=true
 CORS_ALLOWED_ORIGINS=https://verif-ai.com,https://www.verif-ai.com
 
 # Models
+LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
+LLM_MULTIHEAD_SUBFOLDER=mk5
 LLM_WARMUP_ON_START=true
 
 # Rate Limiting (tighten for production)

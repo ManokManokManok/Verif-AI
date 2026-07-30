@@ -1,6 +1,8 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signupRequest } from '../api/client.js';
+import { useTheme } from '../context/ThemeContext';
+import { getPasswordRequirements, validateUsername } from '../utils/validation.js';
 import signupImage from '../../assets/image/signup.png';
 
 function EyeIcon({ slashed }) {
@@ -150,6 +152,7 @@ function LockIcon() {
 
 function Signup() {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -160,11 +163,26 @@ function Signup() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [registered, setRegistered] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+
+  // Dynamic password requirements
+  const passwordRequirements = getPasswordRequirements(password);
+  const showPasswordReqs = password.length > 0;
+  const allPasswordReqsMet = passwordRequirements.every((r) => r.met);
+  const unmetReqs = passwordRequirements.filter((r) => !r.met);
+
+  // Dynamic username validation
+  const usernameError = username.length > 0 ? validateUsername(username) : null;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
     setFieldErrors({});
+
+    if (!agreed) {
+      setError('You must agree to the Terms and Conditions to sign up.');
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -188,11 +206,36 @@ function Signup() {
   };
 
   // Parse error message into list for multi-error display
-  const errorList = parseErrors(error);
+  // Filter out password/username validation errors already shown inline
+  const errorList = parseErrors(error).filter((msg) => {
+    const lower = msg.toLowerCase();
+    // Skip messages already covered by inline password requirements
+    if (lower.includes('at least one uppercase')) return false;
+    if (lower.includes('at least one lowercase')) return false;
+    if (lower.includes('at least one digit')) return false;
+    if (lower.includes('at least one special character')) return false;
+    if (lower.includes('at least') && lower.includes('characters')) return false;
+    if (lower.includes('too common')) return false;
+    if (lower.includes('choose a stronger password')) return false;
+    if (lower.includes('must not contain spaces')) return false;
+    // Skip username errors shown inline
+    if (lower.includes('at least one letter') && lower.includes('username')) return false;
+    return true;
+  });
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--signup">
+    <div className="auth auth--signup page-enter">
+      {/* Theme Toggle Button */}
+      <button 
+        className="auth__theme-toggle" 
+        onClick={toggleTheme}
+        aria-label="Toggle theme"
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {theme === 'dark' ? '☀️' : '🌙'}
+      </button>
+
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
           <p className="auth__tagline">Keeping you Safe</p>
@@ -222,11 +265,12 @@ function Signup() {
               Please click the link in your email to verify your account before logging in.
             </p>
             <button
-              className="auth__primary"
+              className="auth__submit"
               style={{ marginTop: 28 }}
               onClick={() => navigate('/login')}
             >
-              <strong>Go to Login</strong>
+              <span>Go to Login</span>
+              <span className="auth__submit-arrow">→</span>
             </button>
             <p className="auth__subtitle" style={{ marginTop: 16, fontSize: 12 }}>
               Didn&apos;t receive the email? Check your spam folder.
@@ -278,6 +322,9 @@ function Signup() {
                 <UserIcon />
               </span>
             </div>
+            {usernameError && !usernameError.valid && (
+              <span className="auth__field-hint auth__field-hint--error">{usernameError.error}</span>
+            )}
           </label>
 
           <label className="auth__field">
@@ -304,6 +351,22 @@ function Signup() {
                 </span>
               </button>
             </div>
+            {showPasswordReqs && (
+              <div className="password-requirements">
+                {allPasswordReqsMet ? (
+                  <span className="password-requirements__success">✓ Password meets all requirements</span>
+                ) : (
+                  <div className="password-requirements__grid">
+                    {unmetReqs.map((req) => (
+                      <span key={req.key} className="password-requirements__item password-requirements__item--unmet">
+                        <span className="password-requirements__icon">✗</span>
+                        {req.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </label>
 
           <label className="auth__field">
@@ -334,7 +397,7 @@ function Signup() {
             </div>
           </label>
 
-          {error && (
+          {errorList.length > 0 && (
             <div className="auth__error-container">
               {hasMultipleErrors ? (
                 <ul className="auth__error-list">
@@ -348,8 +411,38 @@ function Signup() {
             </div>
           )}
 
-          <button type="submit" className="auth__primary">
-            <strong>{loading ? 'Registering…' : 'Register'}</strong>
+          <label className="auth__checkbox-label" style={{ display: 'flex', alignItems: 'center', margin: '16px 0 8px 0', fontSize: 14 }}>
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={e => setAgreed(e.target.checked)}
+              required
+              style={{ marginRight: 8 }}
+            />
+            I agree to the{' '}
+            <a
+              href="/terms-and-conditions"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#2563eb', textDecoration: 'underline', marginLeft: 4 }}
+              onClick={e => { e.stopPropagation(); }}
+            >
+              Verif-AI Terms and Conditions
+            </a>
+          </label>
+
+          <button type="submit" className="auth__submit" disabled={loading}>
+            {loading ? (
+              <>
+                <span className="auth__submit-spinner"></span>
+                <span>Registering…</span>
+              </>
+            ) : (
+              <>
+                <span>Register</span>
+                <span className="auth__submit-arrow">→</span>
+              </>
+            )}
           </button>
         </form>
         </>
