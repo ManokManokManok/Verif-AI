@@ -122,25 +122,35 @@ export default function UserStats({ onNotify }) {
       render: (_, row) => (
         <div className="user-stats__actions">
           <button
-            className="admin-btn admin-btn--sm admin-btn--secondary"
+            className="admin-btn user-stats__action-btn user-stats__action-btn--view"
             onClick={() => handleViewReport(row)}
             title="View report details"
           >
-            View
+            <svg className="user-stats__icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
           </button>
           {row.status === 'pending' && (
             <>
               <button
-                className="admin-btn admin-btn--sm admin-btn--primary"
+                className="admin-btn user-stats__action-btn user-stats__action-btn--resolve"
                 onClick={() => openModal(row, 'resolve')}
+                title="Resolve report"
               >
-                Resolve
+                <svg className="user-stats__icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
               </button>
               <button
-                className="admin-btn admin-btn--sm admin-btn--ghost"
+                className="admin-btn user-stats__action-btn user-stats__action-btn--dismiss"
                 onClick={() => openModal(row, 'dismiss')}
+                title="Dismiss report"
               >
-                Dismiss
+                <svg className="user-stats__icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </>
           )}
@@ -205,28 +215,34 @@ export default function UserStats({ onNotify }) {
       </div>
 
       {/* Overview Stats */}
-      <div className="admin-grid admin-grid--4">
+      <div className="admin-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
         <StatCard
           title="Total Users"
           value={userStats.total_users?.toLocaleString() || '0'}
           subtitle="Registered accounts"
         />
         <StatCard
-          title="Active Users"
-          value={(userStats.active_users_count || userStats.active_users || 0).toLocaleString()}
+          title="Active Accounts"
+          value={(userStats.active_users_count || 0).toLocaleString()}
           variant="success"
-          subtitle={`${getPercentage(userStats.active_users_count || userStats.active_users, userStats.total_users)}% of total`}
+          subtitle={`${getPercentage(userStats.active_users_count, userStats.total_users)}% of total`}
+        />
+        <StatCard
+          title="Engaged Users"
+          value={(userStats.engaged_users_count || 0).toLocaleString()}
+          variant="primary"
+          subtitle={`Analyzed this ${period}`}
         />
         <StatCard
           title="New Users"
-          value={(userStats.new_users_count || userStats.new_users || 0).toLocaleString()}
+          value={(userStats.new_users_count || 0).toLocaleString()}
           variant="info"
           subtitle={`This ${period}`}
         />
         <StatCard
           title="Verified Users"
-          value={(userStats.verified_users_count || userStats.verified_users || 0).toLocaleString()}
-          subtitle={`${getPercentage(userStats.verified_users_count || userStats.verified_users, userStats.total_users)}% verified`}
+          value={(userStats.verified_users_count || 0).toLocaleString()}
+          subtitle={`${getPercentage(userStats.verified_users_count, userStats.total_users)}% verified`}
         />
       </div>
 
@@ -247,6 +263,29 @@ export default function UserStats({ onNotify }) {
           value={topUserLabel}
           variant="warning"
           subtitle={`Top User (${topUserPeriodLabel}) • ${topUserDetections.toLocaleString()} detections`}
+        />
+      </div>
+
+      {/* Top Targeted Users Section */}
+      <div className="admin-card admin-mt-4">
+        <div className="admin-card__header">
+          <h3 className="admin-card__title">Top Users Susceptible to Scams</h3>
+        </div>
+        <DataTable
+          columns={[
+            {
+              key: 'username',
+              label: 'User',
+              render: (value, row) => row.username || row.email || row.user_id || 'Unknown'
+            },
+            {
+              key: 'scam_encounters',
+              label: 'Scam Encounters',
+              render: (value) => <strong>{value}</strong>
+            }
+          ]}
+          data={userStats.top_susceptive_users || []}
+          emptyMessage="No susceptible users found in this period."
         />
       </div>
 

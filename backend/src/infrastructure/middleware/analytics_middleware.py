@@ -78,18 +78,14 @@ def _is_bot(user_agent: str) -> bool:
 
 def _should_track_path(path: str) -> bool:
     """Determine if this path should be tracked."""
-    # Skip static files, health checks, and admin API
-    skip_patterns = [
-        r'^/static/',
-        r'^/media/',
-        r'^/favicon\.ico',
-        r'^/robots\.txt',
-        r'^/api/health',
-        r'^/api/admin/',  # Don't track admin API calls
-        r'^/__debug__/',
-        r'^/api/reports/',  # Don't track report submissions
+    # Only track specific meaningful interactions (detection or guidance)
+    # to prevent counting basic page refreshes as website visits.
+    track_patterns = [
+        r'^/api/detect/?',               # Scam detection actions
+        r'^/api/chat/message/?',         # General chatbot guidance
+        r'^/api/chat/analysis-guided/?', # Specific analysis guidance
     ]
-    return not any(re.match(pattern, path) for pattern in skip_patterns)
+    return any(re.match(pattern, path) for pattern in track_patterns)
 
 
 class VisitData:

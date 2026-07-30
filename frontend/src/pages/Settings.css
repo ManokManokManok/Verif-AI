@@ -189,3 +189,103 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* My Submitted Reports Styles */
+.settings__card--reports {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+.settings__card--reports::-webkit-scrollbar {
+  width: 6px;
+}
+.settings__card--reports::-webkit-scrollbar-thumb {
+  background: var(--theme-border);
+  border-radius: 4px;
+}
+
+.settings__loading, .settings__empty {
+  color: var(--theme-text-muted);
+  font-size: 0.95rem;
+  padding: 12px 0;
+  text-align: center;
+}
+
+.settings__reports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings__report-item {
+  background: var(--theme-bg-soft);
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+.settings__report-item:hover {
+  border-color: var(--theme-accent);
+}
+
+.settings__report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.settings__report-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--theme-text);
+  margin: 0;
+}
+
+.settings__report-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.settings__report-status--pending {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fbbf24;
+}
+.settings__report-status--in_progress {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+.settings__report-status--resolved {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+.settings__report-status--dismissed {
+  background: rgba(107, 114, 128, 0.15);
+  color: #9ca3af;
+}
+
+.settings__report-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 0.85rem;
+  color: var(--theme-text-muted);
+  margin-bottom: 12px;
+}
+
+.settings__report-type {
+  font-weight: 500;
+}
+
+.settings__report-desc {
+  font-size: 0.9rem;
+  color: var(--theme-text);
+  line-height: 1.5;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px 12px;
+  border-radius: 6px;
+}

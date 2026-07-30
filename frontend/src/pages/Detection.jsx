@@ -55,6 +55,11 @@ function Detection() {
   const fileInputRef = useRef(null);
 
   const refreshHistory = async () => {
+    if (!isLoggedIn) {
+      setChatHistory([]);
+      return;
+    }
+
     try {
       const res = await getChatHistory();
       if (Array.isArray(res?.history)) {
@@ -66,7 +71,7 @@ function Detection() {
       // Fall through to fallback behavior below.
     }
 
-    setChatHistory(isLoggedIn ? [] : mockChatHistory);
+    setChatHistory([]);
   };
 
   useEffect(() => {
@@ -415,26 +420,57 @@ function Detection() {
   }, [detectionResult]);
 
   const handleAskAIGuidance = async () => {
-    if (!detectionResult?.ref_id || !isLoggedIn || isOpeningGuidance) return;
+    if (!detectionResult || isOpeningGuidance) return;
 
     setIsOpeningGuidance(true);
     try {
-      // Get or create the analysis-guided conversation
-      const conversation = await getAnalysisConversation(detectionResult.ref_id, accessToken);
-      console.log('[GUIDANCE CONVERSATION]', conversation);
-      
-      // Navigate to chatbot page with conversation ID and analysis context
-      navigate('/chatbot', {
-        state: {
-          conversationId: conversation.conversation_id,
-          conversationType: 'analysis_guided',
-          analysisContext: conversation.analysis_context,
-          isNew: conversation.is_new
-        }
-      });
+      if (isLoggedIn && accessToken && detectionResult.ref_id) {
+        // Get or create the analysis-guided conversation for authenticated user
+        const conversation = await getAnalysisConversation(detectionResult.ref_id, accessToken);
+        console.log('[GUIDANCE CONVERSATION]', conversation);
+        
+        navigate('/chatbot', {
+          state: {
+            conversationId: conversation.conversation_id,
+            conversationType: 'analysis_guided',
+            analysisContext: conversation.analysis_context,
+            isNew: conversation.is_new
+          }
+        });
+      } else {
+        // Guest mode: Navigate directly to chatbot page with analysis context
+        navigate('/chatbot', {
+          state: {
+            conversationType: 'analysis_guided',
+            analysisContext: {
+              ref_id: detectionResult.ref_id || 'guest-temp-ref',
+              is_scam: detectionResult.is_scam,
+              scam_type: detectionResult.scam_type || 'Scam Detection',
+              scam_score: detectionResult.scam_score,
+              legit_score: detectionResult.legit_score,
+              summary: detectionResult.summary,
+              key_markers: detectionResult.key_markers || [],
+            }
+          }
+        });
+      }
     } catch (error) {
       console.error('[GUIDANCE ERROR]', error);
-      alert(`Error opening guidance: ${error.message || 'Failed to open AI guidance'}`);
+      // Fallback: navigate directly with context
+      navigate('/chatbot', {
+        state: {
+          conversationType: 'analysis_guided',
+          analysisContext: {
+            ref_id: detectionResult.ref_id || 'guest-temp-ref',
+            is_scam: detectionResult.is_scam,
+            scam_type: detectionResult.scam_type || 'Scam Detection',
+            scam_score: detectionResult.scam_score,
+            legit_score: detectionResult.legit_score,
+            summary: detectionResult.summary,
+            key_markers: detectionResult.key_markers || [],
+          }
+        }
+      });
     } finally {
       setIsOpeningGuidance(false);
     }
@@ -454,47 +490,65 @@ function Detection() {
         {sidebarOpen && (
           <div className="detect__chat-history">
             <div className="detect__chat-title">Chat History</div>
-            {isLoggedIn && chatHistory.length > 0 && (
-              <div className="detect__chat-actions">
+            {isLoggedIn ? (
+              <>
+                {chatHistory.length > 0 && (
+                  <div className="detect__chat-actions">
+                    <button
+                      className="detect__chat-clear"
+                      type="button"
+                      onClick={handleDeleteAllHistory}
+                      disabled={isDeletingAllHistory}
+                    >
+                      {isDeletingAllHistory ? 'Deleting...' : 'Clear All'}
+                    </button>
+                  </div>
+                )}
+                <div className="detect__chat-list">
+                  {chatHistory.map((chat) => (
+                    <div
+                      className="detect__chat-item"
+                      key={chat.id}
+                      onClick={() => handleChatClick(chat)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="detect__chat-item-header">
+                        <div className="detect__chat-item-title">{chat.title}</div>
+                        {chat.id && (
+                          <button
+                            className="detect__chat-delete"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteHistoryItem(chat.id);
+                            }}
+                            disabled={isDeletingHistoryId === chat.id}
+                          >
+                            {isDeletingHistoryId === chat.id ? '...' : 'Delete'}
+                          </button>
+                        )}
+                      </div>
+                      <div className="detect__chat-item-preview">{chat.description}</div>
+                      <div className="detect__chat-item-time">{chat.timestamp}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="chatbot__anonymous-box" style={{ margin: '15px' }}>
+                <div className="chatbot__anonymous-icon">🛡️</div>
+                <div className="chatbot__anonymous-text">
+                  You are using guest mode. Log in to save your analysis history across devices.
+                </div>
                 <button
-                  className="detect__chat-clear"
+                  className="chatbot__anonymous-login"
                   type="button"
-                  onClick={handleDeleteAllHistory}
-                  disabled={isDeletingAllHistory}
+                  onClick={() => navigate('/login')}
                 >
-                  {isDeletingAllHistory ? 'Deleting...' : 'Clear All'}
+                  Login / Sign Up
                 </button>
               </div>
             )}
-            <div className="detect__chat-list">
-              {chatHistory.map((chat) => (
-                <div
-                  className="detect__chat-item"
-                  key={chat.id}
-                  onClick={() => handleChatClick(chat)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="detect__chat-item-header">
-                    <div className="detect__chat-item-title">{chat.title}</div>
-                    {isLoggedIn && chat.id && (
-                      <button
-                        className="detect__chat-delete"
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDeleteHistoryItem(chat.id);
-                        }}
-                        disabled={isDeletingHistoryId === chat.id}
-                      >
-                        {isDeletingHistoryId === chat.id ? '...' : 'Delete'}
-                      </button>
-                    )}
-                  </div>
-                  <div className="detect__chat-item-preview">{chat.description}</div>
-                  <div className="detect__chat-item-time">{chat.timestamp}</div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
         {!sidebarOpen && (
@@ -767,26 +821,24 @@ function Detection() {
                 <h2 className="detect__resultsTitle">Analysis Results</h2>
                 <div className="detect__resultsActions">
                   {isLoggedIn && (
-                    <>
-                      <button 
-                        className="detect__reportBtn" 
-                        type="button"
-                        onClick={() => setIsReportModalOpen(true)}
-                        title="Report an issue with this analysis"
-                      >
-                        Report Issue
-                      </button>
-                      <button
-                        className="detect__newAnalysis"
-                        type="button"
-                        onClick={handleAskAIGuidance}
-                        disabled={isOpeningGuidance}
-                        title="Get personalized guidance based on this analysis"
-                      >
-                        {isOpeningGuidance ? 'Opening...' : 'Ask AI for Guidance'}
-                      </button>
-                    </>
+                    <button 
+                      className="detect__reportBtn" 
+                      type="button"
+                      onClick={() => setIsReportModalOpen(true)}
+                      title="Report an issue with this analysis"
+                    >
+                      Report Issue
+                    </button>
                   )}
+                  <button
+                    className="detect__newAnalysis"
+                    type="button"
+                    onClick={handleAskAIGuidance}
+                    disabled={isOpeningGuidance}
+                    title="Get personalized guidance based on this analysis"
+                  >
+                    {isOpeningGuidance ? 'Opening...' : 'Ask AI for Guidance'}
+                  </button>
                   <button 
                     className="detect__newAnalysis" 
                     type="button"
