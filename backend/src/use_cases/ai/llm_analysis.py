@@ -5,6 +5,8 @@ Uses Gemma to provide human-readable summary and key linguistic markers.
 import logging
 from typing import Dict, Any, List
 
+from src.infrastructure.prompt_sanitizer import PromptSanitizer
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +25,7 @@ class LLMAnalysisUseCase:
             llm_model: Loaded llama_cpp.Llama instance
         """
         self.llm = llm_model
+        self.sanitizer = PromptSanitizer(max_length=8000, log_threats=True)
     
     def analyze(self, message: str, bert_result: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -74,9 +77,18 @@ class LLMAnalysisUseCase:
     
     def _get_summary(self, message: str, bert_result: Dict[str, Any]) -> str:
         """Generate a short summary using Gemma."""
+        # Sanitize user input to prevent prompt injection
+        sanitized = self.sanitizer.sanitize(message, context="llm_summary")
+        safe_message = sanitized.sanitized_text
+        
+        if sanitized.threats_detected:
+            logger.warning(
+                f"[LLM SUMMARY] Threats neutralized: {sanitized.threats_detected}"
+            )
+        
         prompt = f"""Analyze this potentially fraudulent message and provide a SHORT summary (max 2 sentences) explaining why it appears to be a scam.
 
-Message: "{message}"
+Message: "{safe_message}"
 
 Classifier detected: {bert_result['scam_type']} scam with {bert_result['scam_score']:.1f}% confidence.
 
@@ -115,9 +127,18 @@ Provide ONLY the summary, no introductions or extra text."""
     
     def _get_key_markers(self, message: str, bert_result: Dict[str, Any]) -> List[str]:
         """Extract key linguistic markers using Gemma."""
+        # Sanitize user input to prevent prompt injection
+        sanitized = self.sanitizer.sanitize(message, context="llm_markers")
+        safe_message = sanitized.sanitized_text
+        
+        if sanitized.threats_detected:
+            logger.warning(
+                f"[LLM MARKERS] Threats neutralized: {sanitized.threats_detected}"
+            )
+        
         prompt = f"""Analyze this scam message and identify the KEY LINGUISTIC MARKERS that indicate it's fraudulent.
 
-Message: "{message}"
+Message: "{safe_message}"
 
 Detected as: {bert_result['scam_type']} scam
 

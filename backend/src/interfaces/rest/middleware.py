@@ -46,6 +46,8 @@ class AuthenticationMiddleware:
                 print(f"Authentication error: {e}")
         
         response = self.get_response(request)
+       # ZAP finding: suppress server version disclosure
+        response['Server'] = 'Verif-AI'
         return response
     
     def _get_jwt_service(self):

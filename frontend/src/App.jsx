@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
@@ -8,7 +9,9 @@ import AIChatbot from './pages/AIChatbot.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import Settings from './pages/Settings.jsx';
 import { AdminDashboard } from './pages/admin';
+import TermsAndConditions from './pages/TermsAndConditions.jsx';
 import SessionExpiredModal from './components/auth/SessionExpiredModal';
 
 /**
@@ -50,9 +53,10 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 
 function App() {
   return (
-    <AuthProvider>
-      <SessionExpiredModal />
-      <Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <SessionExpiredModal />
+        <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/detection" element={<Detection />} />
         <Route path="/chatbot" element={<AIChatbot />} />
@@ -61,8 +65,15 @@ function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        {/* Redirect old /blockchain route to admin panel */}
-        <Route path="/blockchain" element={<Navigate to="/admin" replace />} />
+        <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
         <Route 
           path="/admin" 
           element={
@@ -72,7 +83,8 @@ function App() {
           } 
         />
       </Routes>
-    </AuthProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

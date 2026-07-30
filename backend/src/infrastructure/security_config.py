@@ -135,31 +135,6 @@ def validate_cors_configuration() -> None:
         )
 
 
-def validate_blockchain_config() -> None:
-    """
-    Validate blockchain configuration security.
-    
-    Checks that private keys are not exposed in logs or default values.
-    """
-    chain_enabled = os.getenv('CHAIN_ENABLED', 'false').lower() in ('true', '1', 'yes')
-    private_key = os.getenv('CHAIN_PRIVATE_KEY', '')
-    
-    if not chain_enabled:
-        return  # No validation needed if blockchain is disabled
-    
-    if not private_key:
-        raise SecurityConfigurationError(
-            "CHAIN_ENABLED is true but CHAIN_PRIVATE_KEY is not set."
-        )
-    
-    # Check for obvious test/default keys
-    if private_key.startswith('0x_your_') or private_key == '0x' + '0' * 64:
-        raise SecurityConfigurationError(
-            "CHAIN_PRIVATE_KEY appears to be a placeholder value. "
-            "Set a real private key for blockchain operations."
-        )
-
-
 def validate_jwt_config() -> None:
     """
     Validate JWT configuration.
@@ -213,7 +188,6 @@ def run_security_validation(strict: bool = None) -> bool:
         validate_debug_mode,
         validate_allowed_hosts,
         validate_cors_configuration,
-        validate_blockchain_config,
     ]
     
     all_passed = True

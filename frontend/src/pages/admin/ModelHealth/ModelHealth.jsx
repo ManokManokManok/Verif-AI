@@ -55,7 +55,6 @@ export default function ModelHealth({ onNotify }) {
     // CPU metrics
     cpu_percent: rawMetrics.cpu?.usage_percent || 0,
     cpu_count: rawMetrics.cpu?.count || 0,
-    load_average: rawMetrics.cpu?.load_average,
     
     // Memory metrics (convert MB to bytes for formatBytes helper)
     memory_percent: rawMetrics.memory?.usage_percent || 0,
@@ -78,7 +77,6 @@ export default function ModelHealth({ onNotify }) {
     // Cache metrics
     cache_hit_rate: rawMetrics.cache?.hit_rate || 0,
     cache_size: (rawMetrics.cache?.size_mb || 0) * 1024 * 1024,
-    cache_connected: rawMetrics.cache?.connected !== false,
     
     // Model metrics
     model_loaded: rawMetrics.model?.name ? true : false,
@@ -89,12 +87,14 @@ export default function ModelHealth({ onNotify }) {
     // System metrics
     uptime_seconds: rawMetrics.system?.uptime_seconds || 0,
     uptime_formatted: rawMetrics.system?.uptime_formatted || '0s',
-    
+
     // Additional info
-    platform: rawMetrics.system?.platform || 'Unknown',
-    python_version: rawMetrics.system?.python_version || 'Unknown',
-    django_version: rawMetrics.system?.django_version || 'Unknown',
-    database_connected: rawMetrics.database?.connected !== false,
+    platform: rawMetrics.system?.platform || '',
+    python_version: rawMetrics.system?.python_version || '',
+    django_version: rawMetrics.system?.django_version || '',
+    load_average: rawMetrics.cpu?.load_average ?? rawMetrics.system?.load_average ?? null,
+    database_connected: rawMetrics.database?.connected ?? true,
+    cache_connected: rawMetrics.cache?.connected ?? true,
   };
 
   // Prepare gauge data
@@ -107,7 +107,7 @@ export default function ModelHealth({ onNotify }) {
       thresholds: { warning: 70, danger: 90 },
       details: [
         { label: 'Cores', value: metrics.cpu_count || 'N/A' },
-        { label: 'Load Average', value: metrics.load_average ? metrics.load_average.toFixed(2) : 'N/A' },
+        { label: 'Load Average', value: metrics.load_average != null ? metrics.load_average.toFixed(2) : 'N/A' },
       ],
     },
     {
@@ -147,11 +147,11 @@ export default function ModelHealth({ onNotify }) {
 
   // Prepare system info
   const systemInfo = [
-    { label: 'Platform', value: metrics.platform },
-    { label: 'Python Version', value: metrics.python_version },
-    { label: 'Django Version', value: metrics.django_version },
-    { label: 'Database Status', value: metrics.database_connected ? '✅ Connected' : '❌ Disconnected' },
-    { label: 'Cache Status', value: metrics.cache_connected ? '✅ Connected' : '❌ Disconnected' },
+    { label: 'Platform', value: metrics.platform || null, type: 'text' },
+    { label: 'Python Version', value: metrics.python_version || null, type: 'text' },
+    { label: 'Django Version', value: metrics.django_version || null, type: 'text' },
+    { label: 'Database Status', value: metrics.database_connected, type: 'status' },
+    { label: 'Cache Status', value: metrics.cache_connected, type: 'status' },
   ];
 
   return (
@@ -180,6 +180,46 @@ export default function ModelHealth({ onNotify }) {
         {gauges.map((gauge, index) => (
           <SystemGaugeCard key={index} {...gauge} />
         ))}
+      </div>
+
+      {/* Performance Banner */}
+      <div className="model-health__perf-banner admin-mt-4">
+        <div className="model-health__perf-item">
+          <span className="model-health__perf-label">Model</span>
+          <span className="model-health__perf-value model-health__perf-value--name">
+            {metrics.model_name || '—'}
+          </span>
+        </div>
+        <div className="model-health__perf-divider" />
+        <div className="model-health__perf-item">
+          <span className="model-health__perf-label">Requests Today</span>
+          <span className="model-health__perf-value">
+            {(metrics.requests_today || 0).toLocaleString()}
+          </span>
+        </div>
+        <div className="model-health__perf-divider" />
+        <div className="model-health__perf-item">
+          <span className="model-health__perf-label">Avg Speed</span>
+          <span className="model-health__perf-value">
+            {metrics.avg_processing_speed_ms > 0
+              ? `${metrics.avg_processing_speed_ms.toFixed(0)} ms`
+              : '—'}
+          </span>
+        </div>
+        <div className="model-health__perf-divider" />
+        <div className="model-health__perf-item">
+          <span className="model-health__perf-label">Tokens Today</span>
+          <span className="model-health__perf-value">
+            {(metrics.token_count_today || 0).toLocaleString()}
+          </span>
+        </div>
+        <div className="model-health__perf-divider" />
+        <div className="model-health__perf-item">
+          <span className="model-health__perf-label">Total Tokens</span>
+          <span className="model-health__perf-value">
+            {(metrics.token_count_total || 0).toLocaleString()}
+          </span>
+        </div>
       </div>
 
       {/* Additional Stats */}

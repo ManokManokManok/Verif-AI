@@ -15,44 +15,59 @@ import {
   StatusBadge,
 } from '../../../components/admin';
 import { useAnalysisStats } from '../../../hooks/useAdminData';
-import { getTopScamCategories } from '../../../api/admin';
+import { exportAnalysisStats } from '../../../api/admin';
+import { useAuth } from '../../../context/AuthContext';
 import RiskBreakdownCard from './components/RiskBreakdownCard';
 import DailyActivityChart from './components/DailyActivityChart';
 import { getPercentage, getTrend } from './utils';
 import './AnalysisStats.css';
 
 export default function AnalysisStats({ onNotify }) {
+  const { user } = useAuth();
   const [period, setPeriod] = useState('month');
-  const [scamCategories, setScamCategories] = useState([]);
-  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState(null);
 
   const { 
     data, 
+    categories,
     loading, 
     error, 
     refresh 
   } = useAnalysisStats({ start: null, end: null }, period);
 
-  // Load scam categories on mount and when period changes
-  React.useEffect(() => {
-    loadScamCategories();
-  }, [period]);
-
-  const loadScamCategories = async () => {
-    setLoadingCategories(true);
+  const handleExport = async (format) => {
+    setExportingFormat(format);
     try {
-      const response = await getTopScamCategories({ limit: 10, period });
-      // API returns { success: true, data: [...categories] }
-      // Add rank to each category
-      const categoriesWithRank = (response.success ? (response.data || []) : []).map((cat, idx) => ({
-        ...cat,
-        rank: idx + 1
-      }));
-      setScamCategories(categoriesWithRank);
+      const { blob, filename } = await exportAnalysisStats({
+        period,
+        format,
+        limit: 10,
+        preferClientExport: true,
+        fallbackData: {
+          stats: data || {},
+          categories: categories || [],
+        },
+        fallbackMeta: {
+          generatedBy: user?.email || user?.username || 'admin',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          filtersApplied: `period=${period};limit=10;format=${format}`,
+        },
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      onNotify?.('success', `Analysis stats exported as ${format.toUpperCase()}`);
     } catch (err) {
-      console.error('Failed to load scam categories:', err);
+      onNotify?.('error', err.message || 'Failed to export analysis stats');
     } finally {
-      setLoadingCategories(false);
+      setExportingFormat(null);
     }
   };
 
@@ -79,6 +94,10 @@ export default function AnalysisStats({ onNotify }) {
   }
 
   const stats = data || {};
+  const scamCategories = (categories || []).map((cat, idx) => ({
+    ...cat,
+    rank: idx + 1,
+  }));
 
   // Calculate derived values from API response fields
   const totalAnalyses = stats.total_count || 0;
@@ -92,6 +111,13 @@ export default function AnalysisStats({ onNotify }) {
   // Calculate trends
   const analysisTrend = getTrend(totalAnalyses, stats.previous_total_count);
   const scamTrend = getTrend(scamDetectedCount, stats.previous_scam_count);
+  const hasAnalysisBaseline = Number(stats.previous_total_count) > 0;
+  const hasScamBaseline = Number(stats.previous_scam_count) > 0;
+
+  // Compute max category percentage for relative bar width scaling
+  const maxCategoryPercentage = scamCategories.length > 0
+    ? Math.max(...scamCategories.map(c => c.percentage || 0), 1)
+    : 100;
 
   // Scam categories table columns
   const categoryColumns = [
@@ -105,19 +131,40 @@ export default function AnalysisStats({ onNotify }) {
     { 
       key: 'percentage', 
       label: 'Share',
-      render: (value) => (
-        <div className="analysis-stats__percentage-bar">
-          <div 
-            className="analysis-stats__percentage-fill" 
-            style={{ width: `${value || 0}%` }}
-          />
-          <span>{(value || 0).toFixed(1)}%</span>
-        </div>
-      )
+      render: (value) => {
+        const relWidth = ((value || 0) / maxCategoryPercentage) * 100;
+        return (
+          <div className="analysis-stats__percentage-bar">
+            <div className="analysis-stats__percentage-track">
+              <div 
+                className="analysis-stats__percentage-fill" 
+                style={{ width: `${relWidth}%` }}
+              />
+            </div>
+            <span className="analysis-stats__percentage-text">{(value || 0).toFixed(1)}%</span>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'avg_risk_percent',
+      label: 'Avg Risk',
+      render: (value) => `${Number(value || 0).toFixed(1)}%`
     },
     {
       key: 'severity',
-      label: 'Risk Level',
+      label: (
+        <span className="analysis-stats__header-label">
+          Risk Level
+          <span
+            className="analysis-stats__header-help"
+            title="Thresholds: High ≥ 70%, Medium 40–69%, Low < 40%"
+            aria-label="Risk level thresholds: High greater than or equal to 70 percent, Medium 40 to 69 percent, Low below 40 percent"
+          >
+            ⓘ
+          </span>
+        </span>
+      ),
       render: (value) => (
         <StatusBadge 
           status={value || 'unknown'} 
@@ -134,6 +181,20 @@ export default function AnalysisStats({ onNotify }) {
         <h2 className="admin-section__title">Analysis Statistics</h2>
         <div className="admin-section__actions">
           <PeriodSelector value={period} onChange={setPeriod} />
+          <button
+            className="admin-btn admin-btn--primary admin-btn--sm"
+            onClick={() => handleExport('csv')}
+            disabled={loading || exportingFormat !== null}
+          >
+            {exportingFormat === 'csv' ? 'Exporting CSV...' : 'Export CSV'}
+          </button>
+          <button
+            className="admin-btn admin-btn--secondary admin-btn--sm"
+            onClick={() => handleExport('excel')}
+            disabled={loading || exportingFormat !== null}
+          >
+            {exportingFormat === 'excel' ? 'Exporting Excel...' : 'Export Excel'}
+          </button>
           <button 
             className="admin-btn admin-btn--secondary admin-btn--sm"
             onClick={refresh}
@@ -145,34 +206,75 @@ export default function AnalysisStats({ onNotify }) {
       </div>
 
       {/* Overview Stats */}
-      <div className="admin-grid admin-grid--4">
+      <div className="admin-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        <StatCard
+          title="Platform Users"
+          value={(stats.total_users || 0).toLocaleString()}
+          subtitle="Total accounts"
+          variant="primary"
+        />
         <StatCard
           title="Total Analyses"
           value={totalAnalyses.toLocaleString()}
-          trend={analysisTrend.direction}
-          trendValue={analysisTrend.value}
+          trend={hasAnalysisBaseline ? analysisTrend.direction : undefined}
+          trendValue={hasAnalysisBaseline ? analysisTrend.value : undefined}
           subtitle={`${period === 'all_time' ? 'All time' : `This ${period}`}`}
         />
         <StatCard
           title="Scams Detected"
           value={scamDetectedCount.toLocaleString()}
-          trend={scamTrend.direction}
-          trendValue={scamTrend.value}
+          trend={hasScamBaseline ? scamTrend.direction : undefined}
+          trendValue={hasScamBaseline ? scamTrend.value : undefined}
           variant="danger"
-          subtitle={`${scamPercentage.toFixed(1)}% of total`}
+          subtitle={`${scamPercentage.toFixed(1)}% detection rate`}
         />
         <StatCard
           title="Legitimate"
           value={legitimateCount.toLocaleString()}
           variant="success"
-          subtitle={`${legitimatePercentage.toFixed(1)}% of total`}
+          subtitle={`${legitimatePercentage.toFixed(1)}% pass rate`}
         />
         <StatCard
           title="High Risk"
           value={(stats.high_risk_count || 0).toLocaleString()}
-          variant="info"
-          subtitle="High confidence detections"
+          variant="danger"
+          subtitle={`${totalAnalyses > 0 ? (((stats.high_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}% of total`}
         />
+      </div>
+
+      {/* Rate Summary Banner */}
+      <div className="analysis-stats__rate-banner admin-mt-4">
+        <div className="analysis-stats__rate-item">
+          <span className="analysis-stats__rate-label">Detection Rate</span>
+          <span className="analysis-stats__rate-value analysis-stats__rate-value--danger">
+            {scamPercentage.toFixed(1)}%
+          </span>
+        </div>
+        <div className="analysis-stats__rate-divider" />
+        <div className="analysis-stats__rate-item">
+          <span className="analysis-stats__rate-label">High Risk Rate</span>
+          <span className="analysis-stats__rate-value analysis-stats__rate-value--high">
+            {totalAnalyses > 0 ? (((stats.high_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}%
+          </span>
+        </div>
+        <div className="analysis-stats__rate-divider" />
+        <div className="analysis-stats__rate-item">
+          <span className="analysis-stats__rate-label">Medium Risk Rate</span>
+          <span className="analysis-stats__rate-value analysis-stats__rate-value--medium">
+            {totalAnalyses > 0 ? (((stats.medium_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}%
+          </span>
+        </div>
+        {stats.top_scam_category && (
+          <>
+            <div className="analysis-stats__rate-divider" />
+            <div className="analysis-stats__rate-item">
+              <span className="analysis-stats__rate-label">Top Category</span>
+              <span className="analysis-stats__rate-value analysis-stats__rate-value--category">
+                {stats.top_scam_category.replace(/_/g, ' ')}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Detection Breakdown */}
@@ -185,7 +287,7 @@ export default function AnalysisStats({ onNotify }) {
           <DataTable
             columns={categoryColumns}
             data={scamCategories}
-            loading={loadingCategories}
+            loading={loading}
             emptyMessage="No scam categories found"
           />
         </div>

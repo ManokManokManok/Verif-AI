@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import loginImage from '../../assets/image/login.png';
 import { isAdmin as checkIsAdmin, sendMfaCodeRequest, verifyMfaCodeRequest } from '../api/client';
 
@@ -169,14 +170,37 @@ function GoogleIcon() {
   );
 }
 
+function AlertIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 9v4m0 4h.01M10.615 3.892 2.39 18.098c-.456.789.113 1.777 1.016 1.902h16.39c.902-.125 1.471-1.113 1.015-1.902L12.585 3.892a1.127 1.127 0 0 0-1.97 0Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function Login() {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   // MFA state
   const [mfaStep, setMfaStep] = useState(false);
@@ -273,7 +297,17 @@ function Login() {
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--login">
+    <div className="auth auth--login page-enter">
+      {/* Theme Toggle Button */}
+      <button 
+        className="auth__theme-toggle" 
+        onClick={toggleTheme}
+        aria-label="Toggle theme"
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {theme === 'dark' ? '☀️' : '🌙'}
+      </button>
+
       <div className="auth__panel auth__panel--left">
         <div className="auth__overlay">
           <p className="auth__tagline">Know What&apos;s Real</p>
@@ -353,7 +387,11 @@ function Login() {
 
               <div className="auth__row auth__row--between">
                 <label className="auth__checkbox">
-                  <input type="checkbox" />
+                  <input 
+                    type="checkbox" 
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
                   <span>Remember me</span>
                 </label>
                 <Link to="/forgot-password" className="auth__link" style={{ fontSize: 12 }}>
@@ -362,21 +400,46 @@ function Login() {
               </div>
 
               {error && (
-                <div className="auth__error-container">
-                  {hasMultipleErrors ? (
-                    <ul className="auth__error-list">
-                      {errorList.map((err, index) => (
-                        <li key={index} className="auth__error-item">{err}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="auth__error">{error}</p>
-                  )}
+                <div
+                  className="auth__error-banner"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  <span className="auth__error-icon"><AlertIcon /></span>
+                  <div className="auth__error-body">
+                    {hasMultipleErrors ? (
+                      <ul className="auth__error-list">
+                        {errorList.map((err, index) => (
+                          <li key={index} className="auth__error-item">{err}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="auth__error-text">{error}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="auth__error-dismiss"
+                    onClick={() => setError('')}
+                    aria-label="Dismiss error"
+                  >
+                    ×
+                  </button>
                 </div>
               )}
 
-              <button type="submit" className="auth__primary" disabled={loading}>
-                <strong>{loading ? 'Sending code…' : 'Login'}</strong>
+              <button type="submit" className="auth__submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <span className="auth__submit-spinner"></span>
+                    <span>Sending code…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Login</span>
+                    <span className="auth__submit-arrow">→</span>
+                  </>
+                )}
               </button>
 
               <p className="auth__or">or continue with</p>
@@ -403,31 +466,58 @@ function Login() {
             </p>
 
             <form className="auth__form" onSubmit={handleMfaSubmit}>
-              <div className="mfa-code-inputs" onPaste={handleCodePaste}>
-                {mfaCode.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => (codeRefs.current[i] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    className="mfa-code-input"
-                    value={digit}
-                    onChange={(e) => handleCodeChange(i, e.target.value)}
-                    onKeyDown={(e) => handleCodeKeyDown(i, e)}
-                    autoFocus={i === 0}
-                  />
-                ))}
+              <div className="mfa-code-container">
+                <div className="mfa-code-inputs" onPaste={handleCodePaste}>
+                  {mfaCode.map((digit, i) => (
+                    <input
+                      key={i}
+                      ref={(el) => (codeRefs.current[i] = el)}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      className="mfa-code-input"
+                      value={digit}
+                      onChange={(e) => handleCodeChange(i, e.target.value)}
+                      onKeyDown={(e) => handleCodeKeyDown(i, e)}
+                      autoFocus={i === 0}
+                    />
+                  ))}
+                </div>
               </div>
 
               {error && (
-                <div className="auth__error-container">
-                  <p className="auth__error">{error}</p>
+                <div
+                  className="auth__error-banner"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  <span className="auth__error-icon"><AlertIcon /></span>
+                  <div className="auth__error-body">
+                    <p className="auth__error-text">{error}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="auth__error-dismiss"
+                    onClick={() => setError('')}
+                    aria-label="Dismiss error"
+                  >
+                    ×
+                  </button>
                 </div>
               )}
 
-              <button type="submit" className="auth__primary" disabled={loading}>
-                <strong>{loading ? 'Verifying…' : 'Verify & Login'}</strong>
+              <button type="submit" className="auth__submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <span className="auth__submit-spinner"></span>
+                    <span>Verifying…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Verify & Login</span>
+                    <span className="auth__submit-arrow">→</span>
+                  </>
+                )}
               </button>
 
               <p className="auth__subtitle" style={{ textAlign: 'center', marginTop: 8 }}>

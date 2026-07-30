@@ -13,18 +13,18 @@ from datetime import datetime
 from bson import ObjectId
 
 from ...domain.analysis_entities import (
-    AnalysisResult, ChainMetadata, AnalysisNotFoundError
+    AnalysisResult, AnalysisNotFoundError
 )
 
 
 class AnalysisResultRepository:
     """
-    MongoDB repository for analysis results with blockchain metadata.
-    
+    MongoDB repository for analysis results.
+
     Collection Schema:
     {
         "_id": ObjectId,
-        "ref_id": str,              # UUID for blockchain reference
+        "ref_id": str,              # UUID for analysis reference
         "message_hash": str,        # SHA-256 of original message (optional)
         "scam_class": int,          # Integer classification
         "scam_type": str,           # Human-readable type
@@ -33,18 +33,6 @@ class AnalysisResultRepository:
         "analyzer_type": str,       # "stub" | "rules" | "bert" | "llm"
         "analyzer_version": str,
         "created_at": datetime,
-        
-        # Chain metadata (added after anchoring)
-        "chain_metadata": {
-            "schema_version": int,
-            "canonical_payload": dict,
-            "payload_hash": str,
-            "chain_tx_hash": str,
-            "chain_network": str,
-            "chain_contract_address": str,
-            "anchored_at": datetime,
-            "block_number": int (optional)
-        }
     }
     """
     
@@ -57,7 +45,7 @@ class AnalysisResultRepository:
     
     def _ensure_indexes(self) -> None:
         """Create indexes for efficient queries."""
-        # Unique index on ref_id (used for blockchain anchoring)
+        # Unique index on ref_id (analysis record lookup)
         self.collection.create_index("ref_id", unique=True)
         # Index on user_id for chat history
         self.collection.create_index("user_id", sparse=True)
@@ -65,13 +53,90 @@ class AnalysisResultRepository:
         self.collection.create_index("message_hash", sparse=True)
         # Index on created_at for time-based queries
         self.collection.create_index("created_at")
-        # Index on chain metadata for anchored records
-        self.collection.create_index("chain_metadata.payload_hash", sparse=True)
+        # Index to support user-visible history filtering
+        self.collection.create_index([("user_id", 1), ("user_deleted", 1), ("created_at", -1)])
 
-    def get_by_user_id(self, user_id: str, limit: int = 50):
-        """Fetch all analysis results for a user, most recent first."""
-        docs = self.collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+    @staticmethod
+    def _active_user_visibility_query() -> Dict[str, Any]:
+        """Query clause for records still visible in user history."""
+        return {
+            "$or": [
+                {"user_deleted": {"$exists": False}},
+                {"user_deleted": False},
+            ]
+        }
+
+    def get_by_user_id(self, user_id: str, limit: int = 50, include_deleted: bool = False):
+        """Fetch analysis results for a user, most recent first."""
+        query: Dict[str, Any] = {"user_id": str(user_id)}
+        if not include_deleted:
+            query.update(self._active_user_visibility_query())
+
+        docs = self.collection.find(query).sort("created_at", -1).limit(limit)
         return [self._document_to_entity(doc) for doc in docs]
+
+    def get_by_id_for_user(self, analysis_id: str, user_id: str, include_deleted: bool = False) -> Optional[AnalysisResult]:
+        """Get analysis by id with ownership and visibility checks."""
+        try:
+            query: Dict[str, Any] = {
+                "_id": ObjectId(analysis_id),
+                "user_id": str(user_id),
+            }
+            if not include_deleted:
+                query.update(self._active_user_visibility_query())
+
+            doc = self.collection.find_one(query)
+        except Exception:
+            return None
+
+        if not doc:
+            return None
+
+        return self._document_to_entity(doc)
+
+    def soft_delete_for_user(self, analysis_id: str, user_id: str) -> bool:
+        """Hide one analysis from user history while retaining backend metadata."""
+        try:
+            result = self.collection.update_one(
+                {
+                    "_id": ObjectId(analysis_id),
+                    "user_id": str(user_id),
+                    **self._active_user_visibility_query(),
+                },
+                {
+                    "$set": {
+                        "user_deleted": True,
+                        "user_deleted_at": datetime.utcnow(),
+                        "deleted_by_user_id": str(user_id),
+                        # Remove raw message content once user deletes history.
+                        "message": None,
+                    }
+                },
+            )
+            return result.modified_count > 0
+        except Exception:
+            return False
+
+    def soft_delete_all_for_user(self, user_id: str) -> int:
+        """Hide all user analyses from history while retaining backend metadata."""
+        try:
+            result = self.collection.update_many(
+                {
+                    "user_id": str(user_id),
+                    **self._active_user_visibility_query(),
+                },
+                {
+                    "$set": {
+                        "user_deleted": True,
+                        "user_deleted_at": datetime.utcnow(),
+                        "deleted_by_user_id": str(user_id),
+                        "message": None,
+                    }
+                },
+            )
+            return int(result.modified_count)
+        except Exception:
+            return 0
     
     def save(self, result: AnalysisResult) -> AnalysisResult:
         """
@@ -123,7 +188,7 @@ class AnalysisResultRepository:
         Get analysis result by reference ID (UUID).
         
         Args:
-            ref_id: UUID string used for blockchain reference
+            ref_id: UUID string used for analysis reference
             
         Returns:
             AnalysisResult if found, None otherwise
@@ -155,125 +220,66 @@ class AnalysisResultRepository:
         
         return self._document_to_entity(doc)
     
-    def get_by_payload_hash(self, payload_hash: str) -> Optional[AnalysisResult]:
-        """
-        Get analysis result by blockchain payload hash.
-        
-        Args:
-            payload_hash: Keccak-256 hash stored on-chain
-            
-        Returns:
-            AnalysisResult if found, None otherwise
-        """
-        doc = self.collection.find_one({"chain_metadata.payload_hash": payload_hash})
-        
-        if not doc:
-            return None
-        
-        return self._document_to_entity(doc)
-    
-    def update_chain_metadata(
-        self,
-        ref_id: str,
-        chain_metadata: ChainMetadata
-    ) -> AnalysisResult:
-        """
-        Update an analysis result with blockchain anchoring metadata.
-        
-        Args:
-            ref_id: Reference ID of the analysis
-            chain_metadata: Blockchain metadata to add
-            
-        Returns:
-            Updated AnalysisResult
-            
-        Raises:
-            AnalysisNotFoundError: If analysis with ref_id doesn't exist
-        """
-        chain_doc = {
-            "schema_version": chain_metadata.schema_version,
-            "canonical_payload": chain_metadata.canonical_payload,
-            "payload_hash": chain_metadata.payload_hash,
-            "chain_tx_hash": chain_metadata.chain_tx_hash,
-            "chain_network": chain_metadata.chain_network,
-            "chain_contract_address": chain_metadata.chain_contract_address,
-            "anchored_at": chain_metadata.anchored_at,
-            "block_number": chain_metadata.block_number
-        }
-        
-        result = self.collection.find_one_and_update(
-            {"ref_id": ref_id},
-            {"$set": {"chain_metadata": chain_doc}},
-            return_document=True
-        )
-        
-        if not result:
-            raise AnalysisNotFoundError(f"Analysis with ref_id {ref_id} not found")
-        
-        return self._document_to_entity(result)
-    
+
+
     def list_recent(
         self,
         limit: int = 50,
-        anchored_only: bool = False
     ) -> List[AnalysisResult]:
         """
         List recent analysis results.
-        
+
         Args:
             limit: Maximum number of results to return
-            anchored_only: If True, only return anchored results
-            
+
         Returns:
             List of AnalysisResult entities
         """
-        query = {}
-        if anchored_only:
-            query["chain_metadata"] = {"$exists": True}
-        
-        docs = self.collection.find(query).sort("created_at", -1).limit(limit)
-        
+        docs = self.collection.find({}).sort("created_at", -1).limit(limit)
         return [self._document_to_entity(doc) for doc in docs]
     
     def list_with_filter(
         self,
-        filter_mode: str = 'all',
         page: int = 1,
         limit: int = 50,
-        classification: int = None
+        classification: int = None,
+        min_confidence_bps: int = None,
+        scam_only: bool = False
     ) -> List[AnalysisResult]:
         """
         List analysis results with filtering and pagination.
-        
+
         Args:
-            filter_mode: 'all', 'anchored', or 'pending'
             page: Page number (1-indexed)
             limit: Maximum number of results per page
             classification: Filter by scam_class (None for all)
-            
+            min_confidence_bps: Minimum confidence in basis points (0-10000)
+            scam_only: If True, only include scam classifications (scam_class >= 0)
+
         Returns:
             List of AnalysisResult entities
         """
         query = {}
-        
-        # Status filter
-        if filter_mode == 'anchored':
-            query["chain_metadata"] = {"$exists": True}
-        elif filter_mode == 'pending':
-            query["$or"] = [
-                {"chain_metadata": {"$exists": False}},
-                {"chain_metadata": None}
-            ]
-        
+
         # Classification filter
         if classification is not None:
             query["scam_class"] = classification
-        
+
+        # Confidence filter
+        if min_confidence_bps is not None:
+            query["confidence_bps"] = {"$gte": min_confidence_bps}
+
+        # Scam-only filter (exclude legitimate classifications)
+        if scam_only:
+            if "scam_class" not in query:
+                query["scam_class"] = {"$gte": 0}
+            # If classification is already set, it takes priority
+
         # Calculate skip for pagination
         skip = (page - 1) * limit
-        
+
         docs = self.collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
-        
+
         return [self._document_to_entity(doc) for doc in docs]
     
     def get_distinct_classifications(self) -> List[int]:
@@ -285,28 +291,23 @@ class AnalysisResultRepository:
         """
         return self.collection.distinct("scam_class")
     
-    def count_anchored(self, classification: int = None) -> int:
-        """
-        Count total number of anchored analysis results.
-        
-        Args:
-            classification: Filter by scam_class (None for all)
-        """
-        query = {"chain_metadata": {"$exists": True}}
-        if classification is not None:
-            query["scam_class"] = classification
-        return self.collection.count_documents(query)
-    
-    def count_all(self, classification: int = None) -> int:
+
+    def count_all(self, classification: int = None, min_confidence_bps: int = None, scam_only: bool = False) -> int:
         """
         Count total number of analysis results.
         
         Args:
             classification: Filter by scam_class (None for all)
+            min_confidence_bps: Minimum confidence threshold
+            scam_only: Only count scam classifications
         """
         query = {}
         if classification is not None:
             query["scam_class"] = classification
+        if min_confidence_bps is not None:
+            query["confidence_bps"] = {"$gte": min_confidence_bps}
+        if scam_only and "scam_class" not in query:
+            query["scam_class"] = {"$gte": 0}
         return self.collection.count_documents(query)
     
     def _entity_to_document(self, entity: AnalysisResult) -> Dict[str, Any]:
@@ -332,41 +333,19 @@ class AnalysisResultRepository:
             "type_confidence": entity.type_confidence,
             "summary": entity.summary,
             "key_markers": entity.key_markers,
+            "needs_review": entity.needs_review,
+            "review_reason": entity.review_reason,
         }
         if entity.id:
             doc["_id"] = entity.id
         if entity.message_hash:
             doc["message_hash"] = entity.message_hash
-        if entity.chain_metadata:
-            doc["chain_metadata"] = {
-                "schema_version": entity.chain_metadata.schema_version,
-                "canonical_payload": entity.chain_metadata.canonical_payload,
-                "payload_hash": entity.chain_metadata.payload_hash,
-                "chain_tx_hash": entity.chain_metadata.chain_tx_hash,
-                "chain_network": entity.chain_metadata.chain_network,
-                "chain_contract_address": entity.chain_metadata.chain_contract_address,
-                "anchored_at": entity.chain_metadata.anchored_at,
-                "block_number": entity.chain_metadata.block_number
-            }
         logger.debug(f"[DEBUG] AnalysisResult entity before mapping: {entity}")
         logger.debug(f"[DEBUG] MongoDB document to be saved: {doc}")
         return doc
     
     def _document_to_entity(self, doc: Dict[str, Any]) -> AnalysisResult:
         """Convert MongoDB document to AnalysisResult entity."""
-        chain_metadata = None
-        if "chain_metadata" in doc and doc["chain_metadata"]:
-            chain_doc = doc["chain_metadata"]
-            chain_metadata = ChainMetadata(
-                schema_version=chain_doc["schema_version"],
-                canonical_payload=chain_doc["canonical_payload"],
-                payload_hash=chain_doc["payload_hash"],
-                chain_tx_hash=chain_doc["chain_tx_hash"],
-                chain_network=chain_doc["chain_network"],
-                chain_contract_address=chain_doc["chain_contract_address"],
-                anchored_at=chain_doc["anchored_at"],
-                block_number=chain_doc.get("block_number")
-            )
         return AnalysisResult(
             id=str(doc["_id"]),
             ref_id=doc["ref_id"],
@@ -386,5 +365,6 @@ class AnalysisResultRepository:
             type_confidence=doc.get("type_confidence"),
             summary=doc.get("summary"),
             key_markers=doc.get("key_markers"),
-            chain_metadata=chain_metadata
+            needs_review=doc.get("needs_review", False),
+            review_reason=doc.get("review_reason"),
         )

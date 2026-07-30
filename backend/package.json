@@ -1,0 +1,12 @@
+{
+  "name": "verif-ai-backend-email-bridge",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Node.js bridge dependencies for backend email providers",
+  "scripts": {
+    "email:check": "node scripts/nodemailer_sender.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.10.1"
+  }
+}

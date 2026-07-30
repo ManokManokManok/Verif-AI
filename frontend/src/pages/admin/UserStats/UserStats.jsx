@@ -16,8 +16,9 @@ import {
   ConfirmModal,
 } from '../../../components/admin';
 import { useUserStats, useUserReports } from '../../../hooks/useAdminData';
-import RoleDistributionCard from './components/RoleDistributionCard';
-import { getPercentage, getRoleColor } from './utils';
+import { getReportDetails } from '../../../api/admin';
+import ReportDetailsModal from './components/ReportDetailsModal';
+import { getPercentage } from './utils';
 import './UserStats.css';
 
 export default function UserStats({ onNotify }) {
@@ -26,6 +27,9 @@ export default function UserStats({ onNotify }) {
   const [selectedReport, setSelectedReport] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalAction, setModalAction] = useState(null);
+  const [viewReportModal, setViewReportModal] = useState(false);
+  const [selectedReportDetails, setSelectedReportDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   const { 
     data: stats, 
@@ -63,6 +67,26 @@ export default function UserStats({ onNotify }) {
     setIsModalOpen(true);
   };
 
+  // Handle viewing report details
+  const handleViewReport = async (report) => {
+    setLoadingDetails(true);
+    setViewReportModal(true);
+    try {
+      const response = await getReportDetails(report.id || report.report_id);
+      if (response.success) {
+        setSelectedReportDetails(response.data);
+      } else {
+        onNotify?.('error', 'Failed to load report details');
+        setViewReportModal(false);
+      }
+    } catch (err) {
+      onNotify?.('error', `Error loading report: ${err.message}`);
+      setViewReportModal(false);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
   // Report table columns
   const reportColumns = [
     { 
@@ -73,20 +97,13 @@ export default function UserStats({ onNotify }) {
     { 
       key: 'reported_by', 
       label: 'Reporter',
-      render: (value) => value?.username || 'Anonymous'
+      render: (value, row) => value?.username || value?.email || row?.user_email || value?.user_id || row?.user_id || 'Anonymous'
     },
     { 
       key: 'report_type', 
       label: 'Type',
       render: (value) => (
         <StatusBadge status={value} variant="info" />
-      )
-    },
-    { 
-      key: 'reason', 
-      label: 'Reason',
-      render: (value) => (
-        <span className="user-stats__truncate">{value}</span>
       )
     },
     { 
@@ -104,19 +121,36 @@ export default function UserStats({ onNotify }) {
       label: 'Actions',
       render: (_, row) => (
         <div className="user-stats__actions">
+          <button
+            className="admin-btn user-stats__action-btn user-stats__action-btn--view"
+            onClick={() => handleViewReport(row)}
+            title="View report details"
+          >
+            <svg className="user-stats__icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
           {row.status === 'pending' && (
             <>
               <button
-                className="admin-btn admin-btn--sm admin-btn--primary"
+                className="admin-btn user-stats__action-btn user-stats__action-btn--resolve"
                 onClick={() => openModal(row, 'resolve')}
+                title="Resolve report"
               >
-                Resolve
+                <svg className="user-stats__icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
               </button>
               <button
-                className="admin-btn admin-btn--sm admin-btn--ghost"
+                className="admin-btn user-stats__action-btn user-stats__action-btn--dismiss"
                 onClick={() => openModal(row, 'dismiss')}
+                title="Dismiss report"
               >
-                Dismiss
+                <svg className="user-stats__icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </>
           )}
@@ -154,6 +188,14 @@ export default function UserStats({ onNotify }) {
 
   const userStats = stats || {};
   const reports = reportsData?.reports || [];
+  const topPowerUser = userStats.top_power_user || null;
+  const topUserLabel = topPowerUser
+    ? (topPowerUser.username || topPowerUser.email || 'Unknown User')
+    : 'No activity yet';
+  const topUserDetections = Number(topPowerUser?.total_detections || 0);
+  const topUserPeriodLabel = period === 'all_time'
+    ? 'All Time'
+    : `This ${period.charAt(0).toUpperCase()}${period.slice(1)}`;
 
   return (
     <div className="admin-section">
@@ -173,28 +215,34 @@ export default function UserStats({ onNotify }) {
       </div>
 
       {/* Overview Stats */}
-      <div className="admin-grid admin-grid--4">
+      <div className="admin-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
         <StatCard
           title="Total Users"
           value={userStats.total_users?.toLocaleString() || '0'}
           subtitle="Registered accounts"
         />
         <StatCard
-          title="Active Users"
-          value={(userStats.active_users_count || userStats.active_users || 0).toLocaleString()}
+          title="Active Accounts"
+          value={(userStats.active_users_count || 0).toLocaleString()}
           variant="success"
-          subtitle={`${getPercentage(userStats.active_users_count || userStats.active_users, userStats.total_users)}% of total`}
+          subtitle={`${getPercentage(userStats.active_users_count, userStats.total_users)}% of total`}
+        />
+        <StatCard
+          title="Engaged Users"
+          value={(userStats.engaged_users_count || 0).toLocaleString()}
+          variant="primary"
+          subtitle={`Analyzed this ${period}`}
         />
         <StatCard
           title="New Users"
-          value={(userStats.new_users_count || userStats.new_users || 0).toLocaleString()}
+          value={(userStats.new_users_count || 0).toLocaleString()}
           variant="info"
           subtitle={`This ${period}`}
         />
         <StatCard
           title="Verified Users"
-          value={(userStats.verified_users_count || userStats.verified_users || 0).toLocaleString()}
-          subtitle={`${getPercentage(userStats.verified_users_count || userStats.verified_users, userStats.total_users)}% verified`}
+          value={(userStats.verified_users_count || 0).toLocaleString()}
+          subtitle={`${getPercentage(userStats.verified_users_count, userStats.total_users)}% verified`}
         />
       </div>
 
@@ -211,10 +259,33 @@ export default function UserStats({ onNotify }) {
           subtitle="Analyses average"
         />
         <StatCard
-          title="Power Users"
-          value={userStats.power_users?.toLocaleString() || '0'}
+          title="Power User"
+          value={topUserLabel}
           variant="warning"
-          subtitle=">50 analyses"
+          subtitle={`Top User (${topUserPeriodLabel}) • ${topUserDetections.toLocaleString()} detections`}
+        />
+      </div>
+
+      {/* Top Targeted Users Section */}
+      <div className="admin-card admin-mt-4">
+        <div className="admin-card__header">
+          <h3 className="admin-card__title">Top Users Susceptible to Scams</h3>
+        </div>
+        <DataTable
+          columns={[
+            {
+              key: 'username',
+              label: 'User',
+              render: (value, row) => row.username || row.email || row.user_id || 'Unknown'
+            },
+            {
+              key: 'scam_encounters',
+              label: 'Scam Encounters',
+              render: (value) => <strong>{value}</strong>
+            }
+          ]}
+          data={userStats.top_susceptive_users || []}
+          emptyMessage="No susceptible users found in this period."
         />
       </div>
 
@@ -260,15 +331,6 @@ export default function UserStats({ onNotify }) {
         )}
       </div>
 
-      {/* User Role Distribution */}
-      <div className="admin-mt-4">
-        <RoleDistributionCard 
-          roleDistribution={userStats.role_distribution}
-          totalUsers={userStats.total_users}
-          getRoleColor={getRoleColor}
-        />
-      </div>
-
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={isModalOpen}
@@ -284,6 +346,27 @@ export default function UserStats({ onNotify }) {
         onCancel={() => {
           setIsModalOpen(false);
           setSelectedReport(null);
+        }}
+      />
+
+      {/* Report Details Modal */}
+      <ReportDetailsModal
+        isOpen={viewReportModal}
+        report={selectedReportDetails}
+        loading={loadingDetails}
+        onClose={() => {
+          setViewReportModal(false);
+          setSelectedReportDetails(null);
+        }}
+        onResolve={(report) => {
+          setViewReportModal(false);
+          setSelectedReportDetails(null);
+          openModal(report, 'resolve');
+        }}
+        onDismiss={(report) => {
+          setViewReportModal(false);
+          setSelectedReportDetails(null);
+          openModal(report, 'dismiss');
         }}
       />
     </div>

@@ -81,16 +81,6 @@ class RateLimiter:
                 'window': int(os.getenv('RATE_LIMIT_API_WRITE_WINDOW', '60')),
                 'block': int(os.getenv('RATE_LIMIT_API_WRITE_BLOCK', '120')),
             },
-            'blockchain_read': {
-                'requests': int(os.getenv('RATE_LIMIT_BLOCKCHAIN_READ_REQUESTS', '50')),
-                'window': int(os.getenv('RATE_LIMIT_BLOCKCHAIN_READ_WINDOW', '60')),
-                'block': int(os.getenv('RATE_LIMIT_BLOCKCHAIN_READ_BLOCK', '60')),
-            },
-            'blockchain_write': {
-                'requests': int(os.getenv('RATE_LIMIT_BLOCKCHAIN_WRITE_REQUESTS', '10')),
-                'window': int(os.getenv('RATE_LIMIT_BLOCKCHAIN_WRITE_WINDOW', '60')),
-                'block': int(os.getenv('RATE_LIMIT_BLOCKCHAIN_WRITE_BLOCK', '300')),
-            },
             'token_refresh': {
                 'requests': int(os.getenv('RATE_LIMIT_TOKEN_REFRESH_REQUESTS', '10')),
                 'window': int(os.getenv('RATE_LIMIT_TOKEN_REFRESH_WINDOW', '60')),
@@ -123,7 +113,7 @@ class RateLimiter:
         
         Args:
             identifier: Unique identifier (e.g., "user:123" or "ip:1.2.3.4")
-            category: Rate limit category (e.g., "api_read", "blockchain_write")
+            category: Rate limit category (e.g., "api_read")
             
         Returns:
             Tuple of (is_limited, retry_after_seconds, response_headers)

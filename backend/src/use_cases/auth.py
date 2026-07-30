@@ -115,6 +115,10 @@ class LoginUseCase:
         if not user.is_active:
             raise InvalidCredentialsError("Account is deactivated")
         
+        # Check if email is verified
+        if not user.is_verified:
+            raise InvalidCredentialsError("Please verify your email address before logging in. Check your inbox for the verification link.")
+        
         # Verify password
         if not self.password_hasher.verify_password(password, user.password_hash):
             raise InvalidCredentialsError("Invalid email or password")
@@ -188,3 +192,46 @@ class GetUserProfileUseCase:
             raise UserNotFoundError(f"User with ID {user_id} not found")
         
         return user
+
+
+class UpdateUsernameUseCase:
+    def __init__(self, user_repository):
+        self.user_repository = user_repository
+    
+    def execute(self, user_id: str, new_username: str) -> User:
+        """Update a user's username."""
+        from ..infrastructure.validators import validate_username
+        
+        is_valid, error = validate_username(new_username)
+        if not is_valid:
+            raise ValueError(error)
+        
+        # Check if username is already taken by another user
+        existing = self.user_repository.get_by_username(new_username)
+        if existing and existing.id != user_id:
+            raise ValueError("This username is already taken")
+        
+        user = self.user_repository.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError(f"User with ID {user_id} not found")
+        
+        self.user_repository.update_username(user_id, new_username)
+        user.username = new_username
+        return user
+
+
+class DeleteAccountUseCase:
+    def __init__(self, user_repository, password_hasher: PasswordHasher):
+        self.user_repository = user_repository
+        self.password_hasher = password_hasher
+    
+    def execute(self, user_id: str, password: str) -> bool:
+        """Delete a user's own account after password verification."""
+        user = self.user_repository.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError(f"User with ID {user_id} not found")
+        
+        if not self.password_hasher.verify_password(password, user.password_hash):
+            raise InvalidCredentialsError("Incorrect password")
+        
+        return self.user_repository.self_delete_user(user_id)

@@ -39,10 +39,12 @@ class ConversationRepository:
     """
     
     COLLECTION_NAME = "conversations"
+    ARCHIVE_COLLECTION_NAME = "archived_conversations"
     
     def __init__(self, client: MongoClient, database_name: str):
         self.db: Database = client[database_name]
         self.collection: Collection = self.db[self.COLLECTION_NAME]
+        self.archive_collection: Collection = self.db[self.ARCHIVE_COLLECTION_NAME]
         self._ensure_indexes()
     
     def _ensure_indexes(self) -> None:
@@ -55,6 +57,10 @@ class ConversationRepository:
         self.collection.create_index("analysis_ref_id", sparse=True)
         # Index on updated_at for sorting
         self.collection.create_index("updated_at")
+        # Archive collection indexes
+        self.archive_collection.create_index("user_id")
+        self.archive_collection.create_index("original_id")
+        self.archive_collection.create_index("archived_at")
     
     def save(self, conversation: ChatConversation) -> ChatConversation:
         """
@@ -295,10 +301,21 @@ class ConversationRepository:
             True if deleted, False if not found or unauthorized
         """
         try:
-            result = self.collection.delete_one({
+            doc = self.collection.find_one({
                 "_id": ObjectId(conversation_id),
                 "user_id": user_id  # Ensure user owns this conversation
             })
+            if not doc:
+                return False
+            # Archive before removing
+            archive_doc = dict(doc)
+            archive_doc["archived_at"] = datetime.utcnow()
+            archive_doc["archived_by_user_id"] = user_id
+            archive_doc["original_id"] = str(doc["_id"])
+            del archive_doc["_id"]
+            self.archive_collection.insert_one(archive_doc)
+            # Remove from active conversations
+            result = self.collection.delete_one({"_id": ObjectId(conversation_id)})
             return result.deleted_count > 0
         except Exception:
             return False

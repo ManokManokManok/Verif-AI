@@ -78,18 +78,14 @@ def _is_bot(user_agent: str) -> bool:
 
 def _should_track_path(path: str) -> bool:
     """Determine if this path should be tracked."""
-    # Skip static files, health checks, and admin API
-    skip_patterns = [
-        r'^/static/',
-        r'^/media/',
-        r'^/favicon\.ico',
-        r'^/robots\.txt',
-        r'^/api/health',
-        r'^/api/admin/',  # Don't track admin API calls
-        r'^/__debug__/',
-        r'^/api/reports/',  # Don't track report submissions
+    # Only track specific meaningful interactions (detection or guidance)
+    # to prevent counting basic page refreshes as website visits.
+    track_patterns = [
+        r'^/api/detect/?',               # Scam detection actions
+        r'^/api/chat/message/?',         # General chatbot guidance
+        r'^/api/chat/analysis-guided/?', # Specific analysis guidance
     ]
-    return not any(re.match(pattern, path) for pattern in skip_patterns)
+    return any(re.match(pattern, path) for pattern in track_patterns)
 
 
 class VisitData:
@@ -158,7 +154,7 @@ def _process_visits_worker():
     batch = []
     batch_size = 50
     flush_interval = 5.0  # seconds
-    last_flush = datetime.now()
+    last_flush = datetime.utcnow()
     
     while not _shutdown_event.is_set():
         try:
@@ -171,7 +167,7 @@ def _process_visits_worker():
                 pass
             
             # Flush batch if size reached or interval elapsed
-            now = datetime.now()
+            now = datetime.utcnow()
             should_flush = (
                 len(batch) >= batch_size or
                 (len(batch) > 0 and (now - last_flush).total_seconds() >= flush_interval)
@@ -247,13 +243,13 @@ class AnalyticsMiddleware:
             return self.get_response(request)
         
         # Record start time
-        start_time = datetime.now()
+        start_time = datetime.utcnow()
         
         # Process request
         response = self.get_response(request)
         
         # Calculate response time
-        response_time = (datetime.now() - start_time).total_seconds() * 1000
+        response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
         
         # Create visit data
         try:
@@ -296,7 +292,7 @@ def track_event(event_name: str, metadata: Optional[Dict[str, Any]] = None):
                 if repo:
                     repo.track_custom_event(
                         event_name=event_name,
-                        timestamp=datetime.now(),
+                        timestamp=datetime.utcnow(),
                         metadata=metadata or {}
                     )
             except Exception as e:
