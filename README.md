@@ -141,7 +141,7 @@ For detailed setup instructions, see [backend/SETUP_TEAM.md](backend/SETUP_TEAM.
 
 ```powershell
 # 1. Clone the repository
-git clone https://github.com/your-org/verif-ai.git
+git clone https://github.com/ManokManokManok/Verif-AI.git
 cd verif-ai
 
 # 2. Create and activate virtual environment
@@ -647,14 +647,6 @@ See [SECURITY.md](backend/docs/SECURITY.md) for full security documentation.
 ## License
 
 [MIT License](LICENSE) - See LICENSE file for details
-
----
-
-## Support
-
-- Documentation: [backend/docs/](backend/docs/)
-- Issues: [GitHub Issues](https://github.com/your-org/verif-ai/issues)
-- Discussions: [GitHub Discussions](https://github.com/your-org/verif-ai/discussions)
 
 ---
 

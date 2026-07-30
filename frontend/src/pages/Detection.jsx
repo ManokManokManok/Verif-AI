@@ -897,7 +897,7 @@ function Detection() {
                   </div>
                   <div className="detect__verdict detect__verdict--animate">
                     <span className={`detect__verdictLabel ${detectionResult.is_scam ? 'detect__verdictLabel--scam' : 'detect__verdictLabel--legit'}`}>
-                      {detectionResult.label}
+                      {detectionResult.is_scam ? 'Likely to be a scam' : 'Likely to be legit'}
                     </span>
                   </div>
                 </div>
