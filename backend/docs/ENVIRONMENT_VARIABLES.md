@@ -14,7 +14,6 @@
 - [Email Configuration](#email-configuration)
 - [Rate Limiting Configuration](#rate-limiting-configuration)
 - [Security Configuration](#security-configuration)
-- [Blockchain Configuration](#blockchain-configuration)
 - [LLM Model Configuration](#llm-model-configuration)
 - [Development vs Production](#development-vs-production)
 
@@ -520,22 +519,6 @@ RATE_LIMIT_API_WRITE_BLOCK=120    # 2 min block
 
 ---
 
-### Blockchain Rate Limits
-
-#### Blockchain Read
-```env
-RATE_LIMIT_BLOCKCHAIN_READ_REQUESTS=50  # Default: 50
-RATE_LIMIT_BLOCKCHAIN_READ_WINDOW=60    # 1 minute
-RATE_LIMIT_BLOCKCHAIN_READ_BLOCK=60     # 1 min block
-```
-
-#### Blockchain Write
-```env
-RATE_LIMIT_BLOCKCHAIN_WRITE_REQUESTS=10  # Default: 10
-RATE_LIMIT_BLOCKCHAIN_WRITE_WINDOW=60    # 1 minute
-RATE_LIMIT_BLOCKCHAIN_WRITE_BLOCK=300    # 5 min block
-```
-
 ---
 
 ## Security Configuration
@@ -553,7 +536,6 @@ Run security configuration validation on startup.
 - Debug mode settings
 - CORS configuration
 - JWT configuration
-- Blockchain settings
 
 **Example:**
 ```env
@@ -564,50 +546,6 @@ VALIDATE_SECURITY_CONFIG=true  # Recommended
 
 ---
 
-## Blockchain Configuration
-
-### `WEB3_PROVIDER_URL`
-**Required:** Only if using blockchain features  
-**Type:** URL  
-
-Ethereum node provider URL (Infura, Alchemy, etc.)
-
-**Example:**
-```env
-WEB3_PROVIDER_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
-WEB3_PROVIDER_URL=https://eth-mainnet.alchemyapi.io/v2/YOUR_API_KEY
-```
-
----
-
-### `CONTRACT_ADDRESS`
-**Required:** Only if using blockchain features  
-**Type:** Ethereum address  
-
-Deployed smart contract address for analysis anchoring.
-
-**Example:**
-```env
-CONTRACT_ADDRESS=0x1234567890123456789012345678901234567890
-```
-
----
-
-### `PRIVATE_KEY`
-**Required:** Only if using blockchain features  
-**Type:** Private key (hex)  
-
-Private key for contract interaction (admin operations).
-
-**Security:**
-- Never commit to version control
-- Use deployment wallet with minimal funds
-- Rotate regularly
-
-**Example:**
-```env
-PRIVATE_KEY=0xabcdef123456...
-```
 
 ---
 

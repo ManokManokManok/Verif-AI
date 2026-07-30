@@ -14,7 +14,6 @@ import AnalysisStats from '../AnalysisStats';
 import UserStats from '../UserStats';
 import UserManagement from '../UserManagement';
 import WebsiteAnalytics from '../WebsiteAnalytics';
-import BlockchainVerification from '../BlockchainVerification';
 import './AdminDashboard.css';
 import '../WebsiteAnalytics/WebsiteAnalytics.css';
 
@@ -24,7 +23,6 @@ const SECTION_LABELS = {
   'user-stats': 'User Stats',
   'user-management': 'User Management',
   'website-analytics': 'Website Analytics',
-  'blockchain': 'Blockchain',
 };
 
 export default function AdminDashboard() {
@@ -106,8 +104,6 @@ export default function AdminDashboard() {
         return <UserManagement onNotify={showNotification} />;
       case 'website-analytics':
         return <WebsiteAnalytics onNotify={showNotification} />;
-      case 'blockchain':
-        return <BlockchainVerification onNotify={showNotification} />;
       default:
         return null;
     }

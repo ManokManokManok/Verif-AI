@@ -33,7 +33,6 @@ frontend/src/pages/admin/
 │   │   └── index.js            # Barrel exports
 │   └── README.md
 ├── AnalysisStats.jsx           # (To be modularized)
-├── BlockchainVerification.jsx  # (To be modularized)
 ├── ModelHealth.jsx             # (To be modularized)
 └── UserStats.jsx               # (To be modularized)
 ```
@@ -284,7 +283,7 @@ describe('WebsiteAnalytics', () => {
 
 ## Future Improvements
 
-- [ ] Modularize remaining pages (AnalysisStats, BlockchainVerification, etc.)
+- [ ] Modularize remaining pages (AnalysisStats, ModelHealth, UserStats, etc.)
 - [ ] Create shared form components
 - [ ] Add Storybook documentation
 - [ ] Implement lazy loading for modals
