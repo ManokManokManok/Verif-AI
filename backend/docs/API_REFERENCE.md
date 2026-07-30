@@ -11,7 +11,6 @@
 - [User Management](#user-management)
 - [Admin Endpoints](#admin-endpoints)
 - [Scam Detection](#scam-detection)
-- [Blockchain Endpoints](#blockchain-endpoints)
 - [System Endpoints](#system-endpoints)
 - [Error Responses](#error-responses)
 - [Rate Limiting](#rate-limiting)
@@ -699,57 +698,6 @@ Authorization: Bearer <access_token>
 
 ---
 
-## Blockchain Endpoints
-
-### 1. Anchor Analysis
-
-**Endpoint:** `POST /api/blockchain/anchor/<ref_id>/`  
-**Authentication:** Required (Admin)  
-**Rate Limit:** 10 requests / 1 minute
-
-#### Success Response (200 OK)
-```json
-{
-  "message": "Analysis anchored successfully",
-  "transaction_hash": "0xabc123...",
-  "block_number": 12345,
-  "timestamp": "2026-02-18T10:00:00Z"
-}
-```
-
----
-
-### 2. Verify Analysis
-
-**Endpoint:** `GET /api/blockchain/verify/<ref_id>/`  
-**Authentication:** Required  
-**Rate Limit:** 50 requests / 1 minute
-
-#### Success Response (200 OK)
-```json
-{
-  "verified": true,
-  "ref_id": "analysis_ghi012",
-  "blockchain_hash": "0xabc123...",
-  "block_number": 12345,
-  "timestamp": "2026-02-18T10:00:00Z"
-}
-```
-
----
-
-### 3. Blockchain Status
-
-**Endpoint:** `GET /api/blockchain/status/`  
-**Authentication:** Not required  
-**Rate Limit:** 100 requests / 1 minute
-
-#### Success Response (200 OK)
-```json
-{
-  "connected": true,
-  "network": "sepolia",
-  "block_number": 12345,
   "contract_address": "0x123abc..."
 }
 ```
@@ -862,8 +810,6 @@ X-RateLimit-Reset: 1676721600
 | `api_read` | 100 requests | 1 minute | Read operations |
 | `api_write` | 30 requests | 1 minute | Write operations |
 | `token_refresh` | 10 requests | 1 minute | Token refresh |
-| `blockchain_read` | 50 requests | 1 minute | Blockchain queries |
-| `blockchain_write` | 10 requests | 1 minute | Blockchain writes |
 
 ---
 

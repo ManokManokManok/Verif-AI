@@ -25,13 +25,13 @@ const CAROUSEL_SLIDES = [
   },
   {
     src: imageFiles[2],
-    title: 'Blockchain-verified results',
-    description: 'Important analyses can be anchored on-chain for tamper-proof verification. Admins can anchor; anyone can verify integrity.',
+    title: 'Trusted analysis records',
+    description: 'Review analysis history with clear timestamps, classifications, and confidence details for every check.',
   },
   {
     src: imageFiles[3],
     title: 'Privacy-first and secure',
-    description: 'We don’t store raw messages on the blockchain—only hashes and classifications. Your data stays under your control.',
+    description: 'We keep raw messages private and focus on the minimum data needed to deliver useful results.',
   },
 ];
 
@@ -42,9 +42,9 @@ const FEATURES = [
     icon: '🛡️',
   },
   {
-    title: 'Blockchain anchoring',
-    description: 'Anchor analysis results on-chain for immutable proof. Verify integrity anytime.',
-    icon: '⛓️',
+    title: 'Trust indicators',
+    description: 'Review metadata, confidence, and result history to understand how each decision was made.',
+    icon: '✅',
   },
   {
     title: 'Real-time analysis',
@@ -108,8 +108,8 @@ function Landing() {
       return;
     }
 
-    // Navigate to blockchain/admin page
-    navigate('/blockchain');
+    // Navigate to admin page
+    navigate('/admin');
   };
 
   // Click left/right overlay to navigate
@@ -251,7 +251,7 @@ function Landing() {
               <p className="landing__body">
                 {CAROUSEL_SLIDES[activeIndex]?.description}
               </p>
-              <button type="button" className="landing__cta" onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}>
+              <button type="button" className="landing__cta" onClick={() => navigate('/detection')}>
                 Get Started
               </button>
             </div>

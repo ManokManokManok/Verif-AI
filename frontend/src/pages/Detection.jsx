@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail, deleteAnalysisHistoryItem, deleteAllAnalysisHistory } from '../api/analysis';
-import { anchorAnalysis, verifyAnalysis } from '../api/blockchain';
 import { getAnalysisConversation } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
@@ -38,9 +37,6 @@ function Detection() {
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [graphScamWidth, setGraphScamWidth] = useState(0);
   const [graphLegitWidth, setGraphLegitWidth] = useState(0);
-  const [isAnchoring, setIsAnchoring] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState(null);
   const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -59,6 +55,11 @@ function Detection() {
   const fileInputRef = useRef(null);
 
   const refreshHistory = async () => {
+    if (!isLoggedIn) {
+      setChatHistory([]);
+      return;
+    }
+
     try {
       const res = await getChatHistory();
       if (Array.isArray(res?.history)) {
@@ -70,7 +71,7 @@ function Detection() {
       // Fall through to fallback behavior below.
     }
 
-    setChatHistory(isLoggedIn ? [] : mockChatHistory);
+    setChatHistory([]);
   };
 
   useEffect(() => {
@@ -418,67 +419,58 @@ function Detection() {
     return () => cancelAnimationFrame(t);
   }, [detectionResult]);
 
-  const handleAnchor = async () => {
-    if (!detectionResult?.ref_id || isAnchoring) return;
-
-    setIsAnchoring(true);
-    try {
-      const result = await anchorAnalysis(detectionResult.ref_id);
-      console.log('[ANCHOR RESULT]', result);
-      // Update the detection result with anchored status
-      setDetectionResult(prev => ({
-        ...prev,
-        is_anchored: true,
-        tx_hash: result.tx_hash,
-        block_number: result.block_number
-      }));
-      alert('Analysis anchored to blockchain successfully!');
-    } catch (error) {
-      console.error('[ANCHOR ERROR]', error);
-      alert(`Error anchoring: ${error.message || 'Failed to anchor'}`);
-    } finally {
-      setIsAnchoring(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    if (!detectionResult?.ref_id || isVerifying) return;
-
-    setIsVerifying(true);
-    setVerificationResult(null);
-    try {
-      const result = await verifyAnalysis(detectionResult.ref_id);
-      console.log('[VERIFY RESULT]', result);
-      setVerificationResult(result);
-    } catch (error) {
-      console.error('[VERIFY ERROR]', error);
-      setVerificationResult({ verified: false, error: error.message });
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   const handleAskAIGuidance = async () => {
-    if (!detectionResult?.ref_id || !isLoggedIn || isOpeningGuidance) return;
+    if (!detectionResult || isOpeningGuidance) return;
 
     setIsOpeningGuidance(true);
     try {
-      // Get or create the analysis-guided conversation
-      const conversation = await getAnalysisConversation(detectionResult.ref_id, accessToken);
-      console.log('[GUIDANCE CONVERSATION]', conversation);
-      
-      // Navigate to chatbot page with conversation ID and analysis context
-      navigate('/chatbot', {
-        state: {
-          conversationId: conversation.conversation_id,
-          conversationType: 'analysis_guided',
-          analysisContext: conversation.analysis_context,
-          isNew: conversation.is_new
-        }
-      });
+      if (isLoggedIn && accessToken && detectionResult.ref_id) {
+        // Get or create the analysis-guided conversation for authenticated user
+        const conversation = await getAnalysisConversation(detectionResult.ref_id, accessToken);
+        console.log('[GUIDANCE CONVERSATION]', conversation);
+        
+        navigate('/chatbot', {
+          state: {
+            conversationId: conversation.conversation_id,
+            conversationType: 'analysis_guided',
+            analysisContext: conversation.analysis_context,
+            isNew: conversation.is_new
+          }
+        });
+      } else {
+        // Guest mode: Navigate directly to chatbot page with analysis context
+        navigate('/chatbot', {
+          state: {
+            conversationType: 'analysis_guided',
+            analysisContext: {
+              ref_id: detectionResult.ref_id || 'guest-temp-ref',
+              is_scam: detectionResult.is_scam,
+              scam_type: detectionResult.scam_type || 'Scam Detection',
+              scam_score: detectionResult.scam_score,
+              legit_score: detectionResult.legit_score,
+              summary: detectionResult.summary,
+              key_markers: detectionResult.key_markers || [],
+            }
+          }
+        });
+      }
     } catch (error) {
       console.error('[GUIDANCE ERROR]', error);
-      alert(`Error opening guidance: ${error.message || 'Failed to open AI guidance'}`);
+      // Fallback: navigate directly with context
+      navigate('/chatbot', {
+        state: {
+          conversationType: 'analysis_guided',
+          analysisContext: {
+            ref_id: detectionResult.ref_id || 'guest-temp-ref',
+            is_scam: detectionResult.is_scam,
+            scam_type: detectionResult.scam_type || 'Scam Detection',
+            scam_score: detectionResult.scam_score,
+            legit_score: detectionResult.legit_score,
+            summary: detectionResult.summary,
+            key_markers: detectionResult.key_markers || [],
+          }
+        }
+      });
     } finally {
       setIsOpeningGuidance(false);
     }
@@ -498,47 +490,65 @@ function Detection() {
         {sidebarOpen && (
           <div className="detect__chat-history">
             <div className="detect__chat-title">Chat History</div>
-            {isLoggedIn && chatHistory.length > 0 && (
-              <div className="detect__chat-actions">
+            {isLoggedIn ? (
+              <>
+                {chatHistory.length > 0 && (
+                  <div className="detect__chat-actions">
+                    <button
+                      className="detect__chat-clear"
+                      type="button"
+                      onClick={handleDeleteAllHistory}
+                      disabled={isDeletingAllHistory}
+                    >
+                      {isDeletingAllHistory ? 'Deleting...' : 'Clear All'}
+                    </button>
+                  </div>
+                )}
+                <div className="detect__chat-list">
+                  {chatHistory.map((chat) => (
+                    <div
+                      className="detect__chat-item"
+                      key={chat.id}
+                      onClick={() => handleChatClick(chat)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="detect__chat-item-header">
+                        <div className="detect__chat-item-title">{chat.title}</div>
+                        {chat.id && (
+                          <button
+                            className="detect__chat-delete"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteHistoryItem(chat.id);
+                            }}
+                            disabled={isDeletingHistoryId === chat.id}
+                          >
+                            {isDeletingHistoryId === chat.id ? '...' : 'Delete'}
+                          </button>
+                        )}
+                      </div>
+                      <div className="detect__chat-item-preview">{chat.description}</div>
+                      <div className="detect__chat-item-time">{chat.timestamp}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="chatbot__anonymous-box" style={{ margin: '15px' }}>
+                <div className="chatbot__anonymous-icon">🛡️</div>
+                <div className="chatbot__anonymous-text">
+                  You are using guest mode. Log in to save your analysis history across devices.
+                </div>
                 <button
-                  className="detect__chat-clear"
+                  className="chatbot__anonymous-login"
                   type="button"
-                  onClick={handleDeleteAllHistory}
-                  disabled={isDeletingAllHistory}
+                  onClick={() => navigate('/login')}
                 >
-                  {isDeletingAllHistory ? 'Deleting...' : 'Clear All'}
+                  Login / Sign Up
                 </button>
               </div>
             )}
-            <div className="detect__chat-list">
-              {chatHistory.map((chat) => (
-                <div
-                  className="detect__chat-item"
-                  key={chat.id}
-                  onClick={() => handleChatClick(chat)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="detect__chat-item-header">
-                    <div className="detect__chat-item-title">{chat.title}</div>
-                    {isLoggedIn && chat.id && (
-                      <button
-                        className="detect__chat-delete"
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDeleteHistoryItem(chat.id);
-                        }}
-                        disabled={isDeletingHistoryId === chat.id}
-                      >
-                        {isDeletingHistoryId === chat.id ? '...' : 'Delete'}
-                      </button>
-                    )}
-                  </div>
-                  <div className="detect__chat-item-preview">{chat.description}</div>
-                  <div className="detect__chat-item-time">{chat.timestamp}</div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
         {!sidebarOpen && (
@@ -575,7 +585,7 @@ function Detection() {
               <button
                 className="nav__link nav__btn"
                 type="button"
-                onClick={() => navigate('/blockchain')}
+                onClick={() => navigate('/admin')}
               >
                 Admin
               </button>
@@ -811,26 +821,24 @@ function Detection() {
                 <h2 className="detect__resultsTitle">Analysis Results</h2>
                 <div className="detect__resultsActions">
                   {isLoggedIn && (
-                    <>
-                      <button 
-                        className="detect__reportBtn" 
-                        type="button"
-                        onClick={() => setIsReportModalOpen(true)}
-                        title="Report an issue with this analysis"
-                      >
-                        Report Issue
-                      </button>
-                      <button
-                        className="detect__newAnalysis"
-                        type="button"
-                        onClick={handleAskAIGuidance}
-                        disabled={isOpeningGuidance}
-                        title="Get personalized guidance based on this analysis"
-                      >
-                        {isOpeningGuidance ? 'Opening...' : 'Ask AI for Guidance'}
-                      </button>
-                    </>
+                    <button 
+                      className="detect__reportBtn" 
+                      type="button"
+                      onClick={() => setIsReportModalOpen(true)}
+                      title="Report an issue with this analysis"
+                    >
+                      Report Issue
+                    </button>
                   )}
+                  <button
+                    className="detect__newAnalysis"
+                    type="button"
+                    onClick={handleAskAIGuidance}
+                    disabled={isOpeningGuidance}
+                    title="Get personalized guidance based on this analysis"
+                  >
+                    {isOpeningGuidance ? 'Opening...' : 'Ask AI for Guidance'}
+                  </button>
                   <button 
                     className="detect__newAnalysis" 
                     type="button"

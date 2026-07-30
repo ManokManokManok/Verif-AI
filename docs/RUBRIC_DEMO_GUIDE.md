@@ -194,8 +194,8 @@ If tests are slow on your machine, run only one file live and keep the other as 
 
 ### Show
 
-1. Open `backend/docs/blockchain/GAS_OPTIMIZATION.md` and point to before/after gas table.
-2. Open `contracts/test/test_smart_contract.js` and highlight assertion `gasUsed < 30000`.
+1. Open the deployment or security notes and point to the relevant operational guidance.
+2. Open a representative backend test and highlight the assertion that demonstrates the workflow.
 
 ### Say
 

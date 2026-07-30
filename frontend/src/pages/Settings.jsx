@@ -3,6 +3,7 @@ import './Settings.css';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { updateUsernameRequest, deleteAccountRequest } from '../api/client';
+import { getMyReports, getReportTypeLabel, getReportStatusLabel } from '../api/reports';
 import { validateUsername } from '../utils/validation';
 
 export default function Settings() {
@@ -21,9 +22,32 @@ export default function Settings() {
   const [deleteError, setDeleteError] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // User reports state
+  const [reports, setReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState('');
+
   useEffect(() => {
     if (!isLoggedIn) navigate('/login', { replace: true });
   }, [isLoggedIn, navigate]);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      const fetchReports = async () => {
+        try {
+          const response = await getMyReports({ limit: 50 });
+          if (response.success && response.data) {
+            setReports(response.data.reports || []);
+          }
+        } catch (err) {
+          setReportsError(err.message || 'Failed to load reports');
+        } finally {
+          setReportsLoading(false);
+        }
+      };
+      fetchReports();
+    }
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (user?.username) setNewUsername(user.username);
@@ -155,6 +179,46 @@ export default function Settings() {
                 {usernameLoading ? 'Updating...' : 'Update Username'}
               </button>
             </form>
+          </div>
+        </section>
+
+        {/* My Submitted Reports Section */}
+        <section className="settings__section">
+          <h2 className="settings__section-title">My Submitted Reports</h2>
+          <div className="settings__card settings__card--reports">
+            {reportsLoading ? (
+              <div className="settings__loading">Loading reports...</div>
+            ) : reportsError ? (
+              <div className="settings__error">{reportsError}</div>
+            ) : reports.length === 0 ? (
+              <p className="settings__empty">You haven't submitted any reports yet.</p>
+            ) : (
+              <div className="settings__reports-list">
+                {reports.map((report) => (
+                  <div key={report.id || report.report_id} className="settings__report-item">
+                    <div className="settings__report-header">
+                      <span className="settings__report-title">{report.title || 'Untitled Report'}</span>
+                      <span className={`settings__report-status settings__report-status--${report.status}`}>
+                        {getReportStatusLabel(report.status)}
+                      </span>
+                    </div>
+                    <div className="settings__report-meta">
+                      <span className="settings__report-type">{getReportTypeLabel(report.report_type)}</span>
+                      <span className="settings__report-date">
+                        {new Date(report.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {report.description && (
+                      <p className="settings__report-desc">
+                        {report.description.length > 100 
+                          ? `${report.description.substring(0, 100)}...` 
+                          : report.description}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

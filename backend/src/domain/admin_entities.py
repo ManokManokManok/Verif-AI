@@ -219,6 +219,9 @@ class AnalysisStatistics:
     previous_total_count: int = 0
     previous_scam_count: int = 0
     
+    # Platform-wide user count (for context on the analysis dashboard)
+    total_users: int = 0
+    
     # Scam categories breakdown
     scam_categories_breakdown: List[ScamCategoryBreakdown] = field(default_factory=list)
     
@@ -258,6 +261,7 @@ class AnalysisStatistics:
         """Convert to dictionary for API responses."""
         return {
             "total_count": self.total_count,
+            "total_users": self.total_users,
             "previous_total_count": self.previous_total_count,
             "high_risk_count": self.high_risk_count,
             "medium_risk_count": self.medium_risk_count,
@@ -290,9 +294,10 @@ class UserStatistics:
     # User counts
     total_users: int
     new_users_count: int  # New users in the period
-    active_users_count: int  # Users who performed analyses in the period
+    active_users_count: int  # Accounts with is_active=True (not suspended/deactivated)
     verified_users_count: int
     unverified_users_count: int
+    engaged_users_count: int = 0  # Users who performed analyses in the period
     
     # Website activity
     website_visits: int = 0
@@ -303,6 +308,7 @@ class UserStatistics:
     avg_analyses_per_user: float = 0.0
     power_users: int = 0  # Users with >50 analyses
     top_power_user: Optional[Dict[str, Any]] = None  # Most active user by detections in period
+    top_susceptive_users: List[Dict[str, Any]] = field(default_factory=list)  # Top 10 users targeted by scams
     
     # Time period
     period: StatisticsPeriod = StatisticsPeriod.ALL_TIME
@@ -336,6 +342,7 @@ class UserStatistics:
             "total_users": self.total_users,
             "new_users_count": self.new_users_count,
             "active_users_count": self.active_users_count,
+            "engaged_users_count": self.engaged_users_count,
             "verified_users_count": self.verified_users_count,
             "unverified_users_count": self.unverified_users_count,
             "user_growth_rate": round(self.user_growth_rate, 2),
@@ -346,6 +353,7 @@ class UserStatistics:
             "avg_analyses_per_user": round(self.avg_analyses_per_user, 2),
             "power_users": self.power_users,
             "top_power_user": self.top_power_user,
+            "top_susceptive_users": self.top_susceptive_users,
             "period": self.period.value,
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,

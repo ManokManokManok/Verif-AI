@@ -13,7 +13,6 @@ import analysisStatsIcon from '../../../../../assets/image/analysisstatspage.svg
 import userStatsIcon from '../../../../../assets/image/userstatsPage.svg';
 import userManagementIcon from '../../../../../assets/image/usermanagementPage.svg';
 import websiteAnalyticsIcon from '../../../../../assets/image/websiteanalyticsPage.svg';
-import blockchainIcon from '../../../../../assets/image/blockchainPage.svg';
 
 const ADMIN_SECTIONS = [
   { id: 'model-health', label: 'Model Health', icon: modelHealthIcon },
@@ -21,7 +20,6 @@ const ADMIN_SECTIONS = [
   { id: 'user-stats', label: 'User Stats', icon: userStatsIcon },
   { id: 'user-management', label: 'User Management', icon: userManagementIcon },
   { id: 'website-analytics', label: 'Website Analytics', icon: websiteAnalyticsIcon },
-  { id: 'blockchain', label: 'Blockchain', icon: blockchainIcon },
 ];
 
 export default function AdminSidebar({ 

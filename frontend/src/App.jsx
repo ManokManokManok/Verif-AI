@@ -74,8 +74,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Redirect old /blockchain route to admin panel */}
-        <Route path="/blockchain" element={<Navigate to="/admin" replace />} />
         <Route 
           path="/admin" 
           element={

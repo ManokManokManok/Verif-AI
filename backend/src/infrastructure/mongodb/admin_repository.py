@@ -268,6 +268,9 @@ class AdminRepository:
         previous_daily_counts = self._get_daily_analysis_counts(previous_start, previous_end) if previous_start and previous_end else []
         confidence_distribution = self._get_confidence_distribution(effective_start_date, effective_end_date)
         
+        # Total users for context on the analysis dashboard
+        total_users = self.users_collection.count_documents({})
+
         return AnalysisStatistics(
             total_count=total,
             high_risk_count=high_risk,
@@ -276,6 +279,7 @@ class AdminRepository:
             legitimate_count=legitimate,
             previous_total_count=previous_total,
             previous_scam_count=previous_scam_total,
+            total_users=total_users,
             scam_categories_breakdown=categories,
             period=period,
             start_date=effective_start_date,
@@ -558,13 +562,14 @@ class AdminRepository:
         unverified_count = total_users - verified_count
         
         # New users in period
-        new_users_filter = {}
+        new_users_filter: Dict[str, Any] = {}
         if effective_start_date or effective_end_date:
-            new_users_filter["created_at"] = {}
+            date_filter: Dict[str, Any] = {}
             if effective_start_date:
-                new_users_filter["created_at"]["$gte"] = effective_start_date
+                date_filter["$gte"] = effective_start_date
             if effective_end_date:
-                new_users_filter["created_at"]["$lte"] = effective_end_date
+                date_filter["$lte"] = effective_end_date
+            new_users_filter["created_at"] = date_filter
         
         new_users_count = self.users_collection.count_documents(new_users_filter) if new_users_filter else 0
         logger.debug(
@@ -573,8 +578,11 @@ class AdminRepository:
             new_users_count,
         )
         
-        # Active users (users who have analyses in the period)
-        active_users_count = self._get_active_users_count(effective_start_date, effective_end_date)
+        # Active accounts (accounts with is_active=True, i.e. not suspended/deactivated)
+        active_users_count = self.users_collection.count_documents({"is_active": True})
+
+        # Engaged users (users who performed analyses in the period)
+        engaged_users_count = self._get_engaged_users_count(effective_start_date, effective_end_date)
         
         # Website visits
         visits, unique_visitors = self._get_visit_stats(effective_start_date, effective_end_date)
@@ -588,6 +596,9 @@ class AdminRepository:
 
         # Top power user in current period (highest detection usage)
         top_power_user = self._get_top_power_user(effective_start_date, effective_end_date)
+
+        # Top 10 users most frequently targeted by scams
+        top_susceptive_users = self._get_top_susceptive_users(effective_start_date, effective_end_date)
         
         # Daily signups trend
         daily_signups = self._get_daily_signups(effective_start_date, effective_end_date)
@@ -599,6 +610,7 @@ class AdminRepository:
             total_users=total_users,
             new_users_count=new_users_count,
             active_users_count=active_users_count,
+            engaged_users_count=engaged_users_count,
             verified_users_count=verified_count,
             unverified_users_count=unverified_count,
             website_visits=visits,
@@ -607,6 +619,7 @@ class AdminRepository:
             avg_analyses_per_user=avg_analyses,
             power_users=power_users_count,
             top_power_user=top_power_user,
+            top_susceptive_users=top_susceptive_users,
             period=period,
             start_date=effective_start_date,
             end_date=effective_end_date,
@@ -673,28 +686,92 @@ class AdminRepository:
             "total_detections": total_detections,
         }
     
-    def _get_active_users_count(
+    def _get_top_susceptive_users(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Get top N users most frequently targeted by scams (is_scam=True)."""
+        match_stage: Dict[str, Any] = {
+            "user_id": {"$exists": True, "$ne": None},
+            "is_scam": True,
+        }
+        date_filter = self._build_created_at_filter(start_date, end_date)
+        if date_filter:
+            match_stage["created_at"] = date_filter
+
+        pipeline = [
+            {"$match": match_stage},
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "scam_encounters": {"$sum": 1},
+                }
+            },
+            {"$sort": {"scam_encounters": -1}},
+            {"$limit": limit},
+        ]
+
+        results = list(self.analysis_collection.aggregate(pipeline))
+        logger.debug("Top susceptive users aggregation result=%s", results)
+
+        users: List[Dict[str, Any]] = []
+        for r in results:
+            user_id = str(r.get("_id"))
+            scam_encounters = int(r.get("scam_encounters", 0))
+
+            # Look up the actual username
+            user_doc = self.users_collection.find_one(
+                {
+                    "$or": [
+                        {"user_id": user_id},
+                        {"id": user_id},
+                    ]
+                },
+                {"username": 1, "email": 1, "user_id": 1},
+            )
+            if not user_doc:
+                try:
+                    user_doc = self.users_collection.find_one(
+                        {"_id": ObjectId(user_id)},
+                        {"username": 1, "email": 1, "user_id": 1},
+                    )
+                except Exception:
+                    user_doc = None
+
+            users.append({
+                "user_id": user_id,
+                "username": user_doc.get("username") if user_doc else None,
+                "email": user_doc.get("email") if user_doc else None,
+                "scam_encounters": scam_encounters,
+            })
+
+        return users
+
+    def _get_engaged_users_count(
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> int:
-        """Get count of users who performed analyses in the period."""
-        match_stage = {"user_id": {"$exists": True, "$ne": None}}
+        """Get count of users who performed analyses in the period (engaged users)."""
+        match_stage: Dict[str, Any] = {"user_id": {"$exists": True, "$ne": None}}
         if start_date or end_date:
-            match_stage["created_at"] = {}
+            date_filter: Dict[str, Any] = {}
             if start_date:
-                match_stage["created_at"]["$gte"] = start_date
+                date_filter["$gte"] = start_date
             if end_date:
-                match_stage["created_at"]["$lte"] = end_date
+                date_filter["$lte"] = end_date
+            match_stage["created_at"] = date_filter
         
         pipeline = [
             {"$match": match_stage},
             {"$group": {"_id": "$user_id"}},
-            {"$count": "active_users"}
+            {"$count": "engaged_users"}
         ]
         
         result = list(self.analysis_collection.aggregate(pipeline))
-        return result[0]["active_users"] if result else 0
+        return result[0]["engaged_users"] if result else 0
     
     def _get_power_users_count(self, min_analyses: int = 50) -> int:
         """
@@ -722,13 +799,14 @@ class AdminRepository:
         end_date: Optional[datetime] = None
     ) -> int:
         """Get total analysis count for the period."""
-        filter_query = {}
+        filter_query: Dict[str, Any] = {}
         if start_date or end_date:
-            filter_query["created_at"] = {}
+            date_filter: Dict[str, Any] = {}
             if start_date:
-                filter_query["created_at"]["$gte"] = start_date
+                date_filter["$gte"] = start_date
             if end_date:
-                filter_query["created_at"]["$lte"] = end_date
+                date_filter["$lte"] = end_date
+            filter_query["created_at"] = date_filter
         
         return self.analysis_collection.count_documents(filter_query)
     
@@ -739,13 +817,14 @@ class AdminRepository:
     ) -> Tuple[int, int]:
         """Get website visit statistics."""
         try:
-            filter_query = {}
+            filter_query: Dict[str, Any] = {}
             if start_date or end_date:
-                filter_query["timestamp"] = {}
+                date_filter: Dict[str, Any] = {}
                 if start_date:
-                    filter_query["timestamp"]["$gte"] = start_date
+                    date_filter["$gte"] = start_date
                 if end_date:
-                    filter_query["timestamp"]["$lte"] = end_date
+                    date_filter["$lte"] = end_date
+                filter_query["timestamp"] = date_filter
             
             # Total visits
             total_visits = self.visits_collection.count_documents(filter_query)
@@ -906,7 +985,7 @@ class AdminRepository:
         Returns:
             Tuple of (reports list, total count)
         """
-        filter_query = {}
+        filter_query: Dict[str, Any] = {}
         if status:
             filter_query["status"] = status.value
         if user_id:
@@ -1059,18 +1138,19 @@ class AdminRepository:
         Returns:
             Tuple of (logs list, total count)
         """
-        filter_query = {}
+        filter_query: Dict[str, Any] = {}
         
         if admin_user_id:
             filter_query["admin_user_id"] = admin_user_id
         if action:
             filter_query["action"] = action
         if start_date or end_date:
-            filter_query["created_at"] = {}
+            date_filter: Dict[str, Any] = {}
             if start_date:
-                filter_query["created_at"]["$gte"] = start_date
+                date_filter["$gte"] = start_date
             if end_date:
-                filter_query["created_at"]["$lte"] = end_date
+                date_filter["$lte"] = end_date
+            filter_query["created_at"] = date_filter
         
         total = self.activity_logs_collection.count_documents(filter_query)
         

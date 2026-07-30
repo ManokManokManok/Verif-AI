@@ -24,7 +24,7 @@ const TERMS = [
     number: '04',
     title: 'Privacy & Data Practices',
     content:
-      'We are committed to protecting your privacy. VerifAI collects only the information necessary to provide and improve our services, including your email address, password (hashed), and analysis data. Raw messages and images for scam analysis are processed securely; images for OCR are processed on your device and not stored. Only non-personal metadata (hashes, classifications, confidence, timestamps, reference IDs) are stored on the blockchain. No raw messages, emails, phone numbers, or other personal data are ever stored on-chain. Security and audit logs are maintained for compliance and may include user IDs and emails. For more details, please review our Privacy Policy (coming soon).',
+      'We are committed to protecting your privacy. VerifAI collects only the information necessary to provide and improve our services, including your email address, password (hashed), and analysis data. Raw messages and images for scam analysis are processed securely; images for OCR are processed on your device and not stored. We avoid retaining unnecessary personal data and keep security and audit logs for compliance, which may include user IDs and emails. For more details, please review our Privacy Policy (coming soon).',
   },
   {
     number: '05',
@@ -34,9 +34,9 @@ const TERMS = [
   },
   {
     number: '06',
-    title: 'Blockchain Anchoring',
+    title: 'Data Integrity',
     content:
-      'When you request to anchor an analysis on-chain, only non-personal metadata is stored immutably and publicly. By using this feature, you acknowledge that the classification and hash will be permanently recorded on the blockchain and cannot be removed.',
+      'Analysis records may be retained to support audits, investigations, and service quality. Where data is stored, it is handled according to our retention and access control policies.',
   },
   {
     number: '07',
