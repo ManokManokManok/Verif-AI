@@ -698,12 +698,6 @@ Authorization: Bearer <access_token>
 
 ---
 
-  "contract_address": "0x123abc..."
-}
-```
-
----
-
 ## System Endpoints
 
 ### 1. Health Check
