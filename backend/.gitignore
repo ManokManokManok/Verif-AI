@@ -39,9 +39,3 @@ coverage/
 logs/
 *.log
 
-# =============================================================================
-# Blockchain Infrastructure (backend/src/infrastructure/blockchain/)
-# =============================================================================
-# ABI files are generated from contracts - but we KEEP them for teammates
-# who don't need to compile contracts themselves
-# src/infrastructure/blockchain/abi/  <- TRACKED (needed for backend)

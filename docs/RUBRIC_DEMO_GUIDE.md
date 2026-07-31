@@ -8,8 +8,6 @@ This guide is tailored to the rubric sections shown in your screenshot:
   - Database Security
   - Threat Modeling
   - Audit Trail
-- **Part 2: Smart Contracts (20 pts)**
-  - Contract Security & Tests
   - Gas Optimization
 
 Use this as your live presenter script.
@@ -18,7 +16,7 @@ Use this as your live presenter script.
 
 ## 0) Demo Goal (say this first)
 
-"In this demo, I will prove that Verif-AI implements secure authentication, strong validation, protected data access, auditable actions, and a tested gas-optimized smart contract. I’ll show both code evidence and test execution for each rubric criterion."
+"In this demo, I will prove that Verif-AI implements secure authentication, strong validation, protected data access, and auditable actions. I’ll show both code evidence and test execution for each rubric criterion."
 
 ---
 
@@ -31,7 +29,6 @@ cd backend
 python manage.py runserver
 ```
 
-### Terminal B (Smart Contract tests)
 
 ```powershell
 cd contracts
@@ -159,30 +156,14 @@ If tests are slow on your machine, run only one file live and keep the other as 
 
 ### Score Booster Tip
 
-- Mention that external immutable log storage/SIEM export is the next step if examiner asks for stronger tamper-evidence guarantees.
+- Mention that external log storage/SIEM export is the next step if examiner asks for stronger tamper-evidence guarantees.
 
 ---
 
-## Part 2: Smart Contracts
-
-### F. Contract Security & Tests (Weight x2.0)
-
-### Show
-
-1. Open `contracts/contracts/AnalysisAnchor.sol`:
-   - owner-only write (`onlyOwner`)
-   - input constraints (`InvalidConfidence`, `InvalidScamClass`)
-   - no PII on-chain
-2. Open `contracts/test/test_smart_contract.js` and highlight tests:
-   - unauthorized caller revert
-   - invalid input revert
-   - event correctness
-   - ownership transfer checks
-3. Open `backend/docs/Plat_tech_modifications/SMART_CONTRACT_AUDIT.md` (Slither zero-vulnerability summary).
 
 ### Say
 
-"The contract enforces least-privilege writes, strict input checks, and privacy-first storage design. We validate this with automated contract tests and static security audit evidence."
+"The system enforces least-privilege writes, strict input checks, and privacy-first storage design. We validate this with automated tests and static security audit evidence."
 
 ### Score Booster Tip
 
@@ -199,7 +180,7 @@ If tests are slow on your machine, run only one file live and keep the other as 
 
 ### Say
 
-"We optimized the anchoring path by shifting from storage-heavy writes to event-centric immutable logging where appropriate. This reduced gas cost significantly while preserving verifiability requirements."
+"We optimized the logging path to preserve verifiability requirements while reducing storage overhead."
 
 ### Score Booster Tip
 
@@ -213,7 +194,7 @@ If tests are slow on your machine, run only one file live and keep the other as 
 - **Minute 1-4:** Authentication + Input Validation
 - **Minute 4-6:** Database Security + Audit Trail
 - **Minute 6-7:** Threat modeling status + mitigation plan
-- **Minute 7-10:** Smart contract code + tests
+- **Minute 7-10:** Security tests and validation evidence
 - **Minute 10-11:** Gas optimization proof
 - **Minute 11-12:** recap mapped to rubric rows
 
@@ -221,7 +202,7 @@ If tests are slow on your machine, run only one file live and keep the other as 
 
 ## 4) Recap Slide Script (Final 30 seconds)
 
-"For Security & Core, we demonstrated strong authentication, schema-based validation, hardened data access settings, and centralized auditability with test and code evidence. For Smart Contracts, we showed access-controlled secure design, automated security tests, and measured gas optimization backed by documentation and assertions."
+"For Security & Core, we demonstrated strong authentication, schema-based validation, hardened data access settings, and centralized auditability with test and code evidence."
 
 ---
 
@@ -242,8 +223,6 @@ If tests are slow on your machine, run only one file live and keep the other as 
 cd backend
 python -m pytest tests/test_validators.py tests/test_admin_security.py -v
 
-# Smart contract checks
-cd ..\contracts
 npm test
 ```
 

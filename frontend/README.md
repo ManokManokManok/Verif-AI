@@ -113,7 +113,6 @@ Comprehensive admin dashboard with 6 modular sections:
 - Geographic analytics (if enabled)
 - `HourlyPattern`: 24-hour activity chart
 - `RecentVisits`: Real-time visit log
-- Force re-anchor capability
 - Transaction hash display
 Located in `src/components/admin/`, organized by category:
 
