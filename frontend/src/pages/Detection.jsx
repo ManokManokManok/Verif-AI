@@ -847,6 +847,9 @@ function Detection() {
                     New Analysis
                   </button>
                 </div>
+
+                {/* AI disclaimer */}
+                <div className="detect__disclaimer">AI can still make mistakes — please treat these results as guidance, not definitive.</div>
               </div>
 
               <div className="detect__resultsGrid">
@@ -924,10 +927,16 @@ function Detection() {
                   )}
                   {detectionResult.key_markers && detectionResult.key_markers.length > 0 && (
                     <div className="detect__markers">
-                      <h4 className="detect__markersTitle">Key Linguistic Markers</h4>
+                      <h4 className={`detect__markersTitle ${!detectionResult.is_scam ? 'detect__markersTitle--legit' : 'detect__markersTitle--scam'}`}>
+                        Key Linguistic Markers
+                      </h4>
                       <ul className="detect__markersList">
                         {detectionResult.key_markers.map((marker, idx) => (
-                          <li key={idx} className="detect__markerItem detect__markerItem--animate" style={{ animationDelay: `${0.35 + idx * 0.06}s` }}>
+                          <li
+                            key={idx}
+                            className={`detect__markerItem detect__markerItem--animate ${!detectionResult.is_scam ? 'detect__markerItem--legit' : 'detect__markerItem--scam'}`}
+                            style={{ animationDelay: `${0.35 + idx * 0.06}s` }}
+                          >
                             {marker}
                           </li>
                         ))}

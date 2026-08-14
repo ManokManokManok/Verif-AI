@@ -1552,35 +1552,41 @@ def detect_scam(request: Request) -> Response:
             logger.info(f"[BERT] Scam Type: {bert_result['scam_type']}")
             logger.info(f"[BERT] Type Confidence: {bert_result['type_confidence']:.2f}%")
         
-        # Step 2: Gemma LLM Analysis (only if scam detected)
+        # Step 2: Gemma LLM Analysis — run for both scam and legitimate messages
         llm_result = {'summary': '', 'key_markers': []}
-        
-        if bert_result['is_scam']:
-            try:
-                llm = load_gemma_model()
-                if llm is not None:
-                    llm_analysis = LLMAnalysisUseCase(llm)
-                    llm_result = llm_analysis.analyze(message, bert_result)
-                    logger.info(f"[GEMMA] Summary: {llm_result['summary'][:100]}...")
-                    logger.info(f"[GEMMA] Key Markers: {llm_result['key_markers']}")
-                else:
-                    logger.warning("[GEMMA] LLM not loaded, skipping analysis")
+
+        try:
+            llm = load_gemma_model()
+            if llm is not None:
+                llm_analysis = LLMAnalysisUseCase(llm)
+                llm_result = llm_analysis.analyze(message, bert_result)
+                logger.info(f"[GEMMA] Summary: {llm_result.get('summary','')[:100]}...")
+                logger.info(f"[GEMMA] Key Markers: {llm_result.get('key_markers')}")
+            else:
+                logger.warning("[GEMMA] LLM not loaded, skipping analysis")
+                if bert_result.get('is_scam'):
                     llm_result = {
-                        'summary': f"This appears to be a {bert_result['scam_type']} scam attempt.",
+                        'summary': f"This appears to be a {bert_result.get('scam_type','scam')} scam attempt.",
                         'key_markers': ['Suspicious patterns detected']
                     }
-            except Exception as llm_error:
-                logger.error(f"[GEMMA] Error during LLM analysis: {str(llm_error)}")
-                # Provide fallback if Gemma fails
+                else:
+                    llm_result = {
+                        'summary': 'This message appears to be legitimate with no scam indicators detected.',
+                        'key_markers': []
+                    }
+        except Exception as llm_error:
+            logger.error(f"[GEMMA] Error during LLM analysis: {str(llm_error)}")
+            # Provide fallback if Gemma fails
+            if bert_result.get('is_scam'):
                 llm_result = {
-                    'summary': f"This appears to be a {bert_result['scam_type']} scam attempt.",
+                    'summary': f"This appears to be a {bert_result.get('scam_type','scam')} scam attempt.",
                     'key_markers': ['Suspicious patterns detected']
                 }
-        else:
-            llm_result = {
-                'summary': 'This message appears to be legitimate with no scam indicators detected.',
-                'key_markers': []
-            }
+            else:
+                llm_result = {
+                    'summary': 'This message appears to be legitimate with no scam indicators detected.',
+                    'key_markers': []
+                }
         
         # Step 3: Save analysis result to database for optional audit metadata
         import hashlib
