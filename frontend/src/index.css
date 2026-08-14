@@ -3731,6 +3731,14 @@ button {
   letter-spacing: 0.04em;
 }
 
+.detect__markersTitle--legit {
+  color: #34d399;
+}
+
+.detect__markersTitle--scam {
+  color: #fca5a5;
+}
+
 .detect__markersList {
   list-style: none;
   padding: 0;
@@ -3742,12 +3750,21 @@ button {
 
 .detect__markerItem {
   padding: 10px 14px;
-  background: rgba(239, 68, 68, 0.1);
-  border-left: 3px solid #ef4444;
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.detect__markerItem--scam {
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid #ef4444;
   color: #fecaca;
+}
+
+.detect__markerItem--legit {
+  background: rgba(16, 185, 129, 0.08);
+  border-left: 3px solid #10b981;
+  color: #bbf7d0;
 }
 
 .detect__markerItem--animate {
@@ -3761,6 +3778,13 @@ button {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+.detect__disclaimer {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
 }
 
 @media (max-width: 1024px) {

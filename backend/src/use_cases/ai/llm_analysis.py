@@ -50,19 +50,14 @@ class LLMAnalysisUseCase:
                 }
         """
         try:
-            # Only analyze if BERT detected it as a scam
-            if not bert_result.get('is_scam', False):
-                return {
-                    'summary': 'This message appears to be legitimate with no scam indicators detected.',
-                    'key_markers': []
-                }
-            
-            # Get summary
+            # Always run Gemma to provide a human-readable summary and markers.
+            # For scam cases Gemma explains why it's likely a scam and lists red flags.
+            # For legitimate cases Gemma explains why it appears legitimate and lists green flags.
             summary = self._get_summary(message, bert_result)
-            
-            # Get key linguistic markers
+
+            # Get key linguistic markers (red flags or green flags depending on verdict)
             key_markers = self._get_key_markers(message, bert_result)
-            
+
             return {
                 'summary': summary,
                 'key_markers': key_markers
@@ -86,13 +81,26 @@ class LLMAnalysisUseCase:
                 f"[LLM SUMMARY] Threats neutralized: {sanitized.threats_detected}"
             )
         
-        prompt = f"""Analyze this potentially fraudulent message and provide a SHORT summary (max 2 sentences) explaining why it appears to be a scam.
+        is_scam = bool(bert_result.get('is_scam', False))
 
-Message: "{safe_message}"
+        if is_scam:
+            classifier_info = f"Classifier detected: {bert_result.get('scam_type', 'unknown')} scam with {bert_result.get('scam_score', 0):.1f}% confidence."
+            prompt = f"""Analyze this potentially fraudulent message and provide a SHORT summary (max 2 sentences) explaining why it appears to be a scam.
 
-Classifier detected: {bert_result['scam_type']} scam with {bert_result['scam_score']:.1f}% confidence.
+    Message: "{safe_message}"
 
-Provide ONLY the summary, no introductions or extra text."""
+    {classifier_info}
+
+    Provide ONLY the summary, no introductions or extra text."""
+        else:
+            classifier_info = f"Classifier verdict: legitimate with {bert_result.get('legit_score', 0):.1f}% confidence."
+            prompt = f"""Analyze this message and provide a SHORT summary (max 2 sentences) explaining why it appears legitimate and not a scam.
+
+    Message: "{safe_message}"
+
+    {classifier_info}
+
+    Provide ONLY the summary, no introductions or extra text."""
 
         messages = [
             {
@@ -136,21 +144,42 @@ Provide ONLY the summary, no introductions or extra text."""
                 f"[LLM MARKERS] Threats neutralized: {sanitized.threats_detected}"
             )
         
-        prompt = f"""Analyze this scam message and identify the KEY LINGUISTIC MARKERS that indicate it's fraudulent.
+        is_scam = bool(bert_result.get('is_scam', False))
 
-Message: "{safe_message}"
+        if is_scam:
+            detected_line = f"Detected as: {bert_result.get('scam_type', 'unknown')} scam"
+            prompt = f"""Analyze this scam message and identify the KEY LINGUISTIC MARKERS that indicate it's fraudulent.
 
-Detected as: {bert_result['scam_type']} scam
+    Message: "{safe_message}"
 
-List 3-5 specific red flags or linguistic markers found in this message. Format as a simple bulleted list.
-Each marker should be one short phrase (3-7 words). Focus on:
-- Urgency tactics
-- Suspicious links or contact methods
-- Impersonation attempts
-- Threats or promises
-- Grammar/spelling issues
+    {detected_line}
 
-Output ONLY the bulleted list, nothing else."""
+    List 3-5 specific red flags or linguistic markers found in this message. Format as a simple bulleted list.
+    Each marker should be one short phrase (3-7 words). Focus on:
+    - Urgency tactics
+    - Suspicious links or contact methods
+    - Impersonation attempts
+    - Threats or promises
+    - Grammar/spelling issues
+
+    Output ONLY the bulleted list, nothing else."""
+        else:
+            detected_line = f"Verdict: legitimate"
+            prompt = f"""Analyze this message and identify the KEY POSITIVE INDICATORS (green flags) that support it being legitimate.
+
+    Message: "{safe_message}"
+
+    {detected_line}
+
+    List 3-5 specific green flags or positive markers found in this message. Format as a simple bulleted list.
+    Each marker should be one short phrase (3-7 words). Focus on:
+    - Clear sender identity or recognizable domain
+    - Polite, contextual language
+    - Absence of urgency or pressure
+    - No requests for sensitive information
+    - Correct grammar/spelling
+
+    Output ONLY the bulleted list, nothing else."""
 
         messages = [
             {
