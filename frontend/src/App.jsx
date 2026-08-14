@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import Landing from './pages/Landing.jsx';
@@ -54,6 +54,7 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 }
 
 function App() {
+  const location = useLocation();
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(max-width: 600px)').matches
@@ -71,10 +72,14 @@ function App() {
       else mq.removeListener(handler);
     };
   }, []);
+
+  const hideMobileHeaderOnRoutes = new Set(['/login']);
+  const showMobileHeader = isMobile && !hideMobileHeaderOnRoutes.has(location.pathname);
+
   return (
     <ThemeProvider>
       <AuthProvider>
-        {isMobile && <MobileHeader />}
+        {showMobileHeader && <MobileHeader />}
         <SessionExpiredModal />
         <Routes>
         <Route path="/" element={<Landing />} />

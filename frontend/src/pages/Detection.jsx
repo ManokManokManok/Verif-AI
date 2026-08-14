@@ -40,8 +40,10 @@ function Detection() {
   const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const progressIntervalRef = useRef(null);
   const stepIntervalRef = useRef(null);
+  const textareaRef = useRef(null);
   
   // Image OCR states
   const [selectedImage, setSelectedImage] = useState(null);
@@ -77,6 +79,34 @@ function Detection() {
   useEffect(() => {
     refreshHistory();
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+
+    const mq = window.matchMedia('(max-width: 600px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+
+    if (mq.addEventListener) {
+      mq.addEventListener('change', update);
+    } else {
+      mq.addListener(update);
+    }
+
+    return () => {
+      if (mq.removeEventListener) {
+        mq.removeEventListener('change', update);
+      } else {
+        mq.removeListener(update);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      syncTextareaHeight();
+    }
+  }, [text, isMobile]);
 
   // Analyzing animation: step labels + simulated progress
   useEffect(() => {
@@ -176,6 +206,15 @@ function Detection() {
     setShowLogoutModal(false);
   };
 
+  const syncTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    const nextHeight = Math.min(textarea.scrollHeight, 78);
+    textarea.style.height = `${nextHeight}px`;
+  };
+
   const handleTextChange = (e) => {
     const newText = e.target.value;
     setText(newText);
@@ -195,6 +234,8 @@ function Detection() {
     } else if (newText.length === 0) {
       setIsExpanded(false);
     }
+
+    requestAnimationFrame(syncTextareaHeight);
   };
 
   const handleDetect = async () => {
@@ -764,15 +805,16 @@ function Detection() {
                   disabled={isDetecting || isExtractingText}
                   title="Upload image to extract text"
                 >
-                  {isExtractingText ? '⏳' : '+'}
+                  {isExtractingText ? '⏳' : isMobile ? '+' : '+'}
                 </button>
                 <textarea
+                  ref={textareaRef}
                   className="detect__input"
                   value={text}
                   onChange={handleTextChange}
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
-                  placeholder={isExtractingText ? 'Extracting text from image...' : 'Paste suspicious message or email here, or click + to upload an image...'}
+                  placeholder={isExtractingText ? 'Extracting text from image...' : isMobile ? 'Paste here' : 'Paste suspicious message or email here, or click + to upload an image...'}
                   rows={1}
                   maxLength={CONSTRAINTS.message.maxLength}
                   disabled={isExtractingText}
