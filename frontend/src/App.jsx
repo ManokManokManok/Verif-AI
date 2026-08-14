@@ -13,6 +13,8 @@ import Settings from './pages/Settings.jsx';
 import { AdminDashboard } from './pages/admin';
 import TermsAndConditions from './pages/TermsAndConditions.jsx';
 import SessionExpiredModal from './components/auth/SessionExpiredModal';
+import MobileHeader from './components/MobileHeader';
+import { useEffect, useState } from 'react';
 
 /**
  * Protected Route Component
@@ -52,9 +54,27 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 }
 
 function App() {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(max-width: 600px)').matches
+      : false
+  );
+
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia('(max-width: 600px)');
+    const handler = (e) => setIsMobile(e.matches);
+    if (mq.addEventListener) mq.addEventListener('change', handler);
+    else mq.addListener(handler);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', handler);
+      else mq.removeListener(handler);
+    };
+  }, []);
   return (
     <ThemeProvider>
       <AuthProvider>
+        {isMobile && <MobileHeader />}
         <SessionExpiredModal />
         <Routes>
         <Route path="/" element={<Landing />} />
