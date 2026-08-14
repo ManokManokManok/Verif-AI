@@ -42,7 +42,6 @@
 
 **⚠️ WARNING:** 
 - `0.0.0.0/0` allows access from **ANYWHERE IN THE WORLD**
-- **ONLY acceptable for local development with Ganache/local MongoDB**
 - **MUST BE REMOVED before production deployment**
 - If using MongoDB Atlas for development, replace with specific developer IPs
 

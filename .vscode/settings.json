@@ -1,10 +1,12 @@
 {
     "postman.settings.dotenv-detection-notification-visibility": false,
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "python.terminal.activateEnvironment": true,
     "python.analysis.extraPaths": [
         "${workspaceFolder}/backend",
         "${workspaceFolder}/backend/src",
         "${workspaceFolder}/.venv/Lib/site-packages"
     ],
-    "python.analysis.typeCheckingMode": "off"
+    "python.analysis.typeCheckingMode": "off",
+    "terminal.integrated.enablePersistentSessions": false
 }
