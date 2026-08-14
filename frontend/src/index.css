@@ -1200,6 +1200,499 @@ button {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Responsive / Mobile-first adjustments
+   - Stack multi-column layouts
+   - Increase tappable sizes and reduce horizontal padding
+   - Optimize chat and auth UIs for small screens
+   -------------------------------------------------------------------------- */
+
+/* Base mobile tweaks */
+@media (max-width: 1024px) {
+  .nav {
+    padding: 0 24px;
+    height: 64px;
+  }
+
+  .brand {
+    font-size: 20px;
+  }
+
+  .nav__links {
+    gap: 16px;
+  }
+
+  .landing__hero {
+    padding: 32px 24px;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .landing__left {
+    max-width: none;
+  }
+
+  .landing__feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .landing__features,
+  .landing__how {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .auth {
+    grid-template-columns: 1fr;
+  }
+
+  .auth__panel--right {
+    padding: 36px 28px;
+  }
+
+  .auth__panel--left {
+    padding: 12px 20px;
+  }
+
+  .auth__image {
+    max-width: 380px;
+  }
+
+  .auth__title {
+    font-size: 24px;
+    margin-top: 20px;
+  }
+
+  .auth__subtitle {
+    font-size: 13px;
+  }
+
+  .auth__form {
+    margin-top: 20px;
+    gap: 14px;
+  }
+
+  .auth__field input {
+    height: 48px;
+  }
+
+  .auth__single-card {
+    padding: 20px;
+    border-radius: 12px;
+  }
+
+  .detect {
+    grid-template-columns: 72px 1fr;
+  }
+
+  .detect__sidebar {
+    padding: 12px 8px;
+  }
+
+  .detect__sidebtn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .detect__main {
+    margin-left: 72px !important;
+  }
+}
+
+/* Narrow screens — phones */
+@media (max-width: 600px) {
+  :root {
+    font-size: 15px;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .nav__links {
+    display: none; /* collapse links into menu on small screens */
+  }
+
+  .nav__login {
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  .landing__hero {
+    padding: 8px 6px 10px;
+    gap: 8px;
+  }
+
+  .carousel {
+    min-height: 26vh;
+    max-height: 34vh;
+    width: 100%;
+    border-radius: 6px;
+    overflow: hidden;
+    border: none;
+    box-shadow: none;
+  }
+
+  .landing__title {
+    font-size: 22px;
+    line-height: 1.15;
+    margin-bottom: 8px;
+  }
+
+  /* Ensure carousel image covers mobile viewport proportionally */
+  .carousel img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+  }
+
+  /* Mobile-specific landing hero compact styles */
+  .landing__hero--mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 8px 12px;
+  }
+
+  .landing__mobile-carousel {
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 22vh;
+    max-height: 32vh;
+  }
+
+  .landing__mobile-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .landing__mobile-text {
+    padding: 8px 4px 0;
+  }
+
+  .landing__mobile-title {
+    font-size: 18px;
+    margin: 0 0 6px;
+    color: #f9fafb;
+    line-height: 1.12;
+  }
+
+  .landing__mobile-body {
+    font-size: 14px;
+    color: #d1d5db;
+    margin: 0 0 8px;
+  }
+
+  .landing__mobile-actions { display: flex; gap: 8px; }
+
+  .landing__body {
+    font-size: 15px;
+    max-width: 100%;
+  }
+
+  .landing__feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Auth: stack and make controls full width */
+  .auth__panel--left,
+  .auth__panel--right {
+    padding: 20px 16px;
+    align-items: stretch;
+  }
+
+  .auth__image {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .auth__single-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px;
+  }
+
+  .auth__field input {
+    height: 50px;
+    font-size: 15px;
+  }
+
+  .auth__submit {
+    padding: 12px 16px;
+    font-size: 16px;
+  }
+
+  .auth__submit {
+    width: 100%;
+  }
+
+  /* Chatbot: make full width, expand input, hide large margins */
+  .detect__sidebar {
+    width: 56px;
+    min-width: 56px;
+  }
+
+  .detect__sidebar--open {
+    width: 100%;
+    position: fixed;
+    left: 0;
+    top: 56px;
+    bottom: 0;
+    z-index: 60;
+    background: #0b1220;
+    padding: 12px;
+  }
+
+  .detect__main {
+    margin-left: 0 !important;
+    height: calc(100vh - 56px);
+  }
+
+  .detect__inputRow.detect__inputRow--chatbot {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .detect__input {
+    padding: 12px;
+    font-size: 15px;
+  }
+
+  .detect__cta {
+    padding: 10px 14px;
+    font-size: 15px;
+  }
+
+  /* Simple chatbot component overrides */
+  .chatbot-container {
+    max-width: 100%;
+    margin: 0 auto;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+    color: #111827;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.12);
+  }
+
+  .chatbot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: #4f46e5;
+    color: #fff;
+  }
+
+  .chatbot-status {
+    padding: 8px 14px;
+    font-size: 13px;
+    background: #f9fafb;
+    color: #374151;
+  }
+
+  .chatbot-messages {
+    padding: 12px;
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+    background: #f3f4f6;
+  }
+
+  .chatbot-input-form {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid #e5e7eb;
+    background: white;
+  }
+
+  .chatbot-input-form input[type="text"] {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    outline: none;
+  }
+
+  .chatbot-input-form button {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #4f46e5;
+    color: white;
+    border: none;
+  }
+
+
+/* Mobile header/menu styles */
+.mobile-header {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .mobile-header {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 80;
+    background: #050814;
+    color: #fff;
+    border-bottom: 1px solid rgba(148,163,184,0.06);
+  }
+  .mobile-header__bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .mobile-header__hamburger {
+    background: transparent;
+    color: #fff;
+    border: none;
+    font-size: 20px;
+    padding: 8px;
+    border-radius: 8px;
+  }
+  .mobile-header__brand {
+    background: none;
+    border: none;
+    color: #fff;
+    font-weight: 700;
+    font-size: 18px;
+    margin-left: 6px;
+  }
+  .mobile-header__spacer { flex: 1; }
+
+  .mobile-header__account {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 42vw;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(148,163,184,0.18);
+    background: rgba(15, 23, 42, 0.92);
+    color: #f8fafc;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-header__account--auth {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-color: rgba(59,130,246,0.5);
+  }
+
+  .mobile-header__account-label {
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-header__menu {
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #070a12, #0f1728);
+    padding: 12px;
+    gap: 8px;
+    border-top: 1px solid rgba(148,163,184,0.03);
+  }
+
+  /* Animate open/close */
+  .mobile-header__menu {
+    max-height: 0;
+    overflow: hidden;
+    transform-origin: top;
+    transition: max-height 260ms cubic-bezier(.2,.9,.2,1), opacity 220ms ease, transform 220ms ease;
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  .mobile-header__menu.mobile-header__menu--open {
+    max-height: 520px; /* large enough to show items */
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .mobile-header__item {
+    text-align: left;
+    padding: 12px 10px;
+    background: transparent;
+    color: #e6eefc;
+    border: none;
+    font-size: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .mobile-header__item:hover { background: rgba(255,255,255,0.02); }
+
+  .mobile-header__item--logout { color: #fecaca; }
+
+  .mobile-header__footer {
+    margin-top: 8px;
+    padding-top: 8px;
+    font-size: 13px;
+    color: #9ca3af;
+  }
+
+  /* Make room for fixed header so page content is not hidden */
+  body {
+    padding-top: 56px;
+  }
+}
+
+/* Desktop tweaks for the simple chatbot to keep good proportions */
+@media (min-width: 601px) {
+  .chatbot-container {
+    max-width: 800px;
+    margin: 20px auto;
+  }
+  .chatbot-messages {
+    max-height: 520px;
+  }
+}
+  /* Make footer compact */
+  .detect__footer {
+    padding: 12px;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  /* Buttons and touch targets larger */
+  button, .auth__link, .nav__login {
+    touch-action: manipulation;
+  }
+}
+
+/* Very small / legacy phones */
+@media (max-width: 380px) {
+  .landing__title {
+    font-size: 22px;
+  }
+
+  .auth__brand {
+    font-size: 32px;
+  }
+
+  .auth__tagline {
+    font-size: 22px;
+  }
+
+  .auth__panel--right {
+    padding: 16px;
+  }
+}
+
 .detect__chat-title {
   font-size: 14px;
   font-weight: 600;

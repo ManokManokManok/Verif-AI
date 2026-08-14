@@ -93,9 +93,9 @@ export default function ChatBot({ accessToken = null }) {
   };
 
   return (
-    <div className="chatbot-container" style={styles.container}>
+    <div className="chatbot-container">
       {/* Header */}
-      <div style={styles.header}>
+      <div className="chatbot-header" style={styles.header}>
         <h2 style={styles.title}>🛡️ Verif-AI - Scam Prevention Assistant</h2>
         <button 
           onClick={handleClearChat}
@@ -107,7 +107,7 @@ export default function ChatBot({ accessToken = null }) {
       </div>
 
       {/* Auth Status Badge */}
-      <div style={styles.statusBadge}>
+      <div className="chatbot-status" style={styles.statusBadge}>
         {isAuthenticated ? (
           <span style={styles.authenticatedBadge}>✅ Logged In - Conversation Saved</span>
         ) : (
@@ -123,7 +123,7 @@ export default function ChatBot({ accessToken = null }) {
       )}
 
       {/* Messages Area */}
-      <div style={styles.messagesArea}>
+      <div className="chatbot-messages" style={styles.messagesArea}>
         {messages.length === 0 && (
           <div style={styles.emptyState}>
             <p>👋 Hi! I'm Verif-AI, your scam prevention assistant.</p>
@@ -171,7 +171,7 @@ export default function ChatBot({ accessToken = null }) {
       </div>
 
       {/* Input Area */}
-      <form onSubmit={handleSendMessage} style={styles.inputForm}>
+      <form onSubmit={handleSendMessage} className="chatbot-input-form" style={styles.inputForm}>
         <input
           type="text"
           value={inputMessage}

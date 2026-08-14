@@ -289,3 +289,34 @@
   padding: 10px 12px;
   border-radius: 6px;
 }
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .settings {
+    max-width: 100%;
+    margin: 12px;
+    padding: 18px;
+    border-radius: 12px;
+  }
+
+  .settings__section {
+    padding: 18px;
+  }
+
+  .settings__report-item {
+    padding: 12px;
+  }
+
+  .settings__report-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .settings__btn-group {
+    flex-direction: column;
+  }
+
+  .settings__btn {
+    width: 100%;
+  }
+}
