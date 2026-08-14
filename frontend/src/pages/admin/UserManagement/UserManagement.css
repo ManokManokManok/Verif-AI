@@ -1,0 +1,210 @@
+/* UserManagement Component Styles */
+
+.admin-section__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: var(--admin-text-muted);
+}
+
+.user-mgmt__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+}
+
+.user-mgmt__search {
+  flex: 1;
+  min-width: 250px;
+}
+
+.user-mgmt__filter-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.user-mgmt__user-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-mgmt__avatar {
+  width: 40px;
+  height: 40px;
+  background: var(--admin-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+}
+
+.user-mgmt__user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-mgmt__username {
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.user-mgmt__email {
+  font-size: 0.75rem;
+  color: var(--admin-text-muted);
+}
+
+.user-mgmt__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.user-mgmt__verified {
+  font-size: 0.75rem;
+  color: var(--admin-danger);
+}
+
+.user-mgmt__verified--yes {
+  color: var(--admin-success);
+}
+
+.user-mgmt__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.admin-btn.user-mgmt__action-btn {
+  background: rgba(31, 41, 55, 0.45);
+  border: 1px solid var(--admin-border, #374151);
+  color: var(--admin-text-muted, #9ca3af) ;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--admin-radius-sm, 8px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.user-mgmt__action-btn:hover:not(:disabled) {
+  color: var(--admin-text, #f9fafb);
+  transform: translateY(-2px);
+}
+
+.user-mgmt__action-btn--edit:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: var(--admin-primary, #3b82f6) !important;
+  color: var(--admin-primary, #3b82f6) !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.user-mgmt__action-btn--password:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: var(--admin-warning, #f59e0b) !important;
+  color: var(--admin-warning, #f59e0b) !important;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+}
+
+.user-mgmt__action-btn--delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: var(--admin-danger, #ef4444) !important;
+  color: var(--admin-danger, #ef4444) !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.user-mgmt__action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.user-mgmt__icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  transition: transform 0.2s ease;
+}
+
+.user-mgmt__action-btn:hover:not(:disabled) .user-mgmt__icon {
+  transform: scale(1.1);
+}
+
+.user-mgmt__edit-modal {
+  max-width: 500px;
+}
+
+.user-mgmt__edit-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.user-mgmt__edit-section:last-of-type {
+  border-bottom: none;
+}
+
+.user-mgmt__status-options {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.user-mgmt__roles-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.user-mgmt__role-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--admin-text);
+}
+
+.user-mgmt__role-checkbox input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--admin-primary);
+}
+
+.user-mgmt__password-modal {
+  max-width: 400px;
+}
+
+.admin-modal__text {
+  color: var(--admin-text-muted);
+  margin-bottom: 1rem;
+}
+
+.admin-modal__text strong {
+  color: var(--admin-text);
+}
+
+@media (max-width: 768px) {
+  .user-mgmt__filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .user-mgmt__search {
+    min-width: 100%;
+  }
+
+  .user-mgmt__filter-group {
+    flex-wrap: wrap;
+  }
+}

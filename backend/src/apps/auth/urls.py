@@ -1,0 +1,25 @@
+from django.urls import path
+from . import views
+
+app_name = 'auth'
+
+urlpatterns = [
+    path('register/', views.signup, name='signup'),
+    path('login/', views.login, name='login'),
+    path('profile/', views.profile, name='profile'),
+    path('update-username/', views.update_username, name='update_username'),
+    path('delete-account/', views.delete_account, name='delete_account'),
+    path('check-permission/', views.check_permission, name='check_permission'),
+    path('send-verification/', views.send_verification_email, name='send_verification_email'),
+    path('verify-email/', views.verify_email, name='verify_email'),
+    path('request-reset/', views.request_password_reset, name='request_password_reset'),
+    path('reset-password/', views.reset_password, name='reset_password'),
+    path('reset-password/status/', views.password_reset_token_status, name='password_reset_token_status'),
+    path('reset-password/resend/', views.resend_password_reset_link, name='resend_password_reset_link'),
+    path('logout/', views.logout, name='logout'),
+    path('refresh/', views.refresh_token, name='refresh_token'),
+
+    # MFA (Multi-Factor Authentication)
+    path('mfa/send/', views.send_mfa_code, name='mfa_send'),
+    path('mfa/verify/', views.verify_mfa_code, name='mfa_verify'),
+]

@@ -1,0 +1,41 @@
+# =============================================================================
+# Backend .gitignore
+# =============================================================================
+
+# Keep secrets and local DB out of VCS
+.env
+*.env
+
+# Django local DB
+*.sqlite3
+
+# Local folders (development notes/scripts)
+plans/
+
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django compiled files
+verfai/__pycache__/
+src/apps/**/__pycache__/
+src/infrastructure/**/__pycache__/
+src/use_cases/**/__pycache__/
+src/domain/__pycache__/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Test & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+
+# Logs
+logs/
+*.log
+

@@ -1,0 +1,17 @@
+scam_types = {
+    0: 'Banking Access & Payment',
+    1: 'Financial and Investment',
+    2: 'Health and Wellness',
+    3: 'Impersonation and Authority',
+    4: 'International or Cross-Border',
+    5: 'Job, Business, and Work-from-Home',
+    6: 'Legal and Document',
+    7: 'Mobile and Digital',
+    8: 'Prize, Raffle & Reward',
+    9: 'Property & Rental',
+    10: 'Psychological, Urgency, & Emotional',
+    11: 'Romance, Dating, and Relationship',
+    12: 'Shopping and E-Commerce',
+    13: 'Tax, Banking, and Loan',
+    14: 'Tech and Online Account',
+}
