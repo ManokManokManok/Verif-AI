@@ -116,3 +116,22 @@
   background: #2563eb;
   border-color: #2563eb;
 }
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .confirm-modal {
+    padding: 1.25rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+
+  .confirm-modal__actions {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .confirm-modal__btn {
+    width: 100%;
+    text-align: center;
+  }
+}

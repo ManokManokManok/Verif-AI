@@ -74,7 +74,7 @@ function App() {
   }, []);
 
   const hideMobileHeaderOnRoutes = new Set(['/login', '/signup', '/verify-email']);
-  const showMobileHeader = isMobile && !hideMobileHeaderOnRoutes.has(location.pathname);
+  const showMobileHeader = isMobile && !hideMobileHeaderOnRoutes.has(location.pathname) && !location.pathname.startsWith('/admin');
 
   return (
     <ThemeProvider>

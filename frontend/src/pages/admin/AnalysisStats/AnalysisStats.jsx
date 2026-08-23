@@ -122,7 +122,15 @@ export default function AnalysisStats({ onNotify }) {
   // Scam categories table columns
   const categoryColumns = [
     { key: 'rank', label: '#' },
-    { key: 'category', label: 'Category' },
+    { 
+      key: 'category', 
+      label: 'Category',
+      render: (value) => (
+        <span className="analysis-stats__category-name" title={value ? String(value).replace(/_/g, ' ') : ''}>
+          {value ? String(value).replace(/_/g, ' ') : '-'}
+        </span>
+      )
+    },
     { 
       key: 'count', 
       label: 'Detections',
@@ -175,28 +183,32 @@ export default function AnalysisStats({ onNotify }) {
   ];
 
   return (
-    <div className="admin-section">
-      {/* Header with Filters */}
+    <div className="admin-section page-enter">
+      {/* Tab Header */}
       <div className="admin-section__header">
         <h2 className="admin-section__title">Analysis Statistics</h2>
         <div className="admin-section__actions">
-          <PeriodSelector value={period} onChange={setPeriod} />
+          <PeriodSelector 
+            value={period} 
+            onChange={setPeriod} 
+            disabled={loading}
+          />
           <button
-            className="admin-btn admin-btn--primary admin-btn--sm"
+            className="admin-btn admin-btn--secondary admin-btn--sm"
             onClick={() => handleExport('csv')}
-            disabled={loading || exportingFormat !== null}
+            disabled={loading || exportingFormat === 'csv'}
           >
-            {exportingFormat === 'csv' ? 'Exporting CSV...' : 'Export CSV'}
+            {exportingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}
           </button>
           <button
             className="admin-btn admin-btn--secondary admin-btn--sm"
-            onClick={() => handleExport('excel')}
-            disabled={loading || exportingFormat !== null}
+            onClick={() => handleExport('json')}
+            disabled={loading || exportingFormat === 'json'}
           >
-            {exportingFormat === 'excel' ? 'Exporting Excel...' : 'Export Excel'}
+            {exportingFormat === 'json' ? 'Exporting...' : 'Export JSON'}
           </button>
           <button 
-            className="admin-btn admin-btn--secondary admin-btn--sm"
+            className="admin-btn admin-btn--primary admin-btn--sm"
             onClick={refresh}
             disabled={loading}
           >
@@ -206,7 +218,7 @@ export default function AnalysisStats({ onNotify }) {
       </div>
 
       {/* Overview Stats */}
-      <div className="admin-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+      <div className="admin-grid admin-grid--5">
         <StatCard
           title="Platform Users"
           value={(stats.total_users || 0).toLocaleString()}
@@ -218,7 +230,7 @@ export default function AnalysisStats({ onNotify }) {
           value={totalAnalyses.toLocaleString()}
           trend={hasAnalysisBaseline ? analysisTrend.direction : undefined}
           trendValue={hasAnalysisBaseline ? analysisTrend.value : undefined}
-          subtitle={`${period === 'all_time' ? 'All time' : `This ${period}`}`}
+          variant="info"
         />
         <StatCard
           title="Scams Detected"
@@ -232,36 +244,34 @@ export default function AnalysisStats({ onNotify }) {
           title="Legitimate"
           value={legitimateCount.toLocaleString()}
           variant="success"
-          subtitle={`${legitimatePercentage.toFixed(1)}% pass rate`}
+          subtitle={`${legitimatePercentage.toFixed(1)}% of total`}
         />
         <StatCard
-          title="High Risk"
-          value={(stats.high_risk_count || 0).toLocaleString()}
-          variant="danger"
-          subtitle={`${totalAnalyses > 0 ? (((stats.high_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}% of total`}
+          title="Avg Processing"
+          value={`${(stats.avg_processing_ms || 0).toFixed(0)} ms`}
+          subtitle="Engine latency"
+          variant="warning"
         />
       </div>
 
-      {/* Rate Summary Banner */}
+      {/* Detection Rate Banner */}
       <div className="analysis-stats__rate-banner admin-mt-4">
         <div className="analysis-stats__rate-item">
-          <span className="analysis-stats__rate-label">Detection Rate</span>
-          <span className="analysis-stats__rate-value analysis-stats__rate-value--danger">
+          <span className="analysis-stats__rate-label">Overall Scam Rate</span>
+          <span className={`analysis-stats__rate-value ${scamPercentage >= 50 ? 'analysis-stats__rate-value--danger' : 'analysis-stats__rate-value--medium'}`}>
             {scamPercentage.toFixed(1)}%
           </span>
         </div>
         <div className="analysis-stats__rate-divider" />
         <div className="analysis-stats__rate-item">
-          <span className="analysis-stats__rate-label">High Risk Rate</span>
-          <span className="analysis-stats__rate-value analysis-stats__rate-value--high">
-            {totalAnalyses > 0 ? (((stats.high_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}%
-          </span>
+          <span className="analysis-stats__rate-label">Categories Tracked</span>
+          <span className="analysis-stats__rate-value">{scamCategories.length}</span>
         </div>
         <div className="analysis-stats__rate-divider" />
         <div className="analysis-stats__rate-item">
-          <span className="analysis-stats__rate-label">Medium Risk Rate</span>
-          <span className="analysis-stats__rate-value analysis-stats__rate-value--medium">
-            {totalAnalyses > 0 ? (((stats.medium_risk_count || 0) / totalAnalyses) * 100).toFixed(1) : '0.0'}%
+          <span className="analysis-stats__rate-label">High Risk Share</span>
+          <span className="analysis-stats__rate-value analysis-stats__rate-value--high">
+            {getPercentage(stats.high_risk_count, totalAnalyses).toFixed(1)}%
           </span>
         </div>
         {stats.top_scam_category && (
@@ -278,7 +288,7 @@ export default function AnalysisStats({ onNotify }) {
       </div>
 
       {/* Detection Breakdown */}
-      <div className="admin-grid admin-grid--2 admin-mt-4">
+      <div className="admin-grid analysis-stats__detection-grid admin-mt-4">
         {/* Scam Categories */}
         <div className="admin-card">
           <div className="admin-card__header">
@@ -288,6 +298,7 @@ export default function AnalysisStats({ onNotify }) {
             columns={categoryColumns}
             data={scamCategories}
             loading={loading}
+            compact={true}
             emptyMessage="No scam categories found"
           />
         </div>

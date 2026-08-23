@@ -16,10 +16,11 @@ export default function DataTable({
   onPageChange,
   emptyMessage = 'No data available',
   className = '',
+  compact = false,
 }) {
   if (loading) {
     return (
-      <div className={`data-table data-table--loading ${className}`}>
+      <div className={`data-table ${compact ? 'data-table--compact' : ''} data-table--loading ${className}`}>
         <div className="data-table__skeleton">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="data-table__skeleton-row" />
@@ -31,14 +32,14 @@ export default function DataTable({
 
   if (!data || data.length === 0) {
     return (
-      <div className={`data-table data-table--empty ${className}`}>
+      <div className={`data-table ${compact ? 'data-table--compact' : ''} data-table--empty ${className}`}>
         <p className="data-table__empty-message">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
-    <div className={`data-table ${className}`}>
+    <div className={`data-table ${compact ? 'data-table--compact' : ''} ${className}`}>
       <div className="data-table__wrapper">
         <table className="data-table__table">
           <thead className="data-table__head">

@@ -708,19 +708,36 @@
   gap: 1.5rem;
 }
 
+.admin-grid > * {
+  min-width: 0;
+}
+
 .admin-grid--2 { grid-template-columns: repeat(2, 1fr); }
 .admin-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .admin-grid--4 { grid-template-columns: repeat(4, 1fr); }
+.admin-grid--5 { grid-template-columns: repeat(5, 1fr); }
+
+@media (max-width: 1200px) {
+  .admin-grid--5 { grid-template-columns: repeat(3, 1fr); }
+}
 
 @media (max-width: 1024px) {
   .admin-grid--4 { grid-template-columns: repeat(2, 1fr); }
   .admin-grid--3 { grid-template-columns: repeat(2, 1fr); }
 }
 
+@media (max-width: 768px) {
+  .admin-grid--5 { grid-template-columns: repeat(2, 1fr); }
+}
+
 @media (max-width: 640px) {
   .admin-grid--4,
   .admin-grid--3,
   .admin-grid--2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .admin-grid--5 { grid-template-columns: 1fr; }
 }
 
 .admin-flex {
@@ -745,3 +762,24 @@
 .admin-mb-2 { margin-bottom: 1rem; }
 .admin-mb-3 { margin-bottom: 1.5rem; }
 .admin-mb-4 { margin-bottom: 2rem; }
+
+/* === Global Sleek Dark Admin Scrollbars === */
+.admin-dashboard ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.admin-dashboard ::-webkit-scrollbar-track {
+  background: var(--admin-bg-dark, #050b16);
+  border-radius: 3px;
+}
+
+.admin-dashboard ::-webkit-scrollbar-thumb {
+  background: var(--admin-border, #374151);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.admin-dashboard ::-webkit-scrollbar-thumb:hover {
+  background: var(--admin-primary, #3b82f6);
+}

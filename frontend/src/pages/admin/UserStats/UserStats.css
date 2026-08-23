@@ -11,6 +11,7 @@
 
 .user-stats__report-filters {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -305,6 +306,15 @@ code {
 }
 
 /* Responsive */
+@media (max-width: 768px) {
+  .admin-btn.user-stats__action-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+  }
+}
+
 @media (max-width: 600px) {
   .report-details-modal {
     max-width: 95%;

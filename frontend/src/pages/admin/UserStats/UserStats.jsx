@@ -215,7 +215,7 @@ export default function UserStats({ onNotify }) {
       </div>
 
       {/* Overview Stats */}
-      <div className="admin-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+      <div className="admin-grid admin-grid--5">
         <StatCard
           title="Total Users"
           value={userStats.total_users?.toLocaleString() || '0'}

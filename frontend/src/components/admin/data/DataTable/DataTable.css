@@ -7,10 +7,17 @@
   border: 1px solid var(--admin-border, #374151);
   border-radius: var(--admin-radius, 12px);
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .data-table__wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
 }
 
 .data-table__table {
@@ -35,6 +42,17 @@
   font-size: 0.875rem;
   color: var(--admin-text, #f9fafb);
   border-bottom: 1px solid var(--admin-border, #374151);
+}
+
+/* Compact Table Modifier for Cards */
+.data-table--compact .data-table__th {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.725rem;
+}
+
+.data-table--compact .data-table__td {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .data-table__row:hover {
@@ -117,3 +135,92 @@
   font-size: 0.875rem;
   color: var(--admin-text, #f9fafb);
 }
+
+/* Scroll hint shadow on the wrapper */
+.data-table__wrapper {
+  position: relative;
+}
+
+.data-table__wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(to left, var(--admin-bg-card, #1f2937), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.data-table__wrapper--scrollable::after {
+  opacity: 1;
+}
+
+/* Custom Sleek Dark Scrollbar */
+.data-table__wrapper::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.data-table__wrapper::-webkit-scrollbar-track {
+  background: var(--admin-bg-dark, #050b16);
+  border-radius: 3px;
+}
+
+.data-table__wrapper::-webkit-scrollbar-thumb {
+  background: var(--admin-border, #374151);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.data-table__wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--admin-primary, #3b82f6);
+}
+
+.data-table__wrapper {
+  scrollbar-width: thin;
+  scrollbar-color: var(--admin-border, #374151) var(--admin-bg-dark, #050b16);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+  .data-table__table {
+    min-width: 600px;
+  }
+
+  .data-table__th {
+    padding: 0.625rem 0.75rem;
+    font-size: 0.7rem;
+  }
+
+  .data-table__td {
+    padding: 0.625rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .data-table__pagination {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .data-table__table {
+    min-width: 500px;
+  }
+
+  .data-table__th {
+    padding: 0.5rem 0.625rem;
+  }
+
+  .data-table__td {
+    padding: 0.5rem 0.625rem;
+  }
+}
+

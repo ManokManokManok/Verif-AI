@@ -17,6 +17,8 @@
   flex: 1;
   margin-left: 72px;
   transition: margin-left 0.3s ease-in-out;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .admin-sidebar--open ~ .admin-dashboard__main {

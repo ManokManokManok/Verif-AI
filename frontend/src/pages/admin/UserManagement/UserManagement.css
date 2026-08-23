@@ -207,4 +207,11 @@
   .user-mgmt__filter-group {
     flex-wrap: wrap;
   }
+
+  .admin-btn.user-mgmt__action-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+  }
 }
