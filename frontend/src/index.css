@@ -640,6 +640,10 @@ button {
   color: #f9fafb;
 }
 
+.auth__mobileHeader {
+  display: none;
+}
+
 .auth--single {
   grid-template-columns: 1fr;
   background: radial-gradient(circle at 30% 20%, #111b33 0%, #070a12 72%);
@@ -1245,6 +1249,28 @@ button {
 
   .auth {
     grid-template-columns: 1fr;
+  }
+
+  .auth--mobile {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .auth--mobile .auth__panel--left {
+    display: none;
+  }
+
+  .auth--mobile .auth__panel--right {
+    width: 100%;
+    min-height: 100vh;
+    justify-content: flex-start;
+    padding: 40px 28px;
+  }
+
+  .auth--mobile.auth--single .auth__panel--right {
+    align-items: center;
+    justify-content: center;
   }
 
   .auth__panel--right {

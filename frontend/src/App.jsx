@@ -73,7 +73,7 @@ function App() {
     };
   }, []);
 
-  const hideMobileHeaderOnRoutes = new Set(['/login']);
+  const hideMobileHeaderOnRoutes = new Set(['/login', '/signup', '/verify-email']);
   const showMobileHeader = isMobile && !hideMobileHeaderOnRoutes.has(location.pathname);
 
   return (
