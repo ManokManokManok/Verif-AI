@@ -2,7 +2,7 @@
 Analysis Guided Chatbot Use Case
 
 Business logic for analysis-guided scam prevention chatbot.
-Uses Gemma LLM to provide specific guidance based on analysis results.
+Uses the configured generative AI provider to provide specific guidance based on analysis results.
 """
 
 import logging
@@ -51,7 +51,7 @@ class AnalysisGuidedChatbotUseCase:
         Initialize the analysis-guided chatbot use case.
         
         Args:
-            llm_model: Loaded Gemma LLM (llama_cpp.Llama instance)
+            llm_model: Provider exposing create_chat_completion()
             conversation_repository: ConversationRepository instance
             analysis_repository: AnalysisResultRepository instance
         """

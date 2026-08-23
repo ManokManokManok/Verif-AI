@@ -14,7 +14,7 @@ import logging
 from ...use_cases.chatbot import GeneralChatbotUseCase
 from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
 from ...infrastructure.mongodb.conversation_repository import ConversationRepository
-from ...infrastructure.ai.loaders import load_gemma_model
+from ...infrastructure.ai.genai_provider import get_genai_provider
 from ...infrastructure.rate_limiter import rate_limit
 from ...infrastructure.validators import sanitize_for_logging
 
@@ -36,13 +36,8 @@ def get_conversation_repository():
 
 def get_chatbot_use_case():
     """Get general chatbot use case instance."""
-    llm = load_gemma_model()
-    
-    if llm is None:
-        raise RuntimeError("Gemma LLM not loaded. Chatbot is unavailable.")
-    
     conversation_repo = get_conversation_repository()
-    return GeneralChatbotUseCase(llm, conversation_repo)
+    return GeneralChatbotUseCase(get_genai_provider(), conversation_repo)
 
 
 def _get_session_id(request: Request) -> str:
@@ -103,12 +98,8 @@ def _handle_anonymous_chat(request: Request, message: str) -> dict:
         logger.info(f"[CHATBOT] Trimmed anonymous conversation to {MAX_ANONYMOUS_MESSAGES} messages")
     
     try:
-        # Generate response
-        llm = load_gemma_model()
-        if llm is None:
-            raise RuntimeError("Gemma LLM not loaded")
-        
-        response = llm.create_chat_completion(
+        # Generate response through Gemini, with lazy Gemma fallback.
+        response = get_genai_provider().create_chat_completion(
             messages=llm_messages,
             max_tokens=500,
             temperature=0.7,
@@ -602,18 +593,14 @@ def get_analysis_guided_use_case():
     """Get analysis-guided chatbot use case instance."""
     from ...use_cases.chatbot.analysis_guided_chatbot import AnalysisGuidedChatbotUseCase
     from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
-    
-    llm = load_gemma_model()
-    
-    if llm is None:
-        raise RuntimeError("Gemma LLM not loaded. Chatbot is unavailable.")
+    from ...infrastructure.ai.genai_provider import get_genai_provider
     
     client = get_mongo_client()
     db_name = get_database_name()
     conversation_repo = ConversationRepository(client, db_name)
     analysis_repo = AnalysisResultRepository(client, db_name)
     
-    return AnalysisGuidedChatbotUseCase(llm, conversation_repo, analysis_repo)
+    return AnalysisGuidedChatbotUseCase(get_genai_provider(), conversation_repo, analysis_repo)
 
 
 @api_view(['GET'])
