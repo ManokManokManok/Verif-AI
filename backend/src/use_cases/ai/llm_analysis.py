@@ -1,6 +1,6 @@
 """
 LLM-based scam analysis use case.
-Uses Gemma to provide human-readable summary and key linguistic markers.
+Uses the configured generative AI provider to provide a human-readable summary and key linguistic markers.
 """
 import logging
 from typing import Dict, Any, List
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class LLMAnalysisUseCase:
     """
-    Use Gemma LLM to analyze scam messages and extract:
+    Use the generative AI provider to analyze scam messages and extract:
     - Summary: Short explanation of why it might be a scam
     - Key linguistic markers: List of red flags/indicators found in the text
     """
@@ -22,7 +22,7 @@ class LLMAnalysisUseCase:
         Initialize with a loaded Gemma model.
         
         Args:
-            llm_model: Loaded llama_cpp.Llama instance
+            llm_model: Provider exposing create_chat_completion()
         """
         self.llm = llm_model
         self.sanitizer = PromptSanitizer(max_length=8000, log_threats=True)
@@ -71,7 +71,7 @@ class LLMAnalysisUseCase:
             }
     
     def _get_summary(self, message: str, bert_result: Dict[str, Any]) -> str:
-        """Generate a short summary using Gemma."""
+        """Generate a short summary using the configured provider."""
         # Sanitize user input to prevent prompt injection
         sanitized = self.sanitizer.sanitize(message, context="llm_summary")
         safe_message = sanitized.sanitized_text
@@ -134,7 +134,7 @@ class LLMAnalysisUseCase:
             return "This message appears to be a scam based on pattern analysis."
     
     def _get_key_markers(self, message: str, bert_result: Dict[str, Any]) -> List[str]:
-        """Extract key linguistic markers using Gemma."""
+        """Extract key linguistic markers using the configured provider."""
         # Sanitize user input to prevent prompt injection
         sanitized = self.sanitizer.sanitize(message, context="llm_markers")
         safe_message = sanitized.sanitized_text

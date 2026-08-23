@@ -122,7 +122,8 @@ from ...infrastructure.mongodb.repositories import MongoDBUserRepository, MongoD
 from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.token_blacklist_service import MongoDBTokenBlacklistService
-from ...infrastructure.ai.loaders import load_multihead_model, load_gemma_model
+from ...infrastructure.ai.loaders import load_multihead_model
+from ...infrastructure.ai.genai_provider import get_genai_provider
 from ...infrastructure.rate_limiter import rate_limit, check_rate_limit
 from ...infrastructure.rate_limiter import get_client_ip as _get_client_ip
 from ...infrastructure.audit_logger import get_audit_logger, AuditEventType
@@ -1552,31 +1553,17 @@ def detect_scam(request: Request) -> Response:
             logger.info(f"[BERT] Scam Type: {bert_result['scam_type']}")
             logger.info(f"[BERT] Type Confidence: {bert_result['type_confidence']:.2f}%")
         
-        # Step 2: Gemma LLM Analysis — run for both scam and legitimate messages
+        # Step 2: Gemini-first generative analysis with lazy Gemma fallback
         llm_result = {'summary': '', 'key_markers': []}
 
         try:
-            llm = load_gemma_model()
-            if llm is not None:
-                llm_analysis = LLMAnalysisUseCase(llm)
-                llm_result = llm_analysis.analyze(message, bert_result)
-                logger.info(f"[GEMMA] Summary: {llm_result.get('summary','')[:100]}...")
-                logger.info(f"[GEMMA] Key Markers: {llm_result.get('key_markers')}")
-            else:
-                logger.warning("[GEMMA] LLM not loaded, skipping analysis")
-                if bert_result.get('is_scam'):
-                    llm_result = {
-                        'summary': f"This appears to be a {bert_result.get('scam_type','scam')} scam attempt.",
-                        'key_markers': ['Suspicious patterns detected']
-                    }
-                else:
-                    llm_result = {
-                        'summary': 'This message appears to be legitimate with no scam indicators detected.',
-                        'key_markers': []
-                    }
+            llm_analysis = LLMAnalysisUseCase(get_genai_provider())
+            llm_result = llm_analysis.analyze(message, bert_result)
+            logger.info(f"[GENAI] Summary: {llm_result.get('summary','')[:100]}...")
+            logger.info(f"[GENAI] Key Markers: {llm_result.get('key_markers')}")
         except Exception as llm_error:
-            logger.error(f"[GEMMA] Error during LLM analysis: {str(llm_error)}")
-            # Provide fallback if Gemma fails
+            logger.error(f"[GENAI] Error during generative analysis: {str(llm_error)}")
+            # Provide a deterministic fallback if both providers fail.
             if bert_result.get('is_scam'):
                 llm_result = {
                     'summary': f"This appears to be a {bert_result.get('scam_type','scam')} scam attempt.",
