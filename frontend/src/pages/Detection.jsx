@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail, deleteAnalysisHistoryItem, deleteAllAnalysisHistory } from '../api/analysis';
-import { getAnalysisConversation } from '../api/chatbot';
+import { getAnalysisConversation, analyzeImage } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -10,7 +10,6 @@ import { ReportModal } from '../components/reports';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import Tesseract from 'tesseract.js';
 
 const ANALYSIS_STEPS = [
   'Analyzing message...',
@@ -38,6 +37,7 @@ function Detection() {
   const [graphScamWidth, setGraphScamWidth] = useState(0);
   const [graphLegitWidth, setGraphLegitWidth] = useState(0);
   const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
+  const [isStartingNewAnalysis, setIsStartingNewAnalysis] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -48,8 +48,10 @@ function Detection() {
   // Image OCR states
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  const [isExtractingText, setIsExtractingText] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
+  const [originalImage, setOriginalImage] = useState(null);
+  const [originalImagePreview, setOriginalImagePreview] = useState(null);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [hasAppliedCrop, setHasAppliedCrop] = useState(false);
   const [showCropModal, setShowCropModal] = useState(false);
   const [crop, setCrop] = useState({ unit: '%', x: 5, y: 5, width: 90, height: 90 });
   const [completedCrop, setCompletedCrop] = useState(null);
@@ -239,22 +241,25 @@ function Detection() {
   };
 
   const handleDetect = async () => {
-    if (!text.trim() || isDetecting) return;
+    if ((!text.trim() && !selectedImage) || (selectedImage && !hasAppliedCrop) || isDetecting || isAnalyzingImage) return;
 
     // Client-side validation
-    const validation = validateMessage(text);
+    const validation = selectedImage ? { valid: true } : validateMessage(text);
     if (!validation.valid) {
       setValidationError(validation.error);
       return;
     }
 
     setIsDetecting(true);
+    setIsAnalyzingImage(Boolean(selectedImage));
     setDetectionResult(null);
     setValidationError(null);
     setRateLimitError(null);
 
     try {
-      const result = await detectScamRequest(text);
+      const result = selectedImage
+        ? await analyzeImage(selectedImage, accessToken)
+        : await detectScamRequest(text);
       console.log('[DETECTION RESULT]', result);
       setDetectionResult(result);
       
@@ -273,6 +278,7 @@ function Detection() {
       }
     } finally {
       setIsDetecting(false);
+      setIsAnalyzingImage(false);
     }
   };
 
@@ -287,11 +293,21 @@ function Detection() {
     // Clear image states
     setSelectedImage(null);
     setImagePreview(null);
-    setIsExtractingText(false);
-    setOcrProgress(0);
+    setOriginalImage(null);
+    setOriginalImagePreview(null);
+    setIsAnalyzingImage(false);
+    setHasAppliedCrop(false);
     setShowCropModal(false);
     setCropImageElement(null);
     setCompletedCrop(null);
+  };
+
+  const startNewAnalysis = () => {
+    setIsStartingNewAnalysis(true);
+    window.setTimeout(() => {
+      handleNewAnalysis();
+      setIsStartingNewAnalysis(false);
+    }, 500);
   };
 
   // Handle image file selection
@@ -313,6 +329,9 @@ function Detection() {
     }
 
     setSelectedImage(file);
+    setOriginalImage(file);
+    setText('');
+    setIsExpanded(false);
     setValidationError(null);
     setRateLimitError(null);
 
@@ -320,8 +339,10 @@ function Detection() {
     const reader = new FileReader();
     reader.onload = (event) => {
       setImagePreview(event.target.result);
+      setOriginalImagePreview(event.target.result);
       setCrop({ unit: '%', x: 5, y: 5, width: 90, height: 90 });
       setCompletedCrop(null);
+      setHasAppliedCrop(false);
       setShowCropModal(true);
     };
     reader.readAsDataURL(file);
@@ -367,68 +388,43 @@ function Detection() {
     });
   };
 
-  const handleCropAndExtract = async () => {
+  const handleCropAndAnalyze = async () => {
     if (!selectedImage) return;
 
     try {
       const croppedBlob = await getCroppedImageBlob();
       setShowCropModal(false);
-      await extractTextFromImage(croppedBlob || selectedImage);
+      setHasAppliedCrop(true);
+      if (croppedBlob && croppedBlob !== selectedImage) {
+        setSelectedImage(croppedBlob);
+        setImagePreview(URL.createObjectURL(croppedBlob));
+      }
     } catch (error) {
       console.error('[CROP ERROR]', error);
-      setValidationError('Failed to crop image. Please try again.');
+      setValidationError(error.message || 'Failed to analyze image. Please try again.');
       setShowCropModal(false);
+      setIsAnalyzingImage(false);
     }
   };
 
-  // Extract text from image using Tesseract.js
-  const extractTextFromImage = async (imageFile) => {
-    setIsExtractingText(true);
-    setOcrProgress(0);
-    setText(''); // Clear existing text
+  const handleCropAgain = () => {
+    if (!originalImage || !originalImagePreview || isAnalyzingImage) return;
 
-    try {
-      const result = await Tesseract.recognize(
-        imageFile,
-        'eng', // Language
-        {
-          logger: (m) => {
-            // Update progress
-            if (m.status === 'recognizing text') {
-              setOcrProgress(Math.round(m.progress * 100));
-            }
-          },
-        }
-      );
-
-      const extractedText = (result.data.text || '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      if (!extractedText) {
-        setValidationError('No text found in the image. Please try another image or enter text manually.');
-        setIsExtractingText(false);
-        return;
-      }
-
-      // Set the extracted text
-      setText(extractedText);
-      setIsExpanded(true);
-      setIsExtractingText(false);
-      setOcrProgress(100);
-      
-      console.log('[OCR] Extracted text:', extractedText);
-    } catch (error) {
-      console.error('[OCR ERROR]', error);
-      setValidationError('Failed to extract text from image. Please try again or enter text manually.');
-      setIsExtractingText(false);
-      setOcrProgress(0);
-    }
+    setSelectedImage(originalImage);
+    setImagePreview(originalImagePreview);
+    setCrop({ unit: '%', x: 5, y: 5, width: 90, height: 90 });
+    setCompletedCrop(null);
+    setCropImageElement(null);
+    setHasAppliedCrop(false);
+    setShowCropModal(true);
   };
 
   // Trigger file input click
   const handlePlusButtonClick = () => {
-    if (isDetecting || isExtractingText) return;
+    if (isDetecting || isAnalyzingImage) return;
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     fileInputRef.current?.click();
   };
 
@@ -436,11 +432,13 @@ function Detection() {
   const handleRemoveImage = () => {
     setSelectedImage(null);
     setImagePreview(null);
-    setIsExtractingText(false);
-    setOcrProgress(0);
+    setOriginalImage(null);
+    setOriginalImagePreview(null);
+    setIsAnalyzingImage(false);
     setShowCropModal(false);
     setCropImageElement(null);
     setCompletedCrop(null);
+    setHasAppliedCrop(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -594,7 +592,13 @@ function Detection() {
         )}
         {!sidebarOpen && (
           <>
-            <button className="detect__sidebtn" type="button" aria-label="Edit">
+            <button
+              className="detect__sidebtn"
+              type="button"
+              aria-label="New Detection"
+              onClick={startNewAnalysis}
+              title="New Detection"
+            >
               ✎
             </button>
             <div className="detect__spacer" />
@@ -683,9 +687,13 @@ function Detection() {
         <main className={`detect__content ${detectionResult ? 'detect__content--results' : ''}`}>
           {!detectionResult ? (
             <>
-              <h1 className="detect__title">Welcome to VerifAI</h1>
+              <h1 className="detect__title">
+                {imagePreview ? 'VerifAI Image Analysis' : 'Welcome to VerifAI'}
+              </h1>
               <p className="detect__subtitle">
-                Write the promo/message you want to analyze, or press the plus button to submit a file
+                {imagePreview
+                  ? 'Insert and crop the image you want analyzed for suspicious content.'
+                  : 'Write the promo/message you want to analyze, or press the plus button to submit a file'}
               </p>
 
               {/* Error messages */}
@@ -700,25 +708,41 @@ function Detection() {
                 </div>
               )}
 
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="detect__fileInput"
+              />
+
               {/* Image preview */}
               {imagePreview && (
                 <div className="detect__imagePreview">
                   <div className="detect__imagePreview-header">
-                    <span className="detect__imagePreview-title">📷 Selected Image</span>
+                    <span className="detect__imagePreview-title">Image Analyzation</span>
                     <div className="detect__imagePreview-actions">
                       <button
                         className="detect__imagePreview-crop"
-                        onClick={() => setShowCropModal(true)}
+                        onClick={handlePlusButtonClick}
                         type="button"
-                        disabled={isExtractingText}
+                        disabled={isAnalyzingImage}
                       >
-                        {showCropModal ? 'Cropping...' : 'Crop'}
+                        + Change Image
+                      </button>
+                      <button
+                        className="detect__imagePreview-crop"
+                        onClick={handleCropAgain}
+                        type="button"
+                        disabled={isAnalyzingImage}
+                      >
+                        {showCropModal ? 'Cropping...' : hasAppliedCrop ? 'Crop Again' : 'Crop'}
                       </button>
                       <button
                         className="detect__imagePreview-remove"
                         onClick={handleRemoveImage}
                         type="button"
-                        disabled={isExtractingText}
+                        disabled={isAnalyzingImage}
                       >
                         ✕
                       </button>
@@ -728,13 +752,16 @@ function Detection() {
                   {showCropModal ? (
                     <div className="detect__cropInline">
                       <div className="detect__cropHeader">
-                        <h3 className="detect__cropTitle">Crop Before OCR</h3>
+                        <h3 className="detect__cropTitle">Review Image</h3>
                         <p className="detect__cropHint">Select only the text area for better extraction quality.</p>
                       </div>
                       <div className="detect__cropBody">
                         <ReactCrop
                           crop={crop}
-                          onChange={(nextCrop) => setCrop(nextCrop)}
+                          onChange={(nextCrop) => {
+                            setCrop(nextCrop);
+                            setHasAppliedCrop(false);
+                          }}
                           onComplete={(nextCompletedCrop) => setCompletedCrop(nextCompletedCrop)}
                           keepSelection
                         >
@@ -751,83 +778,83 @@ function Detection() {
                           type="button"
                           className="detect__cropBtn detect__cropBtn--ghost"
                           onClick={() => setShowCropModal(false)}
-                          disabled={isExtractingText}
+                          disabled={isAnalyzingImage}
                         >
                           Cancel
                         </button>
                         <button
                           type="button"
                           className="detect__cropBtn detect__cropBtn--primary"
-                          onClick={handleCropAndExtract}
-                          disabled={isExtractingText}
+                          onClick={handleCropAndAnalyze}
+                          disabled={isAnalyzingImage || hasAppliedCrop}
                         >
-                          {isExtractingText ? 'Extracting...' : 'Crop & Extract'}
+                          {isAnalyzingImage ? 'Submitting...' : hasAppliedCrop ? 'Apply Crop Again' : 'Apply Crop'}
+                        </button>
+                        <button
+                          type="button"
+                          className="detect__cropBtn detect__cropBtn--primary"
+                          onClick={handleDetect}
+                          disabled={!hasAppliedCrop || isAnalyzingImage}
+                        >
+                          {isAnalyzingImage ? 'Submitting...' : 'Submit Image'}
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <img src={imagePreview} alt="Selected for OCR" className="detect__imagePreview-img" />
+                    <img src={imagePreview} alt="Selected for scam analysis" className="detect__imagePreview-img" />
                   )}
 
-                  {isExtractingText && (
+                  {isAnalyzingImage && (
                     <div className="detect__imagePreview-progress">
-                      <div className="detect__imagePreview-progressBar">
-                        <div 
-                          className="detect__imagePreview-progressFill"
-                          style={{ width: `${ocrProgress}%` }}
-                        />
-                      </div>
                       <p className="detect__imagePreview-progressText">
-                        Extracting text... {ocrProgress}%
+                        Gemini is analyzing the image...
                       </p>
                     </div>
                   )}
                 </div>
               )}
 
-              <div
+              {!selectedImage && <div
                 className={`detect__inputRow ${isFocused ? 'detect__inputRow--focused' : ''} ${isExpanded ? 'detect__inputRow--expanded' : ''}`}
               >
-                {/* Hidden file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  style={{ display: 'none' }}
-                />
-                
                 <button 
                   className="detect__plus" 
                   type="button" 
                   aria-label="Upload image"
                   onClick={handlePlusButtonClick}
-                  disabled={isDetecting || isExtractingText}
-                  title="Upload image to extract text"
+                  disabled={isDetecting || isAnalyzingImage}
+                  title="Upload image for Gemini analysis"
                 >
-                  {isExtractingText ? '⏳' : isMobile ? '+' : '+'}
+                  {isAnalyzingImage ? '⏳' : '+'}
                 </button>
-                <textarea
-                  ref={textareaRef}
-                  className="detect__input"
-                  value={text}
-                  onChange={handleTextChange}
-                  onFocus={() => setIsFocused(true)}
-                  onBlur={() => setIsFocused(false)}
-                  placeholder={isExtractingText ? 'Extracting text from image...' : isMobile ? 'Paste here' : 'Paste suspicious message or email here, or click + to upload an image...'}
-                  rows={1}
-                  maxLength={CONSTRAINTS.message.maxLength}
-                  disabled={isExtractingText}
-                />
+                {selectedImage ? (
+                  <div className="detect__imageSubmitStatus">
+                    <span className="detect__imageSubmitIcon" aria-hidden="true">✦</span>
+                    <span>{hasAppliedCrop ? 'Cropped image ready to submit' : 'Apply the crop to continue'}</span>
+                  </div>
+                ) : (
+                  <textarea
+                    ref={textareaRef}
+                    className="detect__input"
+                    value={text}
+                    onChange={handleTextChange}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    placeholder={isMobile ? 'Paste here' : 'Paste suspicious message or email here, or click + to analyze an image...'}
+                    rows={1}
+                    maxLength={CONSTRAINTS.message.maxLength}
+                    disabled={isAnalyzingImage}
+                  />
+                )}
                 <button
-                  className={`detect__cta ${text.trim() && !validationError ? 'detect__cta--active' : ''}`}
+                  className={`detect__cta ${(selectedImage || text.trim()) && !validationError ? 'detect__cta--active' : ''}`}
                   type="button"
-                  disabled={!text.trim() || isDetecting || validationError || isExtractingText}
+                  disabled={(!text.trim() && !selectedImage) || (selectedImage && !hasAppliedCrop) || isDetecting || validationError || isAnalyzingImage}
                   onClick={handleDetect}
                 >
-                  {isDetecting ? 'Analyzing...' : 'Detect'}
+                  {isDetecting ? 'Analyzing...' : selectedImage ? 'Submit Image' : 'Detect'}
                 </button>
-              </div>
+              </div>}
 
               {/* Analyzing progress animation */}
               {isDetecting && (
@@ -917,10 +944,18 @@ function Detection() {
                 <div className="detect__resultCard detect__resultCard--summary detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Summary</h3>
                   <p className="detect__summary">{detectionResult.summary}</p>
-                  <h4 className="detect__cardSubtitle">Analyzed Message</h4>
-                  <div className="detect__originalMessage">
-                    {detectionResult.message}
-                  </div>
+                  <h4 className="detect__cardSubtitle">{detectionResult.image_attachment ? 'Analyzed Image' : 'Analyzed Message'}</h4>
+                  {detectionResult.image_attachment?.data_url ? (
+                    <img
+                      src={detectionResult.image_attachment.data_url}
+                      alt="Analyzed submission"
+                      className="detect__originalImage"
+                    />
+                  ) : (
+                    <div className="detect__originalMessage">
+                      {detectionResult.message}
+                    </div>
+                  )}
                 </div>
 
                 {/* Likelihood Graph */}
@@ -958,13 +993,18 @@ function Detection() {
                 {/* Details & Markers */}
                 <div className="detect__resultCard detect__resultCard--details detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Details</h3>
-                  {detectionResult.is_scam && (
+                  {(detectionResult.is_scam || detectionResult.details) && (
                     <div className="detect__scamType detect__scamType--animate">
-                      <div className="detect__detailLabel">Scam Type</div>
-                      <div className="detect__detailValue">{detectionResult.scam_type}</div>
-                      <div className="detect__confidence">
-                        Confidence: {(detectionResult.type_confidence ?? 0).toFixed(1)}%
-                      </div>
+                      {detectionResult.is_scam && detectionResult.scam_type && (
+                        <>
+                          <div className="detect__detailLabel">Scam Type</div>
+                          <div className="detect__detailValue">{detectionResult.scam_type}</div>
+                          <div className="detect__confidence">
+                            Confidence: {(detectionResult.type_confidence ?? 0).toFixed(1)}%
+                          </div>
+                        </>
+                      )}
+                      {detectionResult.details && <p className="detect__summary">{detectionResult.details}</p>}
                     </div>
                   )}
                   {detectionResult.key_markers && detectionResult.key_markers.length > 0 && (
@@ -997,6 +1037,25 @@ function Detection() {
           </div>
         </footer>
       </div>
+
+      {isStartingNewAnalysis && (
+        <div className="detect__navigation-loading" role="status" aria-live="polite">
+          <div className="detect__navigation-card">
+            <div className="detect__navigation-mark" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="detect__navigation-copy">
+              <strong>Preparing a fresh check</strong>
+              <span>Clearing the previous result...</span>
+            </div>
+            <div className="detect__navigation-progress" aria-hidden="true">
+              <span />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Report Modal */}
       <ReportModal

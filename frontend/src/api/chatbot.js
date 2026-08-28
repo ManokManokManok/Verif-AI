@@ -47,6 +47,25 @@ export async function sendChatMessage(message, accessToken = null, conversationI
   return await response.json();
 }
 
+export async function analyzeImage(imageFileOrBlob, accessToken = null) {
+  const formData = new FormData();
+  formData.append('image', imageFileOrBlob, 'image.png');
+  const headers = {};
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+  else headers['X-Session-ID'] = getOrCreateSessionId();
+
+  const response = await fetch(`${API_BASE_URL}/api/chat/image-analysis/`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Failed to analyze image');
+  }
+  return data;
+}
+
 /**
  * Get chat history for a specific conversation
  * @param {string} accessToken - JWT access token (optional)

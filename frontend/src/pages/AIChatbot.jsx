@@ -25,6 +25,8 @@ function AIChatbot() {
   const [currentTitle, setCurrentTitle] = useState('New Conversation');
   const [conversationType, setConversationType] = useState('general'); // 'general' or 'analysis_guided'
   const [analysisContext, setAnalysisContext] = useState(null);
+  const [expandedAnalysisImage, setExpandedAnalysisImage] = useState(null);
+  const [isStartingDetection, setIsStartingDetection] = useState(false);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
@@ -62,10 +64,25 @@ function AIChatbot() {
     setShowSettingsModal(false);
   };
 
+  const openDetection = () => {
+    setIsStartingDetection(true);
+    window.setTimeout(() => navigate('/detection'), 800);
+  };
+
   // Handle navigation state for analysis-guided mode
   useEffect(() => {
     if (location.state) {
-      const { conversationId, conversationType: navType, analysisContext: navContext, isNew } = location.state;
+      const { conversationId, conversationType: navType, analysisContext: navContext, initialMessages } = location.state;
+
+      if (location.state.imageAnalysis) {
+        setConversationType('general');
+        setCurrentConversationId(conversationId || null);
+        setCurrentTitle('Image Scam Analysis');
+        if (initialMessages) setMessages(initialMessages);
+        fetchConversations();
+        window.history.replaceState({}, document.title);
+        return;
+      }
       
       if (navType === 'analysis_guided' && conversationId) {
         console.log('[CHATBOT] Opening analysis-guided conversation:', conversationId);
@@ -279,9 +296,9 @@ function AIChatbot() {
         <button 
           className="detect__sidebtn" 
           type="button" 
-          aria-label="New Chat"
-          onClick={startNewConversation}
-          title="New Conversation"
+          aria-label="New Detection"
+          onClick={openDetection}
+          title="New Detection"
         >
           ✎
         </button>
@@ -495,11 +512,50 @@ function AIChatbot() {
               {/* Analysis Context Card - shown for analysis-guided conversations */}
               {conversationType === 'analysis_guided' && analysisContext && (
                 <div className={`chatbot__analysis-card${analysisContext.is_scam ? ' chatbot__analysis-card--scam' : ' chatbot__analysis-card--safe'}`}>
+                   {analysisContext.image_attachment?.data_url && (
+                     <button
+                       type="button"
+                       className="chatbot__analysis-image-button"
+                       onClick={() => setExpandedAnalysisImage(analysisContext.image_attachment.data_url)}
+                       aria-label="View analyzed image larger"
+                     >
+                       <img
+                         src={analysisContext.image_attachment.data_url}
+                         alt="Analyzed submission"
+                         className="chatbot__analysis-image"
+                       />
+                     </button>
+                   )}
                   <div className="chatbot__analysis-header">
                     <h3 className="chatbot__analysis-title">
                       {analysisContext.is_scam ? 'High Likelihood' : 'Low Likelihood'}
                     </h3>
                   </div>
+
+                   {expandedAnalysisImage && (
+                     <div
+                       className="chatbot__image-overlay"
+                       role="dialog"
+                       aria-modal="true"
+                       aria-label="Enlarged analyzed image"
+                       onClick={() => setExpandedAnalysisImage(null)}
+                     >
+                       <button
+                         type="button"
+                         className="chatbot__image-overlay-close"
+                         onClick={() => setExpandedAnalysisImage(null)}
+                         aria-label="Close enlarged image"
+                       >
+                         X
+                       </button>
+                       <img
+                         src={expandedAnalysisImage}
+                         alt="Enlarged analyzed submission"
+                         className="chatbot__image-overlay-content"
+                         onClick={(event) => event.stopPropagation()}
+                       />
+                     </div>
+                   )}
                   
                   {analysisContext.is_scam && analysisContext.scam_type && (
                     <div className="chatbot__analysis-line">
@@ -552,6 +608,13 @@ function AIChatbot() {
         className={`chatbot__message-bubble${isUser ? ' chatbot__message-bubble--user' : ''}${msg.isError ? ' chatbot__message-bubble--error' : ''}`}
       >
         <div className="chatbot__message-content">
+          {msg.attachment?.data_url && (
+            <img
+              src={msg.attachment.data_url}
+              alt="Submitted for scam analysis"
+              className="chatbot__message-image"
+            />
+          )}
           {msg.content}
         </div>
       </div>
@@ -611,6 +674,13 @@ function AIChatbot() {
           </div>
         </footer>
       </div>
+
+      {isStartingDetection && (
+        <div className="chatbot__navigation-loading" role="status" aria-live="polite">
+          <div className="chatbot__navigation-spinner" />
+          <span>Opening Detection</span>
+        </div>
+      )}
 
       {/* Logout Confirmation Modal */}
       <LogoutConfirmModal
