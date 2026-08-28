@@ -32,13 +32,15 @@ class ChatMessage:
     role: str  # "user" | "assistant" | "system"
     content: str
     timestamp: datetime = field(default_factory=datetime.utcnow)
+    attachment: Optional[dict] = None
     
     def to_dict(self) -> dict:
         """Convert to dictionary for API response."""
         return {
             "role": self.role,
             "content": self.content,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "attachment": self.attachment
         }
 
 
@@ -91,12 +93,13 @@ class ChatConversation:
             updated_at=datetime.utcnow()
         )
     
-    def add_message(self, role: str, content: str) -> None:
+    def add_message(self, role: str, content: str, attachment: Optional[dict] = None) -> None:
         """Add a message to the conversation."""
         message = ChatMessage(
             role=role,
             content=content,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
+            attachment=attachment
         )
         self.messages.append(message)
         self.updated_at = datetime.utcnow()

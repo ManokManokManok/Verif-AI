@@ -26,7 +26,7 @@ class GeminiProvider:
         self.model_name = model_name
         self.client = genai.Client(api_key=api_key)
 
-    def create_chat_completion(self, messages: List[Dict[str, str]], **options: Any) -> Dict[str, Any]:
+    def create_chat_completion(self, messages: List[Dict[str, Any]], **options: Any) -> Dict[str, Any]:
         from google.genai import types  # type: ignore
 
         system_parts = [item["content"] for item in messages if item.get("role") == "system"]
@@ -35,9 +35,10 @@ class GeminiProvider:
             role = item.get("role")
             if role == "system":
                 continue
+            parts = item.get("parts") or [{"text": item.get("content", "")}]
             contents.append({
                 "role": "model" if role == "assistant" else "user",
-                "parts": [{"text": item.get("content", "")}],
+                "parts": parts,
             })
 
         config = types.GenerateContentConfig(
@@ -52,6 +53,37 @@ class GeminiProvider:
             model=self.model_name,
             contents=contents,
             config=config,
+        )
+        text = getattr(response, "text", None)
+        if not text or not text.strip():
+            raise RuntimeError("Gemini returned an empty response")
+        return {"choices": [{"message": {"content": text}}]}
+
+    def create_image_completion(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        system_prompt: str,
+        user_prompt: str,
+        **options: Any,
+    ) -> Dict[str, Any]:
+        from google.genai import types  # type: ignore
+
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=[{
+                "role": "user",
+                "parts": [
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    types.Part.from_text(text=user_prompt),
+                ],
+            }],
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=options.get("max_tokens"),
+                temperature=options.get("temperature"),
+                thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"),
+            ),
         )
         text = getattr(response, "text", None)
         if not text or not text.strip():
@@ -87,7 +119,7 @@ class GenAIProvider:
         elif not self._gemini_enabled():
             logger.info("[GEMINI] Available: false; disabled by configuration")
 
-    def create_chat_completion(self, messages: List[Dict[str, str]], **options: Any) -> Dict[str, Any]:
+    def create_chat_completion(self, messages: List[Dict[str, Any]], **options: Any) -> Dict[str, Any]:
         if self.gemini is not None:
             try:
                 response = self.gemini.create_chat_completion(messages=messages, **options)
@@ -104,6 +136,24 @@ class GenAIProvider:
         response = gemma.create_chat_completion(messages=messages, **options)
         logger.warning("[GENAI] Provider used: GEMMA_FALLBACK")
         return response
+
+    def create_image_completion(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        system_prompt: str,
+        user_prompt: str,
+        **options: Any,
+    ) -> Dict[str, Any]:
+        if self.gemini is None:
+            raise RuntimeError("Gemini image analysis is unavailable")
+        return self.gemini.create_image_completion(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            **options,
+        )
 
     @staticmethod
     def _gemini_enabled() -> bool:

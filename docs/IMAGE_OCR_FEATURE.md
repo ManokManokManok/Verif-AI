@@ -1,56 +1,57 @@
-# Image OCR Feature for Detection
+# Image Analysis Feature for Detection
 
 ## Overview
-Added simple image-to-text extraction feature that allows users to upload images (screenshots of scam messages, emails, etc.) and automatically extract text for scam detection analysis.
+Users can upload images (screenshots of scam messages, emails, or payment requests) and receive a Gemini-powered scam/fraud analysis in a new chatbot conversation.
 
 ## Implementation Details
 
 ### Technology Used
-- **Tesseract.js** - Client-side OCR (Optical Character Recognition) library
-- No backend changes required
-- Works entirely in the browser
+- **Gemini multimodal analysis** - The backend sends the image directly to Gemini
+- A fixed cybersecurity system prompt controls the analysis
+- Authenticated users receive a persisted new chat containing the image and response
 
 ### How It Works
 1. User clicks the "+" button in the Detection page
-2. Selects an image file (PNG, JPG, etc.)
-3. Tesseract.js extracts text from the image
-4. Extracted text is automatically populated into the textarea
-5. User can review/edit the text before clicking "Detect"
-6. The existing scam detection pipeline processes the text normally
+2. Selects an image file (PNG, JPG, GIF, or WebP)
+3. User may crop the image to the relevant area
+4. The user must apply a crop before the **Submit Image** button becomes available
+5. The cropped image is submitted without a user-written prompt to `/api/chat/image-analysis/`
+6. Gemini analyzes the image using the fixed scam/fraud analysis prompt
+7. The Detection page shows Gemini's report
 
 ### Features
 ✅ **Image Upload** - Click the "+" button to upload images  
-✅ **Live Preview** - See the uploaded image before OCR  
-✅ **Progress Tracking** - Visual progress bar during text extraction  
+✅ **Live Preview** - See and crop the uploaded image before analysis
+✅ **Analysis Status** - Clear status while Gemini evaluates the image
 ✅ **Validation** - File type and size validation (max 10MB)  
 ✅ **Error Handling** - Clear error messages for failed OCR or invalid files  
-✅ **Editable Text** - Review and edit extracted text before detection  
+✅ **Direct Image Analysis** - No OCR transcription or user prompt is required
 ✅ **Remove Image** - Option to remove image and start over  
 
 ### File Changes
 
-#### 1. Frontend Dependencies
-- Added `tesseract.js` package
+#### 1. Backend Endpoint
+- Added `POST /api/chat/image-analysis/`
+- Uses Gemini's multimodal API and persists the resulting chat for authenticated users
 
 #### 2. [`frontend/src/pages/Detection.jsx`](../frontend/src/pages/Detection.jsx)
 **New State Variables:**
 ```javascript
 const [selectedImage, setSelectedImage] = useState(null);
 const [imagePreview, setImagePreview] = useState(null);
-const [isExtractingText, setIsExtractingText] = useState(false);
-const [ocrProgress, setOcrProgress] = useState(0);
+const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
 const fileInputRef = useRef(null);
 ```
 
 **New Functions:**
 - `handleImageSelect()` - Handles image file selection and validation
-- `extractTextFromImage()` - Performs OCR using Tesseract.js
+- `handleCropAndAnalyze()` - Applies the required crop
 - `handlePlusButtonClick()` - Triggers file input dialog
 - `handleRemoveImage()` - Clears selected image
 - Updated `handleNewAnalysis()` - Resets image states
 
 **UI Updates:**
-- Image preview component with progress bar
+- Image preview and crop component
 - Updated placeholder text to mention image upload
 - Added disabled states during OCR extraction
 - Hidden file input element
@@ -70,23 +71,22 @@ const fileInputRef = useRef(null);
 
 ### For Users
 1. Go to the Detection page
-2. Click the **"+"** button (now shows ⏳ during extraction)
+2. Click the **"+"** button
 3. Select an image containing text (screenshot, photo of message, etc.)
-4. Wait for OCR to extract text (progress shown)
-5. Review the extracted text in the textarea
-6. Edit if needed
-7. Click "Detect" to analyze
+4. Click **Analyze Image**
+5. Review Gemini's report in the new chatbot conversation
 
 ### Supported Image Formats
 - PNG
 - JPG/JPEG
 - GIF
 - WebP
-- BMP
 
 ### Limitations
 - Maximum file size: **10MB**
-- Language: **English** (can be extended to other languages)
+- Gemini must be configured with `GEMINI_API_KEY` and enabled with `GEMINI_ENABLED`
+- Anonymous results are held only in the current session and are not persisted
+- Authenticated chat history stores a resized, compressed preview
 - Best results with:
   - Clear, high-resolution images
   - Good contrast between text and background
@@ -108,25 +108,20 @@ const fileInputRef = useRef(null);
 - Auto-rotation of tilted images
 
 ## Technical Notes
-- OCR happens client-side (no server load)
-- Original image is NOT sent to the server
-- Only extracted text goes through the detection API
-- Privacy-friendly: images stay in the browser
-- No additional backend infrastructure required
+- The original upload is sent to the backend and then to Gemini for multimodal analysis
+- The backend does not use the OCR pipeline for this feature
+- Gemini failures return service-unavailable; the text-only Gemma fallback is not used for images
 
 ## Performance
 - Small images (<1MB): ~2-5 seconds
 - Medium images (1-5MB): ~5-10 seconds  
 - Large images (5-10MB): ~10-20 seconds
 
-OCR speed depends on:
-- Image resolution
-- Amount of text
-- User's device performance
+Analysis time depends on image resolution, network latency, Gemini availability, and service load.
 
 ## Security Considerations
 - File type validation to prevent non-image uploads
 - File size limit to prevent memory issues
-- Client-side processing (images don't leave the user's device)
-- Same text validation as manual input
-- No image data stored or transmitted to backend
+- A fixed server-controlled prompt prevents user prompt injection through the request
+- Image content is treated as untrusted by the analysis prompt
+- Persisted previews are bounded to reduce database growth

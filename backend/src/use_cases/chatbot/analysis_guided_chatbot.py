@@ -85,7 +85,7 @@ class AnalysisGuidedChatbotUseCase:
         
         # Get the analysis result to include context
         analysis = self.analysis_repo.get_by_ref_id(analysis_ref_id)
-        if not analysis:
+        if not analysis or analysis.user_id != user_id:
             raise ValueError(f"Analysis {analysis_ref_id} not found")
         
         is_new = False
@@ -147,7 +147,7 @@ class AnalysisGuidedChatbotUseCase:
             raise ValueError("Conversation has no associated analysis")
         
         analysis = self.analysis_repo.get_by_ref_id(conversation.analysis_ref_id)
-        if not analysis:
+        if not analysis or analysis.user_id != user_id:
             raise ValueError(f"Analysis {conversation.analysis_ref_id} not found")
         
         # Add user message to conversation
@@ -157,7 +157,8 @@ class AnalysisGuidedChatbotUseCase:
         analysis_context = self._format_analysis_for_llm(analysis)
         
         # Build message history for LLM
-        message_history = conversation.get_message_history_for_llm()
+        # Keep the active conversation context bounded as it grows.
+        message_history = conversation.get_message_history_for_llm()[-12:]
         
         # Generate response with analysis context
         llm_messages = [
@@ -220,7 +221,7 @@ class AnalysisGuidedChatbotUseCase:
         analysis_context = None
         if conversation.analysis_ref_id:
             analysis = self.analysis_repo.get_by_ref_id(conversation.analysis_ref_id)
-            if analysis:
+            if analysis and analysis.user_id == user_id:
                 analysis_context = self._format_analysis_for_context(analysis)
         
         return {
@@ -248,16 +249,19 @@ class AnalysisGuidedChatbotUseCase:
             context_parts.append(f"Type Confidence: {analysis.type_confidence:.1f}%")
         
         if analysis.summary:
-            context_parts.append(f"\nSummary: {analysis.summary}")
+            context_parts.append(f"\nSummary: {analysis.summary[:1200]}")
+
+        if analysis.details:
+            context_parts.append(f"\nEvidence: {analysis.details[:1600]}")
         
         if analysis.key_markers:
             context_parts.append("\nKey Linguistic Markers Detected:")
-            for marker in analysis.key_markers:
+            for marker in analysis.key_markers[:5]:
                 context_parts.append(f"  • {marker}")
         
         if analysis.message:
             context_parts.append(f"\nOriginal Message:\n{'-' * 40}")
-            context_parts.append(analysis.message)
+            context_parts.append(analysis.message[:2000])
             context_parts.append('-' * 40)
         
         context_parts.append("\nUse this analysis to provide specific, actionable guidance to the user.")
@@ -275,6 +279,8 @@ class AnalysisGuidedChatbotUseCase:
             "scam_type": analysis.scam_type if analysis.is_scam else None,
             "type_confidence": analysis.type_confidence if analysis.is_scam else None,
             "summary": analysis.summary,
+            "details": analysis.details,
+            "image_attachment": analysis.image_attachment,
             "key_markers": analysis.key_markers,
             "message": analysis.message
         }
