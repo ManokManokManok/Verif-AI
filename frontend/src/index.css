@@ -2802,6 +2802,18 @@ button {
   background: rgba(51, 65, 85, 0.95);
 }
 
+.detect__cropBtn--secondary {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #bfdbfe;
+}
+
+.detect__cropBtn--secondary:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.35);
+  border-color: rgba(59, 130, 246, 0.6);
+  color: #ffffff;
+}
+
 .detect__cropBtn--primary {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: #fff;
@@ -2811,6 +2823,32 @@ button {
 .detect__cropBtn--primary:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 10px 24px rgba(59, 130, 246, 0.45);
+}
+
+.detect__imagePreview-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  gap: 12px;
+}
+
+.detect__imageSubmitStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.detect__imageSubmitIcon {
+  color: #60a5fa;
+}
+
+.detect__imagePreview-submitBtn {
+  min-width: 130px;
 }
 
 .detect__plus:disabled {

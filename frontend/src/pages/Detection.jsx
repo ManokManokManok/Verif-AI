@@ -240,25 +240,27 @@ function Detection() {
     requestAnimationFrame(syncTextareaHeight);
   };
 
-  const handleDetect = async () => {
-    if ((!text.trim() && !selectedImage) || (selectedImage && !hasAppliedCrop) || isDetecting || isAnalyzingImage) return;
+  const handleDetect = async (overrideImage = null) => {
+    const isBlob = overrideImage instanceof Blob || overrideImage instanceof File;
+    const imageToAnalyze = isBlob ? overrideImage : selectedImage;
+    if ((!text.trim() && !imageToAnalyze) || isDetecting || isAnalyzingImage) return;
 
     // Client-side validation
-    const validation = selectedImage ? { valid: true } : validateMessage(text);
+    const validation = imageToAnalyze ? { valid: true } : validateMessage(text);
     if (!validation.valid) {
       setValidationError(validation.error);
       return;
     }
 
     setIsDetecting(true);
-    setIsAnalyzingImage(Boolean(selectedImage));
+    setIsAnalyzingImage(Boolean(imageToAnalyze));
     setDetectionResult(null);
     setValidationError(null);
     setRateLimitError(null);
 
     try {
-      const result = selectedImage
-        ? await analyzeImage(selectedImage, accessToken)
+      const result = imageToAnalyze
+        ? await analyzeImage(imageToAnalyze, accessToken)
         : await detectScamRequest(text);
       console.log('[DETECTION RESULT]', result);
       setDetectionResult(result);
@@ -388,7 +390,7 @@ function Detection() {
     });
   };
 
-  const handleCropAndAnalyze = async () => {
+  const handleCropAndApply = async () => {
     if (!selectedImage) return;
 
     try {
@@ -399,6 +401,27 @@ function Detection() {
         setSelectedImage(croppedBlob);
         setImagePreview(URL.createObjectURL(croppedBlob));
       }
+    } catch (error) {
+      console.error('[CROP ERROR]', error);
+      setValidationError(error.message || 'Failed to analyze image. Please try again.');
+      setShowCropModal(false);
+      setIsAnalyzingImage(false);
+    }
+  };
+
+  const handleCropAndSubmit = async () => {
+    if (!selectedImage) return;
+
+    try {
+      const croppedBlob = await getCroppedImageBlob();
+      setShowCropModal(false);
+      setHasAppliedCrop(true);
+      const finalImage = (croppedBlob && croppedBlob !== selectedImage) ? croppedBlob : selectedImage;
+      if (croppedBlob && croppedBlob !== selectedImage) {
+        setSelectedImage(croppedBlob);
+        setImagePreview(URL.createObjectURL(croppedBlob));
+      }
+      await handleDetect(finalImage);
     } catch (error) {
       console.error('[CROP ERROR]', error);
       setValidationError(error.message || 'Failed to analyze image. Please try again.');
@@ -769,7 +792,19 @@ function Detection() {
                             src={imagePreview}
                             alt="Crop selection"
                             className="detect__cropImage"
-                            onLoad={(event) => setCropImageElement(event.currentTarget)}
+                            onLoad={(event) => {
+                              setCropImageElement(event.currentTarget);
+                              const { width, height } = event.currentTarget;
+                              if (width && height && !completedCrop) {
+                                setCompletedCrop({
+                                  unit: 'px',
+                                  x: Math.round(width * 0.05),
+                                  y: Math.round(height * 0.05),
+                                  width: Math.round(width * 0.9),
+                                  height: Math.round(height * 0.9),
+                                });
+                              }
+                            }}
                           />
                         </ReactCrop>
                       </div>
@@ -778,30 +813,46 @@ function Detection() {
                           type="button"
                           className="detect__cropBtn detect__cropBtn--ghost"
                           onClick={() => setShowCropModal(false)}
-                          disabled={isAnalyzingImage}
+                          disabled={isAnalyzingImage || isDetecting}
                         >
                           Cancel
                         </button>
                         <button
                           type="button"
-                          className="detect__cropBtn detect__cropBtn--primary"
-                          onClick={handleCropAndAnalyze}
-                          disabled={isAnalyzingImage || hasAppliedCrop}
+                          className="detect__cropBtn detect__cropBtn--secondary"
+                          onClick={handleCropAndApply}
+                          disabled={isAnalyzingImage || isDetecting}
                         >
-                          {isAnalyzingImage ? 'Submitting...' : hasAppliedCrop ? 'Apply Crop Again' : 'Apply Crop'}
+                          Apply Crop
                         </button>
                         <button
                           type="button"
                           className="detect__cropBtn detect__cropBtn--primary"
-                          onClick={handleDetect}
-                          disabled={!hasAppliedCrop || isAnalyzingImage}
+                          onClick={handleCropAndSubmit}
+                          disabled={isAnalyzingImage || isDetecting}
                         >
-                          {isAnalyzingImage ? 'Submitting...' : 'Submit Image'}
+                          {isAnalyzingImage || isDetecting ? 'Submitting...' : 'Submit Image'}
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <img src={imagePreview} alt="Selected for scam analysis" className="detect__imagePreview-img" />
+                    <>
+                      <img src={imagePreview} alt="Selected for scam analysis" className="detect__imagePreview-img" />
+                      <div className="detect__imagePreview-footer">
+                        <div className="detect__imageSubmitStatus">
+                          <span className="detect__imageSubmitIcon" aria-hidden="true">✦</span>
+                          <span>{hasAppliedCrop ? 'Cropped image ready for analysis' : 'Image ready for analysis'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="detect__cropBtn detect__cropBtn--primary detect__imagePreview-submitBtn"
+                          onClick={() => handleDetect()}
+                          disabled={isAnalyzingImage || isDetecting}
+                        >
+                          {isAnalyzingImage || isDetecting ? 'Submitting...' : 'Submit Image'}
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {isAnalyzingImage && (
