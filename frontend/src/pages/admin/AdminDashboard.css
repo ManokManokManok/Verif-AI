@@ -17,6 +17,8 @@
   flex: 1;
   margin-left: 72px;
   transition: margin-left 0.3s ease-in-out;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .admin-sidebar--open ~ .admin-dashboard__main {
@@ -58,16 +60,18 @@
    DASHBOARD CONTAINER
    ============================================ */
 .admin-dashboard__container {
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1.75rem 2rem;
 }
 
 .admin-dashboard__header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--admin-border-subtle, rgba(255, 255, 255, 0.05));
 }
 
 .admin-dashboard__title-section {
@@ -75,20 +79,21 @@
 }
 
 .admin-dashboard__title {
-  font-size: 2rem;
+  font-size: 1.625rem;
   font-weight: 700;
   color: var(--admin-text, #f9fafb);
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.25rem;
+  letter-spacing: -0.02em;
 }
 
 .admin-dashboard__subtitle {
-  font-size: 0.875rem;
+  font-size: 0.84375rem;
   color: var(--admin-text-muted, #9ca3af);
   margin: 0;
 }
 
 .admin-dashboard__content {
-  padding-top: 1rem;
+  padding-top: 0.5rem;
 }
 
 /* Tab Content Section Headers */
@@ -100,28 +105,33 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.875rem;
 }
 
 .admin-section__title {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 600;
   color: var(--admin-text, #f9fafb);
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .admin-section__actions {
   display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
+  gap: 0.625rem;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 /* Card Layout */
 .admin-card {
-  background: var(--admin-bg-card, #1f2937);
-  border: 1px solid var(--admin-border, #374151);
-  border-radius: var(--admin-radius, 12px);
-  padding: 1.5rem;
+  background: var(--admin-bg-card, #111827);
+  border: 1px solid var(--admin-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--admin-radius, 10px);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--admin-shadow-sm, 0 1px 2px 0 rgba(0, 0, 0, 0.2));
 }
 
 .admin-card__header {
@@ -129,15 +139,16 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--admin-border, #374151);
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--admin-border-subtle, rgba(255, 255, 255, 0.05));
 }
 
 .admin-card__title {
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--admin-text, #f9fafb);
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 /* Buttons */

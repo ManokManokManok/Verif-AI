@@ -10,40 +10,50 @@
   --admin-primary: #3b82f6;
   --admin-primary-light: #60a5fa;
   --admin-primary-dark: #2563eb;
+  --admin-primary-muted: rgba(59, 130, 246, 0.12);
+  --admin-primary-border: rgba(59, 130, 246, 0.28);
   
   /* Status colors */
-  --admin-success: #22c55e;
+  --admin-success: #10b981;
+  --admin-success-muted: rgba(16, 185, 129, 0.12);
   --admin-warning: #f59e0b;
+  --admin-warning-muted: rgba(245, 158, 11, 0.12);
   --admin-danger: #ef4444;
-  --admin-info: #3b82f6;
+  --admin-danger-muted: rgba(239, 68, 68, 0.12);
+  --admin-info: #0ea5e9;
+  --admin-info-muted: rgba(14, 165, 233, 0.12);
   
   /* Backgrounds - matching user-side dark theme */
-  --admin-bg-dark: #050b16;
-  --admin-bg-card: #1f2937;
-  --admin-bg-hover: #374151;
-  --admin-bg-secondary: #111827;
+  --admin-bg-dark: #070c18;
+  --admin-bg-card: #111827;
+  --admin-bg-elevated: #161e2e;
+  --admin-bg-hover: #1f2937;
+  --admin-bg-active: #283548;
+  --admin-bg-secondary: #0d1322;
   
   /* Borders */
-  --admin-border: #374151;
-  --admin-border-light: #4b5563;
+  --admin-border: rgba(255, 255, 255, 0.08);
+  --admin-border-light: rgba(255, 255, 255, 0.14);
+  --admin-border-subtle: rgba(255, 255, 255, 0.05);
   
-  /* Text colors - matching user-side palette */
+  /* Text colors */
   --admin-text: #f9fafb;
-  --admin-text-secondary: #e5e7eb;
+  --admin-text-secondary: #d1d5db;
   --admin-text-muted: #9ca3af;
   --admin-text-dim: #6b7280;
   
   /* Effects */
-  --admin-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --admin-shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.28);
-  --admin-shadow-glow: 0 0 0 1px rgba(96, 165, 250, 0.25), 0 16px 36px rgba(37, 99, 235, 0.25);
-  --admin-radius: 12px;
-  --admin-radius-sm: 8px;
-  --admin-radius-lg: 16px;
-  --admin-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 55%, #1e40af 100%);
-  --admin-glass: linear-gradient(165deg, rgba(17, 24, 39, 0.86) 0%, rgba(15, 23, 42, 0.76) 100%);
+  --admin-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --admin-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --admin-shadow-lg: 0 12px 28px -4px rgba(0, 0, 0, 0.5), 0 4px 8px -2px rgba(0, 0, 0, 0.3);
+  --admin-focus-ring: 0 0 0 2px var(--admin-bg-dark), 0 0 0 4px rgba(59, 130, 246, 0.5);
   
+  /* Border Radii */
+  --admin-radius-sm: 6px;
+  --admin-radius: 10px;
+  --admin-radius-lg: 14px;
+
   /* Transitions */
-  --admin-transition: all 0.2s ease;
-  --admin-transition-smooth: all 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  --admin-transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --admin-transition-smooth: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
