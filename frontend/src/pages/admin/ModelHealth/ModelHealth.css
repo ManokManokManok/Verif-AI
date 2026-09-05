@@ -27,49 +27,71 @@
   }
 }
 
+.model-health__gauges {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 1100px) {
+  .model-health__gauges {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .model-health__gauges {
+    grid-template-columns: 1fr;
+  }
+}
+
 .model-health__gauge-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
-  padding: 2rem;
+  gap: 1.25rem;
+  padding: 1.5rem;
 }
 
 .model-health__gauge-details {
   display: flex;
-  gap: 2rem;
+  gap: 1.5rem;
   width: 100%;
-  justify-content: center;
+  justify-content: space-around;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--admin-border-subtle, rgba(255, 255, 255, 0.05));
 }
 
 .model-health__detail {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .model-health__detail-label {
-  font-size: 0.75rem;
-  color: var(--admin-text-muted);
+  font-size: 0.6875rem;
+  color: var(--admin-text-muted, #9ca3af);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  font-weight: 500;
 }
 
 .model-health__detail-value {
   font-size: 0.875rem;
-  color: var(--admin-text);
-  font-weight: 500;
+  color: var(--admin-text, #f9fafb);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .model-health__stats {
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
 }
 
 .model-health__system-info {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  gap: 0.875rem;
   margin-top: 1rem;
 }
 
@@ -82,45 +104,46 @@
 .model-health__info-row {
   display: flex;
   justify-content: space-between;
-  padding: 0.75rem;
-  background: var(--admin-bg-hover);
-  border-radius: var(--admin-radius-sm);
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--admin-bg-elevated, #161e2e);
+  border: 1px solid var(--admin-border-subtle, rgba(255, 255, 255, 0.05));
+  border-radius: var(--admin-radius-sm, 6px);
 }
 
 .model-health__info-label {
-  color: var(--admin-text-muted);
-  font-size: 0.875rem;
-}
-
-.model-health__info-value {
-  color: var(--admin-text);
-  font-size: 0.875rem;
+  color: var(--admin-text-muted, #9ca3af);
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
-.admin-text-muted {
-  color: var(--admin-text-muted);
+.model-health__info-value {
+  color: var(--admin-text, #f9fafb);
+  font-size: 0.84375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ── Performance Banner ── */
+/* Performance Banner */
 .model-health__perf-banner {
   display: flex;
   align-items: center;
-  background: var(--admin-bg-card);
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius);
+  background: var(--admin-bg-card, #111827);
+  border: 1px solid var(--admin-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--admin-radius, 10px);
   padding: 1rem 1.5rem;
   flex-wrap: wrap;
   gap: 0.5rem;
+  box-shadow: var(--admin-shadow-sm, 0 1px 2px 0 rgba(0, 0, 0, 0.2));
 }
 
 .model-health__perf-item {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.25rem;
   flex: 1;
   min-width: 110px;
-  padding: 0.25rem 1.25rem;
+  padding: 0.25rem 1rem;
 }
 
 .model-health__perf-item:first-child {
@@ -128,29 +151,33 @@
 }
 
 .model-health__perf-label {
-  font-size: 0.7rem;
-  color: var(--admin-text-muted);
+  font-size: 0.6875rem;
+  color: var(--admin-text-muted, #9ca3af);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  font-weight: 600;
 }
 
 .model-health__perf-value {
-  font-size: 1.375rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  color: var(--admin-text);
+  color: var(--admin-text, #f9fafb);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 .model-health__perf-value--name {
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: var(--admin-primary);
+  color: var(--admin-primary-light, #60a5fa);
+  font-family: monospace;
 }
 
 .model-health__perf-divider {
   width: 1px;
-  height: 44px;
-  background: var(--admin-border);
+  height: 38px;
+  background: var(--admin-border, rgba(255, 255, 255, 0.08));
   flex-shrink: 0;
   align-self: center;
 }
@@ -168,25 +195,27 @@
   }
 }
 
-/* ── SystemInfoCard status badges ── */
+/* SystemInfoCard status badges */
 .model-health__info-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
+  gap: 0.35rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
 }
 
 .model-health__info-badge--connected {
-  color: var(--admin-success);
-  background: rgba(34, 197, 94, 0.12);
+  color: var(--admin-success, #10b981);
+  background: var(--admin-success-muted, rgba(16, 185, 129, 0.12));
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .model-health__info-badge--disconnected {
-  color: var(--admin-danger);
-  background: rgba(239, 68, 68, 0.12);
+  color: var(--admin-danger, #ef4444);
+  background: var(--admin-danger-muted, rgba(239, 68, 68, 0.12));
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .model-health__info-dot {
@@ -197,12 +226,7 @@
   flex-shrink: 0;
 }
 
-.model-health__info-value {
-  color: var(--admin-text);
-  font-size: 0.875rem;
-  font-weight: 500;
+.model-health__info-unknown {
+  color: var(--admin-text-dim, #6b7280);
 }
 
-.model-health__info-unknown {
-  color: var(--admin-text-dim);
-}
