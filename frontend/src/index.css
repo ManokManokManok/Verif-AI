@@ -2763,6 +2763,12 @@ button {
   margin-top: 14px;
 }
 
+.detect__imagePreview-submitRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
 @media (max-width: 768px) {
   .detect__cropImage {
     max-height: 40vh;

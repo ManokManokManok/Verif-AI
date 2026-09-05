@@ -81,6 +81,7 @@ def history_detail(request: Request, analysis_id: str) -> Response:
             'type_confidence': result.type_confidence,
             'key_markers': result.key_markers,
             'message': result.message,
+            'image_attachment': result.image_attachment,
             'needs_review': result.needs_review,
             'review_reason': result.review_reason,
         }, status=status.HTTP_200_OK)
@@ -188,6 +189,7 @@ def history(request: Request) -> Response:
                 "type_confidence": result.type_confidence,
                 "key_markers": result.key_markers,
                 "message": result.message,
+                "image_attachment": result.image_attachment,
                 "needs_review": result.needs_review,
                 "review_reason": result.review_reason,
             })
