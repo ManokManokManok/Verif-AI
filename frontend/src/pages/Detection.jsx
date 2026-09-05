@@ -790,18 +790,23 @@ function Detection() {
                         >
                           {isAnalyzingImage ? 'Submitting...' : hasAppliedCrop ? 'Apply Crop Again' : 'Apply Crop'}
                         </button>
-                        <button
-                          type="button"
-                          className="detect__cropBtn detect__cropBtn--primary"
-                          onClick={handleDetect}
-                          disabled={!hasAppliedCrop || isAnalyzingImage}
-                        >
-                          {isAnalyzingImage ? 'Submitting...' : 'Submit Image'}
-                        </button>
                       </div>
                     </div>
                   ) : (
                     <img src={imagePreview} alt="Selected for scam analysis" className="detect__imagePreview-img" />
+                  )}
+
+                  {!showCropModal && (
+                    <div className="detect__imagePreview-submitRow">
+                      <button
+                        type="button"
+                        className="detect__cropBtn detect__cropBtn--primary"
+                        onClick={handleDetect}
+                        disabled={!hasAppliedCrop || isAnalyzingImage}
+                      >
+                        {isAnalyzingImage ? 'Submitting...' : 'Submit Image'}
+                      </button>
+                    </div>
                   )}
 
                   {isAnalyzingImage && (
