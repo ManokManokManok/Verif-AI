@@ -17,6 +17,22 @@ const ANALYSIS_STEPS = [
   'Generating summary...',
 ];
 
+function getReviewExplanation(reviewReason) {
+  if (reviewReason?.startsWith('Low classification confidence')) {
+    return 'The model detected likely scam indicators, but was less confident about the specific scam type.';
+  }
+
+  if (reviewReason?.startsWith('High uncertainty')) {
+    return 'The scam and legitimate likelihood scores were too close to make a reliable decision.';
+  }
+
+  if (reviewReason?.startsWith('Low confidence')) {
+    return 'The model was not confident enough in the overall scam likelihood.';
+  }
+
+  return 'The model was not confident enough in one or more parts of this analysis.';
+}
+
 function Detection() {
   const navigate = useNavigate();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
@@ -616,6 +632,11 @@ function Detection() {
             <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>
               About us
             </button>
+            {isLoggedIn && (
+              <button className="nav__link nav__btn" type="button" onClick={() => navigate('/journey')}>
+                Your Verif-AI Journey
+              </button>
+            )}
             <button className="nav__link nav__btn nav__btn--active" type="button">
               Detection
             </button>
@@ -812,7 +833,7 @@ function Detection() {
                   {isAnalyzingImage && (
                     <div className="detect__imagePreview-progress">
                       <p className="detect__imagePreview-progressText">
-                        Gemini is analyzing the image...
+                        Verif-AI is analyzing the image...
                       </p>
                     </div>
                   )}
@@ -935,8 +956,11 @@ function Detection() {
                       <div className="detect__reviewContent">
                         <h3 className="detect__reviewTitle">This result is under review</h3>
                         <p className="detect__reviewText">
-                          Our AI model wasn&apos;t fully confident about this analysis. We&apos;ve flagged it for human review to ensure accuracy.
+                          {getReviewExplanation(detectionResult.review_reason)} We&apos;ve flagged it for human review to ensure accuracy.
                         </p>
+                        {detectionResult.review_reason && (
+                          <p className="detect__reviewReason">Reason: {detectionResult.review_reason}</p>
+                        )}
                         <p className="detect__reviewNote">
                           Verif-AI is constantly learning and improving. Your patience helps us achieve even more accurate scam detection for everyone.
                         </p>

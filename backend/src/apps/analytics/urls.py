@@ -15,6 +15,8 @@ from ...interfaces.rest.analytics_views import (
     get_referrer_stats,
     get_recent_visits,
     get_analytics_summary,
+    get_user_safety_summary,
+    get_global_safety_summary,
 )
 
 app_name = 'analytics'
@@ -43,4 +45,10 @@ urlpatterns = [
     
     # Comprehensive summary
     path('summary/', get_analytics_summary, name='analytics_summary'),
+
+    # Personal safety overview
+    path('my-summary/', get_user_safety_summary, name='my_safety_summary'),
+
+    # Platform-wide scam trend overview
+    path('global-summary/', get_global_safety_summary, name='global_safety_summary'),
 ]

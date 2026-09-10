@@ -196,6 +196,123 @@
   overflow-y: auto;
   padding-right: 8px;
 }
+
+.settings__analytics-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.settings__analytics-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings__analytics-pill {
+  flex: 1;
+  min-width: 140px;
+  background: var(--theme-bg-soft);
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings__analytics-pill--primary {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.settings__analytics-pill--warning {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.settings__analytics-label {
+  font-size: 0.78rem;
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings__analytics-pill strong {
+  font-size: 1.1rem;
+  color: var(--theme-text);
+}
+
+.settings__summary-text {
+  margin: 0;
+  color: var(--theme-text);
+  line-height: 1.6;
+}
+
+.settings__mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings__mini-stat {
+  background: var(--theme-bg-soft);
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.settings__mini-stat span {
+  font-size: 0.78rem;
+  color: var(--theme-text-muted);
+}
+
+.settings__mini-stat strong {
+  font-size: 0.98rem;
+  color: var(--theme-text);
+}
+
+.settings__trend-box {
+  background: var(--theme-bg-soft);
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.settings__trend-box h3 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  color: var(--theme-text);
+}
+
+.settings__trend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings__trend-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.95rem;
+  color: var(--theme-text);
+}
+
+.settings__trend-name {
+  font-weight: 600;
+}
+
+.settings__trend-count {
+  color: var(--theme-text-muted);
+  font-size: 0.85rem;
+}
 .settings__card--reports::-webkit-scrollbar {
   width: 6px;
 }

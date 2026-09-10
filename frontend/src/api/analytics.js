@@ -7,6 +7,14 @@
 
 import apiClient from './client';
 
+export async function getUserSafetySummary() {
+  return apiClient.get('/analytics/my-summary/');
+}
+
+export async function getGlobalSafetySummary() {
+  return apiClient.get('/analytics/global-summary/');
+}
+
 function formatDateTime(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -276,6 +284,8 @@ export const exportWebsiteAnalytics = ({
 
 // Export all functions as default object as well
 export default {
+  getUserSafetySummary,
+  getGlobalSafetySummary,
   getVisitStatistics,
   getPageAnalytics,
   getDeviceBreakdown,

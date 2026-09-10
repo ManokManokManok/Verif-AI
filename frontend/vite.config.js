@@ -3,9 +3,13 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    force: true,
+  },
   server: {
     open: true,
     headers: {
+      'Cache-Control': 'no-store',
       // Clickjacking protection
       'X-Frame-Options': 'DENY',
       // MIME-sniffing protection

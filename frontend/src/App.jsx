@@ -10,6 +10,7 @@ import VerifyEmail from './pages/VerifyEmail.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Settings from './pages/Settings.jsx';
+import Analytics from './pages/Analytics.jsx';
 import { AdminDashboard } from './pages/admin';
 import TermsAndConditions from './pages/TermsAndConditions.jsx';
 import SessionExpiredModal from './components/auth/SessionExpiredModal';
@@ -96,6 +97,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/journey"
+          element={
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           }
         />

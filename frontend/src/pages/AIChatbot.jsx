@@ -400,6 +400,11 @@ function AIChatbot() {
             >
               About us
             </button>
+            {isLoggedIn && (
+              <button className="nav__link nav__btn" type="button" onClick={() => navigate('/journey')}>
+                Your Verif-AI Journey
+              </button>
+            )}
             <button
               className="nav__link nav__btn"
               type="button"
@@ -676,9 +681,21 @@ function AIChatbot() {
       </div>
 
       {isStartingDetection && (
-        <div className="chatbot__navigation-loading" role="status" aria-live="polite">
-          <div className="chatbot__navigation-spinner" />
-          <span>Opening Detection</span>
+        <div className="detect__navigation-loading" role="status" aria-live="polite">
+          <div className="detect__navigation-card">
+            <div className="detect__navigation-mark" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="detect__navigation-copy">
+              <strong>Opening Detection</strong>
+              <span>Loading the scam checker...</span>
+            </div>
+            <div className="detect__navigation-progress" aria-hidden="true">
+              <span />
+            </div>
+          </div>
         </div>
       )}
 
