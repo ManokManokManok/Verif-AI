@@ -39,3 +39,6 @@ coverage/
 logs/
 *.log
 
+/frontend/node_modules/
+/frontend/dist/
+

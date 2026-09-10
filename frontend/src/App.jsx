@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import Landing from './pages/Landing.jsx';
@@ -10,9 +10,12 @@ import VerifyEmail from './pages/VerifyEmail.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Settings from './pages/Settings.jsx';
+import Analytics from './pages/Analytics.jsx';
 import { AdminDashboard } from './pages/admin';
 import TermsAndConditions from './pages/TermsAndConditions.jsx';
 import SessionExpiredModal from './components/auth/SessionExpiredModal';
+import MobileHeader from './components/MobileHeader';
+import { useEffect, useState } from 'react';
 
 /**
  * Protected Route Component
@@ -52,9 +55,32 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 }
 
 function App() {
+  const location = useLocation();
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(max-width: 600px)').matches
+      : false
+  );
+
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia('(max-width: 600px)');
+    const handler = (e) => setIsMobile(e.matches);
+    if (mq.addEventListener) mq.addEventListener('change', handler);
+    else mq.addListener(handler);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', handler);
+      else mq.removeListener(handler);
+    };
+  }, []);
+
+  const hideMobileHeaderOnRoutes = new Set(['/login', '/signup', '/verify-email']);
+  const showMobileHeader = isMobile && !hideMobileHeaderOnRoutes.has(location.pathname);
+
   return (
     <ThemeProvider>
       <AuthProvider>
+        {showMobileHeader && <MobileHeader />}
         <SessionExpiredModal />
         <Routes>
         <Route path="/" element={<Landing />} />
@@ -71,6 +97,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/journey"
+          element={
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           }
         />

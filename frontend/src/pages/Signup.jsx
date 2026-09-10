@@ -225,7 +225,7 @@ function Signup() {
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--signup page-enter">
+    <div className="auth auth--signup auth--mobile page-enter">
       {/* Theme Toggle Button */}
       <button 
         className="auth__theme-toggle" 
