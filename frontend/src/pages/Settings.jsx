@@ -46,6 +46,7 @@ export default function Settings() {
         }
       };
       fetchReports();
+
     }
   }, [isLoggedIn]);
 
@@ -116,7 +117,6 @@ export default function Settings() {
   if (!user) return null;
 
   const usernameChanged = newUsername.trim() !== (user?.username || '');
-
   return (
     <div className="settings page-enter">
       <header className="settings__header">

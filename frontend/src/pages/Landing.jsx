@@ -166,6 +166,7 @@ function Landing() {
         <div className="brand">VerifAI</div>
         <nav className="nav__links">
           <button className="nav__link nav__btn" type="button">About us</button>
+          {isLoggedIn && <button className="nav__link nav__btn" type="button" onClick={() => navigate('/journey')}>Your Verif-AI Journey</button>}
           <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
           <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
         </nav>
