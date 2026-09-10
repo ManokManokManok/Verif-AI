@@ -7,6 +7,7 @@ Provides access to visit statistics, page analytics, and traffic patterns.
 
 import json
 import logging
+from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Optional, Dict, Any
@@ -23,6 +24,138 @@ from ...infrastructure.middleware.analytics_repository import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_percent(part: float, total: float) -> float:
+    if not total:
+        return 0.0
+    return round((part / total) * 100, 1)
+
+
+def _extract_user_id_from_request(request: HttpRequest) -> Optional[str]:
+    user = extract_user_from_request(request)
+    if not user:
+        return None
+    return str(user.get('user_id') or user.get('id') or user.get('sub'))
+
+
+def _get_analysis_collection():
+    from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
+    client = get_mongo_client()
+    db_name = get_database_name()
+    return client[db_name]['analysis_results']
+
+
+def _build_trend_points(docs):
+    buckets = defaultdict(int)
+    for doc in docs:
+        created_at = doc.get('created_at')
+        if not created_at:
+            continue
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            except ValueError:
+                continue
+        month_key = created_at.strftime('%Y-%m')
+        buckets[month_key] += 1
+    ordered = [
+        {'label': label, 'count': count}
+        for label, count in sorted(buckets.items())
+    ]
+    return ordered[-6:]
+
+
+def _build_top_types(docs, limit: int = 4):
+    counts = defaultdict(int)
+    scam_docs = [doc for doc in docs if doc.get('is_scam') and (doc.get('scam_type') or '').lower() != 'not scam']
+    for doc in scam_docs:
+        scam_type = doc.get('scam_type') or 'Unknown'
+        if scam_type:
+            counts[scam_type] += 1
+    ranked = [
+        {'type': name, 'count': count, 'share': _safe_percent(count, len(scam_docs) or 1)}
+        for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    return ranked[:limit]
+
+
+def _build_scam_trend_points(docs):
+    """Count only confirmed scam analyses by month for the community chart."""
+    scam_docs = [doc for doc in docs if doc.get('is_scam') and (doc.get('scam_type') or '').lower() != 'not scam']
+    return _build_trend_points(scam_docs)
+
+
+def _build_global_trend_insight(docs):
+    """Describe a meaningful month-over-month change without guessing from sparse data."""
+    now = datetime.utcnow()
+    current_key = now.strftime('%Y-%m')
+    previous_month = (now.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
+    current_counts = defaultdict(int)
+    previous_counts = defaultdict(int)
+
+    for doc in docs:
+        if not doc.get('is_scam') or (doc.get('scam_type') or '').lower() == 'not scam':
+            continue
+        created_at = doc.get('created_at')
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00')).replace(tzinfo=None)
+            except ValueError:
+                continue
+        if not created_at:
+            continue
+        scam_type = doc.get('scam_type') or 'Unknown'
+        if created_at.strftime('%Y-%m') == current_key:
+            current_counts[scam_type] += 1
+        elif created_at.strftime('%Y-%m') == previous_month:
+            previous_counts[scam_type] += 1
+
+    changes = []
+    for scam_type, current_count in current_counts.items():
+        previous_count = previous_counts.get(scam_type, 0)
+        if current_count > previous_count and current_count >= 2:
+            increase = 100 if previous_count == 0 else round(((current_count - previous_count) / previous_count) * 100)
+            changes.append((increase, scam_type, current_count, previous_count))
+
+    if not changes:
+        return None
+
+    increase, scam_type, current_count, previous_count = max(changes)
+    if previous_count == 0:
+        return f'{scam_type} has appeared {current_count} times this month and was not seen last month.'
+    return f'{scam_type} checks increased by {increase}% this month compared with last month.'
+
+
+def _build_seasonal_insight():
+    month = datetime.utcnow().month
+    seasonal_messages = {
+        11: 'Holiday shopping and delivery scams often increase this time of year. Be careful with urgent payment links, fake discounts, and delivery messages.',
+        12: 'Holiday shopping, delivery, prize, and charity scams often increase this time of year. Be careful with urgent payment links and surprising requests.',
+        1: 'Be careful with messages offering quick financial opportunities or asking for urgent payments after the holidays.',
+        4: 'Tax and government impersonation scams often become more common around tax deadlines. Verify requests through official websites.',
+    }
+    return seasonal_messages.get(month)
+
+
+def _user_risk_summary_text(high_risk_count: int, recent_high_risk: int, total_checks: int):
+    if total_checks == 0:
+        return 'You have not checked any messages yet. Try a message to see your safety summary.'
+    if recent_high_risk >= max(2, total_checks * 0.4):
+        return 'You are seeing a lot of high-risk messages lately, so it is a good idea to stay extra careful.'
+    if high_risk_count >= max(1, total_checks * 0.25):
+        return 'Your checks show a moderate risk pattern. Please pause before acting on urgent or unexpected requests.'
+    return 'Your recent checks look fairly safe overall, but it is still wise to be cautious with urgent payment or prize messages.'
+
+
+def _global_risk_summary_text(global_high_risk: int, global_total: int):
+    if global_total == 0:
+        return 'There are not enough checks yet to show a platform trend.'
+    if global_high_risk / global_total >= 0.5:
+        return 'A large share of checks are coming back as high-risk right now. Users should stay alert.'
+    if global_high_risk / global_total >= 0.3:
+        return 'The overall pattern is moderately risky. Urgent payment and impersonation scams are showing up often.'
+    return 'The platform is mostly seeing lower-risk checks overall, but fraud patterns still appear in a few scam categories.'
 
 
 def get_jwt_service():
@@ -68,6 +201,137 @@ def require_admin(view_func):
         request.user_info = user
         return view_func(request, *args, **kwargs)
     return wrapper
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@rate_limit('api_read')
+def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
+    """Provide a simple safety overview for the logged-in user."""
+    user_id = _extract_user_id_from_request(request)
+    if not user_id:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    collection = _get_analysis_collection()
+    docs = list(collection.find({
+        'user_id': user_id,
+        'user_deleted': {'$ne': True},
+    }).sort('created_at', -1))
+
+    if not docs:
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'total_checks': 0,
+                'high_risk_count': 0,
+                'recent_high_risk_count': 0,
+                'most_common_type': None,
+                'risk_level': 'No data yet',
+                'summary': 'You have not checked any messages yet. Try a message to see your safety summary.',
+                'trend': [],
+                'top_types': [],
+            }
+        })
+
+    high_risk_count = 0
+    recent_high_risk_count = 0
+    scam_total = 0
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    for doc in docs:
+        created_at = doc.get('created_at')
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            except ValueError:
+                created_at = None
+        if doc.get('is_scam'):
+            scam_total += 1
+        score = doc.get('scam_score')
+        if isinstance(score, (int, float)) and doc.get('is_scam') and score >= 70:
+            high_risk_count += 1
+        if created_at and created_at >= thirty_days_ago and doc.get('is_scam') and isinstance(score, (int, float)) and score >= 70:
+            recent_high_risk_count += 1
+
+    top_types = _build_top_types(docs, limit=4)
+    trend = _build_trend_points(docs)
+    most_common = top_types[0] if top_types else None
+    summary = _user_risk_summary_text(high_risk_count, recent_high_risk_count, len(docs))
+
+    risk_level = 'Low risk'
+    if high_risk_count >= max(2, len(docs) * 0.3):
+        risk_level = 'High risk'
+    elif high_risk_count >= max(1, len(docs) * 0.15):
+        risk_level = 'Medium risk'
+
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'total_checks': len(docs),
+            'high_risk_count': high_risk_count,
+            'recent_high_risk_count': recent_high_risk_count,
+            'total_scam_checks': scam_total,
+            'most_common_type': most_common['type'] if most_common else None,
+            'risk_level': risk_level,
+            'summary': summary,
+            'trend': trend,
+            'top_types': top_types,
+        }
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@rate_limit('api_read')
+def get_global_safety_summary(request: HttpRequest) -> JsonResponse:
+    """Provide a simple platform-wide trend summary for all users."""
+    user = extract_user_from_request(request)
+    if not user:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    collection = _get_analysis_collection()
+    docs = list(collection.find({
+        'user_deleted': {'$ne': True},
+    }).sort('created_at', -1))
+
+    if not docs:
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'total_checks': 0,
+                'scam_rate': 0,
+                'most_common_type': None,
+                'summary': 'There are not enough checks yet to show a platform trend.',
+                'trend': [],
+                'trend_insight': None,
+                'seasonal_insight': _build_seasonal_insight(),
+                'top_types': [],
+            }
+        })
+
+    scam_total = sum(1 for doc in docs if doc.get('is_scam'))
+    high_risk_total = sum(
+        1 for doc in docs
+        if doc.get('is_scam') and isinstance(doc.get('scam_score'), (int, float)) and doc.get('scam_score') >= 70
+    )
+    top_types = _build_top_types(docs, limit=4)
+    trend = _build_scam_trend_points(docs)
+    most_common = top_types[0] if top_types else None
+    summary = _global_risk_summary_text(high_risk_total, len(docs))
+
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'total_checks': len(docs),
+            'scam_rate': _safe_percent(scam_total, len(docs)),
+            'high_risk_total': high_risk_total,
+            'most_common_type': most_common['type'] if most_common else None,
+            'summary': summary,
+            'trend': trend,
+            'trend_insight': _build_global_trend_insight(docs),
+            'seasonal_insight': _build_seasonal_insight(),
+            'top_types': top_types,
+        }
+    })
 
 
 def parse_date_params(request: HttpRequest) -> tuple[Optional[datetime], Optional[datetime]]:

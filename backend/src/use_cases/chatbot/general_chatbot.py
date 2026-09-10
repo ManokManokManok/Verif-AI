@@ -2,7 +2,7 @@
 General Chatbot Use Case
 
 Business logic for general scam prevention chatbot.
-Uses Gemma LLM to provide friendly, professional guidance.
+Uses the configured generative AI provider to provide friendly, professional guidance.
 """
 
 import logging
@@ -63,7 +63,7 @@ class GeneralChatbotUseCase:
         Initialize the chatbot use case.
         
         Args:
-            llm_model: Loaded Gemma LLM (llama_cpp.Llama instance)
+            llm_model: Provider exposing create_chat_completion()
             conversation_repository: ConversationRepository instance
         """
         self.llm = llm_model
@@ -126,7 +126,7 @@ class GeneralChatbotUseCase:
         ] + conversation.get_message_history_for_llm()
         
         try:
-            # Generate response from Gemma
+            # Generate response from the configured provider.
             response = self.llm.create_chat_completion(
                 messages=llm_messages,
                 max_tokens=500,

@@ -330,7 +330,8 @@ class ConversationRepository:
                 {
                     "role": msg.role,
                     "content": msg.content,
-                    "timestamp": msg.timestamp
+                    "timestamp": msg.timestamp,
+                    "attachment": msg.attachment
                 }
                 for msg in conversation.messages
             ],
@@ -349,7 +350,8 @@ class ConversationRepository:
             ChatMessage(
                 role=msg["role"],
                 content=msg["content"],
-                timestamp=msg.get("timestamp")
+                timestamp=msg.get("timestamp"),
+                attachment=msg.get("attachment")
             )
             for msg in doc.get("messages", [])
         ]

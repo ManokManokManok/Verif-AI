@@ -37,7 +37,7 @@ function VerifyEmail() {
   }, [token]);
 
   return (
-    <div className="auth auth--single page-enter">
+    <div className="auth auth--single auth--mobile page-enter">
       <div className="auth__panel auth__panel--right auth__panel--single">
         <div className="auth__single-card auth__single-card--center">
           <h1 className="auth__title auth__title--compact">Email Verification</h1>

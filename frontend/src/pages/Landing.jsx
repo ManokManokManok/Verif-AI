@@ -4,6 +4,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination } from 'swiper/modules';
 import { useAuth } from '../context/AuthContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
+import LandingHeroMobile from '../components/LandingHeroMobile';
 
 import 'swiper/css';
 import 'swiper/css/pagination';
@@ -75,6 +76,7 @@ function Landing() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const textRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Handle logout button click - show confirmation modal
   const handleLogout = () => {
@@ -150,12 +152,21 @@ function Landing() {
     }
   }, [showUserMenu]);
 
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 600px)');
+    const update = () => setIsMobile(!!mq.matches);
+    update();
+    mq.addEventListener?.('change', update);
+    return () => mq.removeEventListener?.('change', update);
+  }, []);
+
   return (
     <div className="page page--landing page-enter">
       <header className="nav">
         <div className="brand">VerifAI</div>
         <nav className="nav__links">
           <button className="nav__link nav__btn" type="button">About us</button>
+          {isLoggedIn && <button className="nav__link nav__btn" type="button" onClick={() => navigate('/journey')}>Your Verif-AI Journey</button>}
           <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
           <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
         </nav>
@@ -209,9 +220,12 @@ function Landing() {
       </header>
 
       <main className="landing">
-        <section className="landing__hero">
-          <div className="landing__left">
-            <div className="carousel" style={{ overflow: 'hidden', position: 'relative', height: '100%' }}>
+        {isMobile ? (
+          <LandingHeroMobile slides={CAROUSEL_SLIDES} />
+        ) : (
+          <section className="landing__hero">
+            <div className="landing__left">
+              <div className="carousel" style={{ overflow: 'hidden', position: 'relative', height: '100%' }}>
               <Swiper
                 modules={[Autoplay, Pagination]}
                 slidesPerView={1}
@@ -257,6 +271,7 @@ function Landing() {
             </div>
           </section>
         </section>
+        )}
 
         <section className="landing__features" id="features">
           <h2 className="landing__section-title">What VerifAI offers</h2>

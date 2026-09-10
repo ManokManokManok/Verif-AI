@@ -207,6 +207,15 @@ function Login() {
   const [mfaCode, setMfaCode] = useState(['', '', '', '', '', '']);
   const codeRefs = useRef([]);
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/');
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
@@ -297,7 +306,34 @@ function Login() {
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--login page-enter">
+    <div className="auth auth--login auth--mobile page-enter">
+      <div className="auth__mobileHeader" aria-label="Login mobile header">
+        <button
+          type="button"
+          className="auth__backButton"
+          onClick={handleBack}
+          aria-label="Go back"
+          title="Go back"
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          className="auth__logo-link auth__logo-link--mobile"
+          onClick={() => navigate('/')}
+        >
+          Verif-AI
+        </button>
+        <button 
+          className="auth__theme-toggle auth__theme-toggle--mobile" 
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
+      </div>
+
       {/* Theme Toggle Button */}
       <button 
         className="auth__theme-toggle" 
@@ -459,10 +495,16 @@ function Login() {
         ) : (
           <>
             <h1 className="auth__title">Verification Code</h1>
-            <p className="auth__subtitle">
-              We&apos;ve sent a 6-digit code to <strong>{email}</strong>.
-              <br />
-              Enter it below to complete login.
+            <p className="auth__subtitle auth__subtitle--mfa">
+              {window.matchMedia && window.matchMedia('(max-width: 600px)').matches ? (
+                <>Enter the 6-digit code we sent to <strong>{email}</strong>.</>
+              ) : (
+                <>
+                  We&apos;ve sent a 6-digit code to <strong>{email}</strong>.
+                  <br />
+                  Enter it below to complete login.
+                </>
+              )}
             </p>
 
             <form className="auth__form" onSubmit={handleMfaSubmit}>

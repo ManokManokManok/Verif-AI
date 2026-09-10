@@ -82,6 +82,8 @@ class AnalysisResult:
     label: Optional[str] = None
     type_confidence: Optional[float] = None
     summary: Optional[str] = None
+    details: Optional[str] = None
+    image_attachment: Optional[dict] = None
     key_markers: Optional[list] = None
 
     # Low confidence review fields
@@ -107,6 +109,8 @@ class AnalysisResult:
         label: Optional[str] = None,
         type_confidence: Optional[float] = None,
         summary: Optional[str] = None,
+        details: Optional[str] = None,
+        image_attachment: Optional[dict] = None,
         key_markers: Optional[list] = None,
         needs_review: bool = False,
         review_reason: Optional[str] = None
@@ -131,6 +135,8 @@ class AnalysisResult:
             label=label,
             type_confidence=type_confidence,
             summary=summary,
+            details=details,
+            image_attachment=image_attachment,
             key_markers=key_markers,
             needs_review=needs_review,
             review_reason=review_reason,
@@ -155,6 +161,8 @@ class AnalysisResult:
             "label": self.label,
             "type_confidence": self.type_confidence,
             "summary": self.summary,
+            "details": self.details,
+            "image_attachment": self.image_attachment,
             "key_markers": self.key_markers,
         }
 
