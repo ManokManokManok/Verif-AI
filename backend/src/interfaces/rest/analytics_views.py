@@ -80,6 +80,67 @@ def _build_top_types(docs, limit: int = 4):
     return ranked[:limit]
 
 
+def _build_type_insights(docs, limit: int = 4):
+    """Return category counts with a plain-language pattern description."""
+    descriptions = {
+        'Banking Access & Payment': 'Requests for passwords, one-time codes, card details, or urgent transfers.',
+        'Financial and Investment': 'Promises of guaranteed profits, loans, or pressure to invest quickly.',
+        'Impersonation and Authority': 'Messages pretending to be a trusted person, company, or official organization.',
+        'Job, Business, and Work-from-Home': 'Offers that ask for fees, personal documents, or banking details before work begins.',
+        'Shopping and E-Commerce': 'Fake stores, unbelievable discounts, delivery notices, or payment links.',
+        'Tech and Online Account': 'Claims that an account or device is at risk and needs a code or remote access.',
+    }
+    insights = []
+    for item in _build_top_types(docs, limit):
+        insights.append({
+            **item,
+            'description': descriptions.get(
+                item['type'],
+                'A message pattern that uses urgency, authority, or an attractive offer to prompt quick action.'
+            ),
+        })
+    return insights
+
+
+def _build_recent_submissions(docs, limit: int = 8):
+    """Expose safe analysis metadata, never the submitted message content."""
+    submissions = []
+    for doc in docs[:limit]:
+        created_at = doc.get('created_at')
+        if hasattr(created_at, 'isoformat'):
+            created_at = created_at.isoformat()
+        submissions.append({
+            'ref_id': str(doc.get('ref_id') or doc.get('_id') or ''),
+            'created_at': created_at,
+            'type': doc.get('scam_type') or 'Unknown',
+            'is_scam': bool(doc.get('is_scam')),
+            'scam_score': doc.get('scam_score') if isinstance(doc.get('scam_score'), (int, float)) else None,
+            'risk_level': (
+                'High risk'
+                if doc.get('is_scam') and isinstance(doc.get('scam_score'), (int, float)) and doc.get('scam_score') >= 70
+                else 'Review carefully' if doc.get('is_scam') else 'Low risk'
+            ),
+        })
+    return submissions
+
+
+def _build_activity_insight(docs, high_risk_count: int):
+    if len(docs) < 2:
+        return 'Keep checking messages here to reveal how your risk pattern changes over time.'
+    recent_docs = docs[:min(5, len(docs))]
+    recent_high_risk = sum(
+        1 for doc in recent_docs
+        if doc.get('is_scam') and isinstance(doc.get('scam_score'), (int, float)) and doc.get('scam_score') >= 70
+    )
+    recent_rate = _safe_percent(recent_high_risk, len(recent_docs))
+    overall_rate = _safe_percent(high_risk_count, len(docs))
+    if recent_rate > overall_rate + 10:
+        return f'Your latest checks are more concerning than your overall history: {recent_rate}% high risk recently versus {overall_rate}% overall.'
+    if recent_rate < overall_rate - 10:
+        return f'Your latest checks look safer than your overall history: {recent_rate}% high risk recently versus {overall_rate}% overall.'
+    return f'Your recent checks are broadly in line with your overall pattern at about {overall_rate}% high risk.'
+
+
 def _build_scam_trend_points(docs):
     """Count only confirmed scam analyses by month for the community chart."""
     scam_docs = [doc for doc in docs if doc.get('is_scam') and (doc.get('scam_type') or '').lower() != 'not scam']
@@ -224,12 +285,17 @@ def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
             'data': {
                 'total_checks': 0,
                 'high_risk_count': 0,
+                'high_risk_rate': 0,
                 'recent_high_risk_count': 0,
                 'most_common_type': None,
                 'risk_level': 'No data yet',
                 'summary': 'You have not checked any messages yet. Try a message to see your safety summary.',
                 'trend': [],
                 'top_types': [],
+                'type_insights': [],
+                'recent_submissions': [],
+                'activity_insight': 'Keep checking messages here to reveal how your risk pattern changes over time.',
+                'analytics_scope_note': 'Based only on your authenticated Verif-AI checks. Message content is not shown here.',
             }
         })
 
@@ -253,6 +319,7 @@ def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
             recent_high_risk_count += 1
 
     top_types = _build_top_types(docs, limit=4)
+    type_insights = _build_type_insights(docs, limit=4)
     trend = _build_trend_points(docs)
     most_common = top_types[0] if top_types else None
     summary = _user_risk_summary_text(high_risk_count, recent_high_risk_count, len(docs))
@@ -268,6 +335,7 @@ def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
         'data': {
             'total_checks': len(docs),
             'high_risk_count': high_risk_count,
+            'high_risk_rate': _safe_percent(high_risk_count, len(docs)),
             'recent_high_risk_count': recent_high_risk_count,
             'total_scam_checks': scam_total,
             'most_common_type': most_common['type'] if most_common else None,
@@ -275,6 +343,10 @@ def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
             'summary': summary,
             'trend': trend,
             'top_types': top_types,
+            'type_insights': type_insights,
+            'recent_submissions': _build_recent_submissions(docs),
+            'activity_insight': _build_activity_insight(docs, high_risk_count),
+            'analytics_scope_note': 'Based only on your authenticated Verif-AI checks. Message content is not shown here.',
         }
     })
 
@@ -290,6 +362,7 @@ def get_global_safety_summary(request: HttpRequest) -> JsonResponse:
 
     collection = _get_analysis_collection()
     docs = list(collection.find({
+        'user_id': {'$nin': [None, '']},
         'user_deleted': {'$ne': True},
     }).sort('created_at', -1))
 
