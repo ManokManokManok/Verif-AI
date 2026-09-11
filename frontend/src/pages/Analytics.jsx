@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Analytics.css';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +17,7 @@ function BarChart({ items, emptyText }) {
             <strong>{item.count}</strong>
           </div>
           <div className="journey__bar-track">
-            <span style={{ width: `${Math.max((item.count / maxCount) * 100, 4)}%` }} />
+            <span style={{ '--bar-width': `${Math.max((item.count / maxCount) * 100, 4)}%` }} />
           </div>
         </div>
       ))}
@@ -35,7 +35,7 @@ function TrendChart({ points, emptyText }) {
         <div className="journey__trend-column" key={point.label}>
           <div className="journey__trend-value">{point.count}</div>
           <div className="journey__trend-track">
-            <span style={{ height: `${Math.max((point.count / maxCount) * 100, 8)}%` }} />
+            <span style={{ '--bar-height': `${Math.max((point.count / maxCount) * 100, 8)}%` }} />
           </div>
           <span className="journey__trend-label">{point.label}</span>
         </div>
@@ -104,6 +104,56 @@ function getGuidance(type) {
     action: 'They may use urgency, authority, or an attractive offer to make you act before you have time to verify the message.',
     advice: 'Pause, do not click or pay, and verify the request through an official contact method.',
   };
+}
+
+function Reveal({ children, className = '', delay = 0 }) {
+  const elementRef = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return undefined;
+    if (!('IntersectionObserver' in window)) {
+      setIsVisible(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setIsVisible(true);
+        observer.disconnect();
+      }
+    }, { threshold: 0.16 });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={elementRef}
+      className={`journey__reveal ${isVisible ? 'is-visible' : ''} ${className}`}
+      style={{ '--reveal-delay': `${delay}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FocusScene({ children, recap, label, direction = 'from-right' }) {
+  return (
+    <section className={`journey__focus-scene ${direction}`} aria-label={label}>
+      <div className="journey__focus-detail">{children}</div>
+      <div className="journey__focus-recap">{recap}</div>
+    </section>
+  );
+}
+
+function formatSubmissionDate(value) {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
 }
 
 function AdviceCarousel({ community }) {
@@ -211,41 +261,113 @@ export default function Analytics() {
           <div className="journey__error">{error}</div>
         ) : (
           <>
-            <section className="journey__summary" aria-labelledby="safety-summary-title">
-              <div className="journey__summary-icon" aria-hidden="true">✦</div>
-              <div>
-                <p className="journey__eyebrow">Your safety summary</p>
-                <h2 id="safety-summary-title">{personal?.risk_level || 'No data yet'}</h2>
-                <p>{personal?.summary || 'Check a message to start building your safety summary.'}</p>
-              </div>
-            </section>
+            <Reveal>
+              <section className="journey__summary" aria-labelledby="safety-summary-title">
+                <div className="journey__summary-icon" aria-hidden="true">✦</div>
+                <div>
+                  <p className="journey__eyebrow">Your safety summary</p>
+                  <h2 id="safety-summary-title">{personal?.risk_level || 'No data yet'}</h2>
+                  <p>{personal?.summary || 'Check a message to start building your safety summary.'}</p>
+                  <p className="journey__scope-note">{personal?.analytics_scope_note || 'Based only on your authenticated Verif-AI checks.'}</p>
+                </div>
+              </section>
+            </Reveal>
 
-            <section className="journey__stat-grid" aria-label="Your detection totals">
-              <div className="journey__stat"><span>Messages checked</span><strong>{personal?.total_checks ?? 0}</strong></div>
-              <div className="journey__stat journey__stat--alert"><span>High-risk results</span><strong>{personal?.high_risk_count ?? 0}</strong></div>
-              <div className="journey__stat"><span>Most common pattern</span><strong>{personal?.most_common_type || 'Not enough data'}</strong></div>
-            </section>
+            <Reveal className="journey__reveal--wide" delay={80}>
+              <section className="journey__stat-grid" aria-label="Your detection totals">
+                <div className="journey__stat"><span>Messages checked</span><strong>{personal?.total_checks ?? 0}</strong></div>
+                <div className="journey__stat journey__stat--alert"><span>High-risk results</span><strong>{personal?.high_risk_count ?? 0}</strong></div>
+                <div className="journey__stat"><span>Most common pattern</span><strong>{personal?.most_common_type || 'Not enough data'}</strong></div>
+              </section>
+            </Reveal>
 
-            <section className="journey__chart-grid">
-              <div className="journey__panel">
-                <div className="journey__panel-heading"><div><p className="journey__eyebrow">Your checks</p><h2>What you see most often</h2></div><span className="journey__panel-mark">01</span></div>
-                <BarChart items={personal?.top_types || []} emptyText="Your scam patterns will appear here after you check messages." />
-              </div>
-              <div className="journey__panel">
-                <div className="journey__panel-heading"><div><p className="journey__eyebrow">Your activity</p><h2>Checks over time</h2></div><span className="journey__panel-mark">02</span></div>
-                <TrendChart points={personal?.trend || []} emptyText="Your monthly activity will appear here after you check messages." />
-              </div>
-            </section>
+            <Reveal className="journey__reveal--wide" delay={120}>
+              <FocusScene
+                label="Your most common scam patterns"
+                direction="from-right"
+                recap={(
+                  <div className="journey__compact-line">
+                    <span className="journey__eyebrow">Your pattern</span>
+                    <strong>{personal?.most_common_type || 'No pattern yet'}</strong>
+                    <span>{personal?.top_types?.[0]?.count || 0} checks</span>
+                  </div>
+                )}
+              >
+                <div className="journey__section-heading">
+                  <div><p className="journey__eyebrow">01 / Your checks</p><h2>What are you running into?</h2><p>These are the scam patterns appearing most often in your authenticated checks.</p></div>
+                  <span className="journey__section-number">01</span>
+                </div>
+                <div className="journey__pattern-layout">
+                  <BarChart items={personal?.top_types || []} emptyText="Your scam patterns will appear here after you check messages." />
+                  <div className="journey__insight-list">
+                    {(personal?.type_insights || []).slice(0, 3).map((item) => (
+                      <article className="journey__insight" key={item.type}>
+                        <strong>{item.type}</strong>
+                        <p>{item.description}</p>
+                        <span>{item.share}% of your scam checks</span>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+                <div className="journey__submission-strip">
+                  <div><p className="journey__eyebrow">Recent checks</p><h3>What you have brought here lately</h3></div>
+                  <div className="journey__submission-list">
+                    {(personal?.recent_submissions || []).slice(0, 4).map((submission) => (
+                      <div className="journey__submission" key={`${submission.ref_id}-${submission.created_at}`}>
+                        <span className={submission.is_scam ? 'is-risk' : 'is-clear'} aria-hidden="true" />
+                        <div><strong>{submission.type}</strong><span>{formatSubmissionDate(submission.created_at)}</span></div>
+                        <b>{submission.scam_score ?? '--'}%</b>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </FocusScene>
+            </Reveal>
 
-            <section className="journey__community">
-              <div className="journey__panel-heading"><div><p className="journey__eyebrow">Everyone using Verif-AI</p><h2>Scam trends around the community</h2></div><span className="journey__community-rate">{community?.scam_rate ?? 0}% flagged</span></div>
-              <p className="journey__community-summary">{community?.summary || 'Community trends are still being collected.'}</p>
-              <AdviceCarousel community={community} />
-              <div className="journey__community-grid">
-                <BarChart items={community?.top_types || []} emptyText="Community trends will appear as more checks are made." />
-                <TrendChart points={community?.trend || []} emptyText="Community activity will appear here soon." />
-              </div>
-            </section>
+            <Reveal className="journey__reveal--wide" delay={120}>
+              <FocusScene
+                label="Your checking activity"
+                direction="from-left"
+                recap={(
+                  <div className="journey__compact-line">
+                    <span className="journey__eyebrow">Your activity</span>
+                    <strong>{personal?.high_risk_rate ?? 0}% high risk</strong>
+                    <span>{personal?.trend?.length || 0} months tracked</span>
+                  </div>
+                )}
+              >
+                <div className="journey__section-heading">
+                  <div><p className="journey__eyebrow">02 / Your activity</p><h2>Is your situation changing?</h2><p>Volume matters, but the direction of your high-risk results matters more.</p></div>
+                  <span className="journey__section-number">02</span>
+                </div>
+                <div className="journey__activity-layout">
+                  <div className="journey__activity-copy">
+                    <span className="journey__metric-large">{personal?.high_risk_rate ?? 0}<small>%</small></span>
+                    <strong>of your checks were high risk</strong>
+                    <p>{personal?.activity_insight || 'Keep checking messages here to reveal how your risk pattern changes over time.'}</p>
+                    <div className="journey__activity-pills"><span>{personal?.total_checks ?? 0} total checks</span><span>{personal?.recent_high_risk_count ?? 0} high risk recently</span></div>
+                  </div>
+                  <TrendChart points={personal?.trend || []} emptyText="Your monthly activity will appear here after you check messages." />
+                </div>
+              </FocusScene>
+            </Reveal>
+
+            <Reveal className="journey__reveal--wide" delay={120}>
+              <section className="journey__community">
+                <div className="journey__section-heading"><div><p className="journey__eyebrow">03 / Everyone using Verif-AI</p><h2>What is happening around you?</h2><p>Authenticated community checks reveal which patterns are appearing most often right now.</p></div><span className="journey__community-rate">{community?.scam_rate ?? 0}% flagged</span></div>
+                <p className="journey__community-summary">{community?.summary || 'Community trends are still being collected.'}</p>
+                <div className="journey__community-compare">
+                  <div><span>Your top pattern</span><strong>{personal?.most_common_type || 'Not enough data'}</strong></div>
+                  <div className="journey__compare-arrow" aria-hidden="true">↔</div>
+                  <div><span>Community top pattern</span><strong>{community?.most_common_type || 'Not enough data'}</strong></div>
+                </div>
+                <AdviceCarousel community={community} />
+                <div className="journey__community-grid">
+                  <BarChart items={community?.top_types || []} emptyText="Community trends will appear as more checks are made." />
+                  <TrendChart points={community?.trend || []} emptyText="Community activity will appear here soon." />
+                </div>
+              </section>
+            </Reveal>
           </>
         )}
       </main>
