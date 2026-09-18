@@ -39,6 +39,7 @@ from src.infrastructure.middleware.analytics_repository import (
     DeviceBreakdown,
     TimeSeriesPoint,
 )
+from src.interfaces.rest.analytics_views import _build_type_insights
 
 
 # ==================== Fixtures ====================
@@ -236,6 +237,42 @@ class TestHelperFunctions:
         """Test tablet device detection."""
         ua = 'Mozilla/5.0 (iPad; CPU OS 14_6) AppleWebKit/605.1'
         assert _detect_device_type(ua) == 'tablet'
+
+    def test_type_insights_include_risk_and_recency_metrics(self):
+        """User pattern insights should describe severity and recent movement."""
+        now = datetime.utcnow()
+        docs = [
+            {
+                'is_scam': True,
+                'scam_type': 'Mobile and Digital',
+                'scam_score': 92,
+                'type_confidence': 88,
+                'created_at': now - timedelta(days=4),
+            },
+            {
+                'is_scam': True,
+                'scam_type': 'Mobile and Digital',
+                'scam_score': 76,
+                'type_confidence': 80,
+                'created_at': now - timedelta(days=45),
+            },
+            {
+                'is_scam': True,
+                'scam_type': 'Prize, Raffle & Reward',
+                'scam_score': 81,
+                'created_at': now - timedelta(days=5),
+            },
+        ]
+
+        insights = _build_type_insights(docs)
+
+        mobile = insights[0]
+        assert mobile['average_scam_score'] == 84.0
+        assert mobile['high_risk_count'] == 2
+        assert mobile['recent_count'] == 1
+        assert mobile['previous_count'] == 1
+        assert mobile['trend_direction'] == 'stable'
+        assert mobile['average_type_confidence'] == 84.0
 
 
 # ==================== Analytics Repository Tests ====================

@@ -81,7 +81,7 @@ def _build_top_types(docs, limit: int = 4):
 
 
 def _build_type_insights(docs, limit: int = 4):
-    """Return category counts with a plain-language pattern description."""
+    """Return category metrics that can support a user-facing insight."""
     descriptions = {
         'Banking Access & Payment': 'Requests for passwords, one-time codes, card details, or urgent transfers.',
         'Financial and Investment': 'Promises of guaranteed profits, loans, or pressure to invest quickly.',
@@ -90,14 +90,73 @@ def _build_type_insights(docs, limit: int = 4):
         'Shopping and E-Commerce': 'Fake stores, unbelievable discounts, delivery notices, or payment links.',
         'Tech and Online Account': 'Claims that an account or device is at risk and needs a code or remote access.',
     }
+    scam_docs = [
+        doc for doc in docs
+        if doc.get('is_scam') and (doc.get('scam_type') or '').lower() != 'not scam'
+    ]
+    now = datetime.utcnow()
+    recent_start = now - timedelta(days=30)
+    previous_start = now - timedelta(days=60)
+
+    def as_datetime(value):
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            except ValueError:
+                return None
+        if value and getattr(value, 'tzinfo', None):
+            return value.replace(tzinfo=None)
+        return value
+
     insights = []
     for item in _build_top_types(docs, limit):
+        matching = [doc for doc in scam_docs if (doc.get('scam_type') or 'Unknown') == item['type']]
+        scores = [
+            float(doc['scam_score']) for doc in matching
+            if isinstance(doc.get('scam_score'), (int, float))
+        ]
+        high_risk_count = sum(1 for score in scores if score >= 70)
+        recent_count = 0
+        previous_count = 0
+        for doc in matching:
+            created_at = as_datetime(doc.get('created_at'))
+            if created_at and created_at >= recent_start:
+                recent_count += 1
+            elif created_at and created_at >= previous_start:
+                previous_count += 1
+
+        if recent_count > previous_count:
+            trend_direction = 'increasing'
+        elif recent_count < previous_count:
+            trend_direction = 'decreasing'
+        else:
+            trend_direction = 'stable'
+
+        if item['count'] < 2:
+            sample_note = 'Early signal: there is not enough history for a reliable trend yet.'
+        elif item['count'] < 5:
+            sample_note = 'Limited history: treat this pattern as an early signal.'
+        else:
+            sample_note = None
+
         insights.append({
             **item,
             'description': descriptions.get(
                 item['type'],
                 'A message pattern that uses urgency, authority, or an attractive offer to prompt quick action.'
             ),
+            'average_scam_score': round(sum(scores) / len(scores), 1) if scores else None,
+            'high_risk_count': high_risk_count,
+            'high_risk_rate': _safe_percent(high_risk_count, len(matching)),
+            'average_type_confidence': round(
+                sum(float(doc['type_confidence']) for doc in matching if isinstance(doc.get('type_confidence'), (int, float)))
+                / len([doc for doc in matching if isinstance(doc.get('type_confidence'), (int, float))]),
+                1,
+            ) if any(isinstance(doc.get('type_confidence'), (int, float)) for doc in matching) else None,
+            'recent_count': recent_count,
+            'previous_count': previous_count,
+            'trend_direction': trend_direction,
+            'sample_note': sample_note,
         })
     return insights
 
