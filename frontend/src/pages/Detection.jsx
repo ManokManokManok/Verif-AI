@@ -3,7 +3,7 @@ import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail, deleteAnalysisHistoryItem, deleteAllAnalysisHistory } from '../api/analysis';
 import { getAnalysisConversation, analyzeImage } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 import { ReportModal } from '../components/reports';
@@ -35,6 +35,7 @@ function getReviewExplanation(reviewReason) {
 
 function Detection() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [text, setText] = useState('');
@@ -60,6 +61,29 @@ function Detection() {
   const progressIntervalRef = useRef(null);
   const stepIntervalRef = useRef(null);
   const textareaRef = useRef(null);
+
+  // Handle location state for opening a specific analysis result (e.g. from Settings reports)
+  useEffect(() => {
+    if (location.state) {
+      const { analysisId, analysisRefId, analysisDetail } = location.state;
+      if (analysisDetail) {
+        setDetectionResult(analysisDetail);
+        window.history.replaceState({}, document.title);
+      } else if (analysisId || analysisRefId) {
+        const idToFetch = analysisId || analysisRefId;
+        getAnalysisDetail(idToFetch)
+          .then((detail) => {
+            if (detail) setDetectionResult(detail);
+          })
+          .catch((err) => {
+            console.warn('[DETECTION] Failed to fetch analysis detail from location state:', err);
+          })
+          .finally(() => {
+            window.history.replaceState({}, document.title);
+          });
+      }
+    }
+  }, [location.state]);
   
   // Image OCR states
   const [selectedImage, setSelectedImage] = useState(null);

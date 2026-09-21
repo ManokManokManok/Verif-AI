@@ -149,7 +149,13 @@ export default function ChatBot({ accessToken = null }) {
             <div style={styles.messageHeader}>
               <strong>{msg.role === 'user' ? '👤 You' : '🤖 Verif-AI'}</strong>
               <span style={styles.timestamp}>
-                {new Date(msg.timestamp).toLocaleTimeString()}
+                {(() => {
+                  if (!msg.timestamp) return '';
+                  let str = String(msg.timestamp);
+                  if (!str.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(str)) str += 'Z';
+                  const d = new Date(str);
+                  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                })()}
               </span>
             </div>
             <div style={styles.messageContent}>{msg.content}</div>

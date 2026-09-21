@@ -76,18 +76,33 @@ class AnalysisResultRepository:
         return [self._document_to_entity(doc) for doc in docs]
 
     def get_by_id_for_user(self, analysis_id: str, user_id: str, include_deleted: bool = False) -> Optional[AnalysisResult]:
-        """Get analysis by id with ownership and visibility checks."""
-        try:
-            query: Dict[str, Any] = {
-                "_id": ObjectId(analysis_id),
-                "user_id": str(user_id),
-            }
-            if not include_deleted:
-                query.update(self._active_user_visibility_query())
+        """Get analysis by id or ref_id with ownership and visibility checks."""
+        doc = None
+        # Try finding by ObjectId if valid 24-char hex
+        if ObjectId.is_valid(analysis_id):
+            try:
+                query: Dict[str, Any] = {
+                    "_id": ObjectId(analysis_id),
+                    "user_id": str(user_id),
+                }
+                if not include_deleted:
+                    query.update(self._active_user_visibility_query())
+                doc = self.collection.find_one(query)
+            except Exception:
+                doc = None
 
-            doc = self.collection.find_one(query)
-        except Exception:
-            return None
+        # Fallback to ref_id query if not found by _id
+        if not doc:
+            try:
+                query = {
+                    "ref_id": str(analysis_id),
+                    "user_id": str(user_id),
+                }
+                if not include_deleted:
+                    query.update(self._active_user_visibility_query())
+                doc = self.collection.find_one(query)
+            except Exception:
+                doc = None
 
         if not doc:
             return None

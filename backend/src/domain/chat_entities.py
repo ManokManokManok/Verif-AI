@@ -36,10 +36,18 @@ class ChatMessage:
     
     def to_dict(self) -> dict:
         """Convert to dictionary for API response."""
+        ts = None
+        if self.timestamp:
+            if isinstance(self.timestamp, str):
+                ts = self.timestamp if (self.timestamp.endswith('Z') or '+' in self.timestamp or '-' in self.timestamp[10:]) else self.timestamp + 'Z'
+            elif hasattr(self.timestamp, 'isoformat'):
+                ts = self.timestamp.isoformat()
+                if not ts.endswith('Z') and '+' not in ts[10:] and '-' not in ts[10:]:
+                    ts += 'Z'
         return {
             "role": self.role,
             "content": self.content,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": ts,
             "attachment": self.attachment
         }
 
