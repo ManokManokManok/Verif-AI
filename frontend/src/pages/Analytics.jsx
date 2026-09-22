@@ -404,11 +404,18 @@ function AdviceCarousel({ community }) {
 
 export default function Analytics() {
   const navigate = useNavigate();
-  const { isLoggedIn, isAdmin } = useAuth();
+  const { user, isLoggedIn, isAdmin, logout } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [personal, setPersonal] = useState(null);
   const [community, setCommunity] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const handleLogout = async () => {
+    await logout();
+    setShowUserMenu(false);
+    navigate('/');
+  };
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -421,7 +428,7 @@ export default function Analytics() {
         if (personalResponse?.data?.success) setPersonal(personalResponse.data.data);
         if (communityResponse?.data?.success) setCommunity(communityResponse.data.data);
       })
-      .catch((requestError) => setError(requestError.message || 'We could not load your safety journey.'))
+      .catch((requestError) => setError(requestError.message || 'We could not load your analytics.'))
       .finally(() => setLoading(false));
   }, [isLoggedIn, navigate]);
 
@@ -438,8 +445,42 @@ export default function Analytics() {
           <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
         </nav>
         <div className="journey__actions">
-          <button className="journey__settings" type="button" onClick={() => navigate('/settings')}>Settings</button>
-          {isAdmin && <button className="journey__settings" type="button" onClick={() => navigate('/admin')}>Admin</button>}
+          <div className="nav__user-menu" onClick={(event) => event.stopPropagation()}>
+            <button
+              className="nav__login"
+              type="button"
+              onClick={() => setShowUserMenu((visible) => !visible)}
+            >
+              {user?.username || user?.email || 'Profile'}
+            </button>
+            {showUserMenu && (
+              <div className="nav__dropdown">
+                <button
+                  className="nav__dropdown-item"
+                  type="button"
+                  onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
+                >
+                  Settings
+                </button>
+                {isAdmin && (
+                  <button
+                    className="nav__dropdown-item nav__dropdown-item--admin"
+                    type="button"
+                    onClick={() => { navigate('/admin'); setShowUserMenu(false); }}
+                  >
+                    Admin Dashboard
+                  </button>
+                )}
+                <button
+                  className="nav__dropdown-item nav__dropdown-item--logout"
+                  type="button"
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

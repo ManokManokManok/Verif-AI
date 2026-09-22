@@ -133,7 +133,7 @@ from ...infrastructure.validators import (
     get_email_only_validator, get_token_only_validator,
     get_password_reset_validator, get_refresh_token_validator,
     get_check_permission_validator, sanitize_for_logging,
-    validate_username
+    validate_username, validate_password
 )
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
 
@@ -675,7 +675,8 @@ def update_username(request: Request) -> Response:
     
     Request body:
     {
-        "username": "new_username"
+        "username": "new_username",
+        "current_password": "current_password"
     }
     """
     try:
@@ -686,15 +687,32 @@ def update_username(request: Request) -> Response:
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         new_username = (request.data.get('username') or '').strip()
+        current_password = request.data.get('current_password') or ''
         if not new_username:
             return Response({
                 'error': {'code': 'VALIDATION_ERROR', 'message': 'Username is required'}
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+        if not current_password:
+            return Response({
+                'error': {'code': 'VALIDATION_ERROR', 'message': 'Current password is required'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         user_repo = get_user_repository()
+        user = user_repo.get_by_id(user_id)
+        if not user:
+            return Response({
+                'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'}
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        password_hasher = BCryptPasswordHasher()
+        if not password_hasher.verify_password(current_password, user.password_hash):
+            return Response({
+                'error': {'code': 'INVALID_PASSWORD', 'message': 'Current password is incorrect'}
+            }, status=status.HTTP_403_FORBIDDEN)
+
         use_case = UpdateUsernameUseCase(user_repository=user_repo)
         user = use_case.execute(user_id, new_username)
-        
+
         get_audit_logger().log_event(
             event_type=AuditEventType.USER_UPDATED,
             user_id=user_id,
@@ -719,6 +737,99 @@ def update_username(request: Request) -> Response:
         return Response({
             'error': {'code': 'INTERNAL_ERROR', 'message': 'An unexpected error occurred'}
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@rate_limit('api_write')
+def send_password_change_code(request: Request) -> Response:
+    """Send an email verification code for an authenticated password change."""
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return Response({'error': {'code': 'AUTHENTICATION_REQUIRED', 'message': 'Authentication required'}}, status=401)
+
+        user = get_user_repository().get_by_id(user_id)
+        if not user:
+            return Response({'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'}}, status=404)
+
+        from ...domain.services import MFACodeGenerator
+        from ...infrastructure.email_service import get_email_service
+        from datetime import datetime, timedelta
+        mfa_repo = get_mfa_repository()
+        active_code = mfa_repo.get_active_code(user_id, purpose='password_change')
+        if active_code and active_code.get('created_at'):
+            cooldown_ends = active_code['created_at'] + timedelta(seconds=60)
+            remaining = int((cooldown_ends - datetime.utcnow()).total_seconds())
+            if remaining > 0:
+                return Response({
+                    'error': {
+                        'code': 'CODE_COOLDOWN',
+                        'message': f'Please wait {remaining} seconds before requesting another code.',
+                        'retry_after_seconds': remaining,
+                    }
+                }, status=429)
+
+        code, expires_at = MFACodeGenerator.generate_code_with_expiry(5)
+        if not mfa_repo.create_mfa_code(user_id, code, expires_at, _get_client_ip(request), purpose='password_change'):
+            return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Failed to generate verification code'}}, status=500)
+
+        if not get_email_service().send_password_change_code_email(user.email, code):
+            mfa_repo.invalidate_codes(user_id, purpose='password_change')
+            return Response({'error': {'code': 'EMAIL_ERROR', 'message': 'Failed to send verification code'}}, status=500)
+
+        return Response({'message': 'Verification code sent to your email', 'expires_in_seconds': 300}, status=200)
+    except Exception:
+        logger.exception('Password change code request failed')
+        return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Unable to send verification code'}}, status=500)
+
+
+@api_view(['POST'])
+@rate_limit('api_write')
+def change_password(request: Request) -> Response:
+    """Change an authenticated user's password after email-code verification."""
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return Response({'error': {'code': 'AUTHENTICATION_REQUIRED', 'message': 'Authentication required'}}, status=401)
+
+        code = str(request.data.get('code') or '').strip()
+        current_password = request.data.get('current_password') or ''
+        new_password = request.data.get('new_password') or ''
+        confirm_password = request.data.get('confirm_password') or ''
+        if not code or not current_password or not new_password or not confirm_password:
+            return Response({'error': {'code': 'VALIDATION_ERROR', 'message': 'All password change fields are required'}}, status=400)
+        if new_password != confirm_password:
+            return Response({'error': {'code': 'VALIDATION_ERROR', 'message': 'New passwords do not match'}}, status=400)
+
+        valid_password, password_errors = validate_password(new_password)
+        if not valid_password:
+            return Response({'error': {'code': 'VALIDATION_ERROR', 'message': '. '.join(password_errors)}}, status=400)
+
+        user_repo = get_user_repository()
+        user = user_repo.get_by_id(user_id)
+        if not user:
+            return Response({'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'}}, status=404)
+
+        password_hasher = BCryptPasswordHasher()
+        if not password_hasher.verify_password(current_password, user.password_hash):
+            return Response({'error': {'code': 'INVALID_PASSWORD', 'message': 'Current password is incorrect'}}, status=403)
+
+        valid_code, code_error = get_mfa_repository().verify_mfa_code(user_id, code, purpose='password_change')
+        if not valid_code:
+            return Response({'error': {'code': 'INVALID_CODE', 'message': code_error or 'Invalid or expired verification code'}}, status=401)
+
+        if not user_repo.update_user_password(user_id, password_hasher.hash_password(new_password)):
+            return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Failed to update password'}}, status=500)
+
+        get_audit_logger().log_event(
+            event_type=AuditEventType.PASSWORD_CHANGED,
+            user_id=user_id,
+            ip_address=_get_client_ip(request),
+        )
+        return Response({'message': 'Password changed successfully'}, status=200)
+    except Exception:
+        logger.exception('Password change failed')
+        return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Unable to change password'}}, status=500)
 
 
 @api_view(['POST'])

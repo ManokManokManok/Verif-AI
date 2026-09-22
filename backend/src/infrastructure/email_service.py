@@ -45,6 +45,8 @@ class EmailServiceProtocol(Protocol):
 
     def send_mfa_code_email(self, email: str, code: str) -> bool: ...
 
+    def send_password_change_code_email(self, email: str, code: str) -> bool: ...
+
 
 class _TemplatedEmailServiceBase:
     """Shared email template/link behavior for all providers."""
@@ -65,6 +67,9 @@ class _TemplatedEmailServiceBase:
 
     def send_mfa_code_email(self, email: str, code: str) -> bool:
         return self._send(email, "Your Verification Code - Verif-AI", _mfa_code_html(code))
+
+    def send_password_change_code_email(self, email: str, code: str) -> bool:
+        return self._send(email, "Password Change Verification Code - Verif-AI", _password_change_code_html(code))
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +151,16 @@ def _mfa_code_html(code: str) -> str:
 <div class="code">{code}</div>
 <p><strong>This code will expire in 5 minutes.</strong></p>
 <p class="footer">If you didn't request this code, please secure your account immediately.</p>
+""")
+
+
+def _password_change_code_html(code: str) -> str:
+    return _base_html(f"""
+<h2>Password Change Request</h2>
+<p>Use this code to confirm that you want to change your Verif-AI password:</p>
+<div class="code">{code}</div>
+<p><strong>This code will expire in 5 minutes.</strong></p>
+<p>If you did not request a password change, you can ignore this email. Your password will not change without your current password.</p>
 """)
 
 
@@ -389,6 +404,12 @@ class MockEmailService(_TemplatedEmailServiceBase):
         logger.info(f"[MockEmail] MFA code email to {email}")
         logger.info(f"[MockEmail] Code: {code}")
         print(f"MOCK: MFA code to {email} | Code: {code}")
+        return True
+
+    def send_password_change_code_email(self, email: str, code: str) -> bool:
+        logger.info(f"[MockEmail] Password change code email to {email}")
+        logger.info(f"[MockEmail] Code: {code}")
+        print(f"MOCK: Password change code to {email} | Code: {code}")
         return True
 
 

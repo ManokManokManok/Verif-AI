@@ -657,7 +657,7 @@ function Detection() {
               About us
             </button>
             {isLoggedIn && (
-              <button className="nav__link nav__btn" type="button" onClick={() => navigate('/journey')}>
+              <button className="nav__link nav__btn" type="button" onClick={() => navigate('/analytics')}>
                 Your Verif-AI Journey
               </button>
             )}

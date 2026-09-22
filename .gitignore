@@ -1,5 +1,8 @@
 # Root-level ignores
 
+# Local planning notes
+/TODO.md
+
 # Local Python venv
 /.venv/
 

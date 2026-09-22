@@ -101,13 +101,14 @@ function App() {
           }
         />
         <Route
-          path="/journey"
+          path="/analytics"
           element={
             <ProtectedRoute>
               <Analytics />
             </ProtectedRoute>
           }
         />
+        <Route path="/journey" element={<Navigate to="/analytics" replace />} />
         <Route 
           path="/admin" 
           element={
