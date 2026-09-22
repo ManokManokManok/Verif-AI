@@ -331,6 +331,8 @@ export async function loginRequest({ email, password }) {
       email: data.user.email,
       username: data.user.username,
       roles: data.user.roles,
+      is_verified: data.user.is_verified,
+      created_at: data.user.created_at,
     };
     window.localStorage.setItem('user', JSON.stringify(safeUser));
   }
@@ -404,6 +406,8 @@ export async function verifyMfaCodeRequest({ email, code }) {
       email: data.user.email,
       username: data.user.username,
       roles: data.user.roles,
+      is_verified: data.user.is_verified,
+      created_at: data.user.created_at,
     };
     window.localStorage.setItem('user', JSON.stringify(safeUser));
   }
@@ -464,10 +468,13 @@ export async function resendPasswordResetLinkRequest(token) {
 /**
  * Update the current user's username.
  */
-export async function updateUsernameRequest({ username }) {
+export async function updateUsernameRequest({ username, currentPassword }) {
   const data = await authApiRequest('/auth/update-username/', {
     method: 'PATCH',
-    body: JSON.stringify({ username: username.trim() }),
+    body: JSON.stringify({
+      username: username.trim(),
+      current_password: currentPassword,
+    }),
   });
 
   // Update stored user object
@@ -478,6 +485,41 @@ export async function updateUsernameRequest({ username }) {
   }
 
   return data;
+}
+
+/**
+ * Refresh the current user's profile and cached account metadata.
+ */
+export async function getProfileRequest() {
+  const data = await authApiRequest('/auth/profile/', { method: 'GET' });
+  const stored = getStoredUser();
+
+  if (data?.user) {
+    window.localStorage.setItem('user', JSON.stringify({
+      ...stored,
+      id: data.user.id,
+      email: data.user.email,
+      username: data.user.username,
+      roles: data.user.roles,
+      is_verified: data.user.is_verified,
+      created_at: data.user.created_at,
+    }));
+  }
+
+  return data;
+}
+
+/** Send an email verification code for an authenticated password change. */
+export async function sendPasswordChangeCodeRequest() {
+  return authApiRequest('/auth/password-change/send-code/', { method: 'POST' });
+}
+
+/** Change the authenticated user's password after code verification. */
+export async function changePasswordRequest({ code, current_password, new_password, confirm_password }) {
+  return authApiRequest('/auth/password-change/', {
+    method: 'POST',
+    body: JSON.stringify({ code, current_password, new_password, confirm_password }),
+  });
 }
 
 /**

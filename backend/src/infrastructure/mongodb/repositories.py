@@ -356,6 +356,20 @@ class MongoDBUserRepository:
             logging.getLogger(__name__).error(
                 f"update_last_login failed for user_id={user_id}: {e}"
             )
+
+    def update_user_password(self, user_id: str, password_hash: str) -> bool:
+        """Update a user's password hash and modification timestamp."""
+        try:
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": {
+                    "password_hash": password_hash,
+                    "password_updated_at": datetime.utcnow(),
+                }}
+            )
+            return result.modified_count > 0
+        except Exception:
+            return False
     
     def get_user_roles(self, user_id: str) -> List[Role]:
         """

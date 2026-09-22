@@ -2,10 +2,15 @@ import { useState, useEffect, useMemo } from 'react';
 import './Settings.css';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { updateUsernameRequest, deleteAccountRequest } from '../api/client';
+import {
+  changePasswordRequest,
+  deleteAccountRequest,
+  sendPasswordChangeCodeRequest,
+  updateUsernameRequest,
+} from '../api/client';
 import { getMyReports, getReportTypeLabel, getReportStatusLabel } from '../api/reports';
 import { getAnalysisDetail } from '../api/analysis';
-import { validateUsername, CONSTRAINTS } from '../utils/validation';
+import { getPasswordRequirements, validatePassword, validateUsername, CONSTRAINTS } from '../utils/validation';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -19,6 +24,22 @@ export default function Settings() {
   const [usernameError, setUsernameError] = useState('');
   const [usernameSuccess, setUsernameSuccess] = useState('');
   const [usernameLoading, setUsernameLoading] = useState(false);
+  const [showUsernameChange, setShowUsernameChange] = useState(false);
+  const [usernamePassword, setUsernamePassword] = useState('');
+  const [showUsernamePassword, setShowUsernamePassword] = useState(false);
+
+  // Password change state
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [passwordCode, setPasswordCode] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [codeCooldown, setCodeCooldown] = useState(0);
+  const [visiblePasswords, setVisiblePasswords] = useState({});
 
   // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -61,6 +82,14 @@ export default function Settings() {
     if (user?.username) setNewUsername(user.username);
   }, [user?.username]);
 
+  useEffect(() => {
+    if (codeCooldown <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setCodeCooldown((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [codeCooldown]);
+
   // Real-time username validation
   useEffect(() => {
     if (!newUsername || newUsername === user?.username) {
@@ -77,6 +106,11 @@ export default function Settings() {
     setUsernameError('');
 
     const trimmed = newUsername.trim();
+    if (!usernamePassword) {
+      setUsernameError('Enter your current password to continue.');
+      return;
+    }
+
     if (trimmed === user?.username) {
       setUsernameError('Username is the same as your current one.');
       return;
@@ -90,13 +124,75 @@ export default function Settings() {
 
     setUsernameLoading(true);
     try {
-      await updateUsernameRequest({ username: trimmed });
+      await updateUsernameRequest({ username: trimmed, currentPassword: usernamePassword });
       refreshUser();
       setUsernameSuccess('Username updated successfully.');
+      setUsernamePassword('');
+      setShowUsernameChange(false);
     } catch (err) {
       setUsernameError(err.message || 'Failed to update username.');
     } finally {
       setUsernameLoading(false);
+    }
+  };
+
+  const handleSendPasswordCode = async () => {
+    if (codeCooldown > 0) return;
+    setPasswordError('');
+    setPasswordMessage('');
+    setCodeLoading(true);
+    try {
+      await sendPasswordChangeCodeRequest();
+      setPasswordMessage(`A verification code was sent to ${user.email}.`);
+      setCodeCooldown(60);
+    } catch (err) {
+      const retryAfter = err.payload?.error?.retry_after_seconds || err.retryAfter;
+      if (retryAfter) setCodeCooldown(Number(retryAfter));
+      setPasswordError(err.message || 'Failed to send verification code.');
+    } finally {
+      setCodeLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordMessage('');
+
+    if (!passwordCode || !currentPassword) {
+      setPasswordError('Verification code and current password are required.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+
+    const validation = validatePassword(newPassword);
+    if (!validation.valid) {
+      setPasswordError(validation.errors.join('. '));
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      await changePasswordRequest({
+        code: passwordCode,
+        current_password: currentPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      setPasswordMessage('Password changed successfully.');
+      setPasswordCode('');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setCodeCooldown(0);
+      setShowPasswordChange(false);
+    } catch (err) {
+      setPasswordError(err.message || 'Failed to change password.');
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -178,6 +274,8 @@ export default function Settings() {
   if (!user) return null;
 
   const usernameChanged = newUsername.trim() !== (user?.username || '');
+  const passwordRequirements = getPasswordRequirements(newPassword);
+  const newPasswordValid = passwordRequirements.every((requirement) => requirement.met);
   const userInitial = (user.username || user.email || 'U').charAt(0).toUpperCase();
 
   return (
@@ -227,7 +325,7 @@ export default function Settings() {
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
-            <span>Account Details</span>
+            <span>Account &amp; Security</span>
           </button>
 
           <button
@@ -250,32 +348,39 @@ export default function Settings() {
 
           <button
             type="button"
-            className={`settings-nav__item settings-nav__item--danger ${activeTab === 'danger' ? 'settings-nav__item--active' : ''}`}
-            onClick={() => setActiveTab('danger')}
+            className={`settings-nav__item ${activeTab === 'privacy' ? 'settings-nav__item--active' : ''}`}
+            onClick={() => setActiveTab('privacy')}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-              <line x1="12" y1="9" x2="12" y2="13"></line>
-              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              <path d="M12 3a9 9 0 0 0-9 9c0 4.97 4.03 9 9 9h1a2 2 0 0 0 2-2v-1a2 2 0 0 1 2-2h1a2 2 0 0 0 2-2v-2a9 9 0 0 0-9-9z"></path>
+              <circle cx="7.5" cy="12" r="1"></circle>
+              <circle cx="12" cy="7.5" r="1"></circle>
+              <circle cx="16.5" cy="12" r="1"></circle>
             </svg>
-            <span>Danger Zone</span>
+            <span>Privacy &amp; Support</span>
           </button>
         </nav>
 
         {/* Content Panels */}
-        <main className="settings-content">
-          {/* TAB 1: Account Information & Username Update */}
-          {activeTab === 'account' && (
-            <div className="settings-panel page-enter">
+        <main className={`settings-content ${activeTab === 'account' ? 'settings-content--account' : ''}`}>
+          {/* TAB 1: Account & Security */}
+          {(activeTab === 'account' || activeTab === 'privacy') && (
+            <div className={`settings-panel ${activeTab === 'account' ? 'settings-account-panel' : 'page-enter'}`}>
               <div className="settings-panel__header">
-                <h2 className="settings-panel__title">Account Details</h2>
+                <h2 className="settings-panel__title">
+                  {activeTab === 'account' ? 'Account & Security' : 'Privacy & Support'}
+                </h2>
                 <p className="settings-panel__subtitle">
-                  Manage your personal account profile information and username settings.
+                  {activeTab === 'account'
+                    ? 'Manage your account details, sign-in security, and account protection.'
+                    : 'Review how your data is managed and find important support resources.'}
                 </p>
               </div>
 
+              {activeTab === 'account' && (
+                <>
               {/* Email Section Card */}
-              <div className="settings-card">
+              <div className="settings-card settings-account-card settings-account-card--email">
                 <div className="settings-card__header">
                   <h3 className="settings-card__title">Email Address</h3>
                   <span className="settings-tag settings-tag--locked">
@@ -305,77 +410,137 @@ export default function Settings() {
               </div>
 
               {/* Username Update Section Card */}
-              <div className="settings-card">
+              <div className="settings-card settings-account-card settings-account-card--username">
                 <div className="settings-card__header">
                   <h3 className="settings-card__title">Username</h3>
-                  <span className="settings-field__counter">
-                    {newUsername.length} / {CONSTRAINTS?.username?.maxLength || 32} chars
-                  </span>
                 </div>
 
-                <form onSubmit={handleUsernameUpdate} className="settings-form">
-                  <div className="settings-field">
-                    <label className="settings-field__label" htmlFor="settings-username">
-                      Display Username
-                    </label>
-                    <div className="settings-input-wrapper">
-                      <input
-                        id="settings-username"
-                        className={`settings-input ${usernameError ? 'settings-input--error' : ''} ${usernameSuccess ? 'settings-input--success' : ''}`}
-                        type="text"
-                        value={newUsername}
-                        onChange={(e) => {
-                          setNewUsername(e.target.value);
-                          setUsernameSuccess('');
-                        }}
-                        maxLength={CONSTRAINTS?.username?.maxLength || 32}
-                        autoComplete="username"
-                        placeholder="Enter username"
-                      />
-                    </div>
-
-                    {usernameError && (
-                      <div className="settings-message settings-message--error">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"></circle>
-                          <line x1="12" y1="8" x2="12" y2="12"></line>
-                          <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                        </svg>
-                        <span>{usernameError}</span>
-                      </div>
-                    )}
-
-                    {usernameSuccess && (
-                      <div className="settings-message settings-message--success">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        <span>{usernameSuccess}</span>
-                      </div>
-                    )}
-
-                    <p className="settings-field__hint">
-                      Usernames may contain letters, numbers, underscores, and hyphens (3-32 characters).
-                    </p>
+                <div className="settings-username-summary">
+                  <div className="settings-username-summary__identity">
+                    <span className="settings-field__label">Current username</span>
+                    <strong className="settings-username-summary__value">{user.username || 'Not set'}</strong>
                   </div>
+                  <button
+                    className="settings-username-summary__action"
+                    type="button"
+                    onClick={() => {
+                      setUsernameError('');
+                      setUsernameSuccess('');
+                      setNewUsername(user.username || '');
+                      setUsernamePassword('');
+                      setShowUsernameChange(true);
+                    }}
+                  >
+                    Change username
+                  </button>
+                </div>
+                {usernameSuccess && (
+                  <div className="settings-message settings-message--success">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span>{usernameSuccess}</span>
+                  </div>
+                )}
+              </div>
+                </>
+              )}
 
-                  <div className="settings-form__actions">
+              <div className="settings-feature-grid">
+                {activeTab === 'account' && (
+                <section className="settings-feature-section">
+                  <div className="settings-feature-section__header">
+                    <div>
+                      <h3 className="settings-feature-section__title">Security</h3>
+                      <p className="settings-feature-section__description">
+                        Keep your account protected and manage sign-in options.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="settings-feature-list">
                     <button
-                      className="settings-btn settings-btn--primary"
-                      type="submit"
-                      disabled={usernameLoading || !usernameChanged || !!usernameError}
+                      className="settings-feature-item"
+                      type="button"
+                      onClick={() => {
+                        setPasswordError('');
+                        setPasswordMessage('');
+                        setShowPasswordChange(true);
+                      }}
                     >
-                      {usernameLoading ? (
-                        <>
-                          <span className="settings-spinner"></span>
-                          Updating...
-                        </>
-                      ) : (
-                        'Save Username'
-                      )}
+                      <span>
+                        <strong>Change password</strong>
+                        <small>Verify your email and current password before choosing a new one.</small>
+                      </span>
+                      <span className="settings-feature-item__arrow" aria-hidden="true">&rarr;</span>
+                    </button>
+                    <button className="settings-feature-item" type="button" disabled>
+                      <span>
+                        <strong>Two-factor authentication</strong>
+                        <small>Add another layer of protection to your account.</small>
+                      </span>
+                      <span className="settings-feature-item__action">Coming soon</span>
                     </button>
                   </div>
-                </form>
+                </section>
+                )}
+
+                {activeTab === 'privacy' && (
+                <>
+                  <section className="settings-feature-section">
+                  <div className="settings-feature-section__header">
+                    <div>
+                      <h3 className="settings-feature-section__title">Privacy &amp; Data</h3>
+                      <p className="settings-feature-section__description">
+                        Review how your analyses and account data are managed.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="settings-feature-list">
+                    <button className="settings-feature-item" type="button" disabled>
+                      <span>
+                        <strong>Download your data</strong>
+                        <small>Request a copy of your VerfAi account data.</small>
+                      </span>
+                      <span className="settings-feature-item__action">Coming soon</span>
+                    </button>
+                    <button className="settings-feature-item" type="button" disabled>
+                      <span>
+                        <strong>Analysis history</strong>
+                        <small>Manage how long your submitted analyses are retained.</small>
+                      </span>
+                      <span className="settings-feature-item__action">Coming soon</span>
+                    </button>
+                  </div>
+                  </section>
+
+                  <section className="settings-feature-section">
+                  <div className="settings-feature-section__header">
+                    <div>
+                      <h3 className="settings-feature-section__title">Support &amp; Legal</h3>
+                      <p className="settings-feature-section__description">
+                        Find help and review the documents that govern VerfAi.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="settings-feature-list">
+                    <button className="settings-feature-item" type="button" onClick={() => navigate('/terms-and-conditions')}>
+                      <span>
+                        <strong>Terms and Conditions</strong>
+                        <small>Review the terms for using VerfAi.</small>
+                      </span>
+                      <span className="settings-feature-item__arrow" aria-hidden="true">&rarr;</span>
+                    </button>
+                    <button className="settings-feature-item" type="button" disabled>
+                      <span>
+                        <strong>Help and contact support</strong>
+                        <small>Get assistance with your account or an analysis.</small>
+                      </span>
+                      <span className="settings-tag settings-tag--coming">Coming soon</span>
+                    </button>
+                  </div>
+                  </section>
+                </>
+                )}
               </div>
             </div>
           )}
@@ -539,9 +704,9 @@ export default function Settings() {
             </div>
           )}
 
-          {/* TAB 3: Danger Zone */}
-          {activeTab === 'danger' && (
-            <div className="settings-panel page-enter">
+          {/* Danger Zone stays separate within Account & Security. */}
+          {activeTab === 'account' && (
+            <div className="settings-panel settings-panel--danger">
               <div className="settings-panel__header">
                 <h2 className="settings-panel__title settings-panel__title--danger">Danger Zone</h2>
                 <p className="settings-panel__subtitle">
@@ -549,7 +714,7 @@ export default function Settings() {
                 </p>
               </div>
 
-              <div className="settings-card settings-card--danger">
+              <div className="settings-card settings-card--danger settings-account-card settings-account-card--danger">
                 <div className="settings-danger-box">
                   <div className="settings-danger-box__icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -660,6 +825,252 @@ export default function Settings() {
           )}
         </main>
       </div>
+
+      {showPasswordChange && (
+        <div className="settings-modal-overlay" onClick={() => !passwordLoading && setShowPasswordChange(false)}>
+          <div className="settings-modal settings-modal--username page-enter" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-modal__header">
+              <div>
+                <span className="settings-tag settings-tag--locked">Account security</span>
+                <h3 className="settings-modal__title">Change password</h3>
+              </div>
+              <button
+                className="settings-modal__close"
+                type="button"
+                onClick={() => setShowPasswordChange(false)}
+                disabled={passwordLoading}
+                aria-label="Close password change dialog"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form className="settings-modal__body" onSubmit={handlePasswordChange}>
+              <p className="settings-modal__intro">
+                Send a verification code to {user.email}, then confirm your current password.
+              </p>
+
+              <div className="settings-field">
+                <label className="settings-field__label" htmlFor="settings-password-code">Verification code</label>
+                <div className="settings-input-wrapper">
+                  <input
+                    id="settings-password-code"
+                    className="settings-input"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={5}
+                    value={passwordCode}
+                    onChange={(e) => setPasswordCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Enter the 5-digit code"
+                  />
+                  <button
+                    className="settings-input-toggle"
+                    type="button"
+                    onClick={handleSendPasswordCode}
+                    disabled={codeLoading || codeCooldown > 0}
+                  >
+                    {codeLoading ? 'Sending...' : codeCooldown > 0 ? `${codeCooldown}s` : 'Send code'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-field">
+                <label className="settings-field__label" htmlFor="settings-current-password">Current password</label>
+                <div className="settings-input-wrapper">
+                  <input
+                    id="settings-current-password"
+                    className="settings-input"
+                    type={visiblePasswords.current ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    className="settings-input-toggle settings-input-toggle--text"
+                    type="button"
+                    onClick={() => setVisiblePasswords((current) => ({ ...current, current: !current.current }))}
+                    aria-label={visiblePasswords.current ? 'Hide current password' : 'Show current password'}
+                  >
+                    {visiblePasswords.current ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-field">
+                <label className="settings-field__label" htmlFor="settings-new-password">New password</label>
+                <div className="settings-input-wrapper">
+                  <input
+                    id="settings-new-password"
+                    className="settings-input"
+                    type={visiblePasswords.new ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    className="settings-input-toggle settings-input-toggle--text"
+                    type="button"
+                    onClick={() => setVisiblePasswords((current) => ({ ...current, new: !current.new }))}
+                    aria-label={visiblePasswords.new ? 'Hide new password' : 'Show new password'}
+                  >
+                    {visiblePasswords.new ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <ul className="settings-password-requirements" aria-label="Password requirements">
+                  {passwordRequirements.map((requirement) => (
+                    <li className={requirement.met ? 'is-met' : ''} key={requirement.key}>
+                      <span aria-hidden="true">{requirement.met ? '✓' : '○'}</span>
+                      {requirement.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="settings-field">
+                <label className="settings-field__label" htmlFor="settings-confirm-password">Confirm new password</label>
+                <div className="settings-input-wrapper">
+                  <input
+                    id="settings-confirm-password"
+                    className={`settings-input ${confirmPassword && confirmPassword !== newPassword ? 'settings-input--error' : ''}`}
+                    type={visiblePasswords.confirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    className="settings-input-toggle settings-input-toggle--text"
+                    type="button"
+                    onClick={() => setVisiblePasswords((current) => ({ ...current, confirm: !current.confirm }))}
+                    aria-label={visiblePasswords.confirm ? 'Hide confirmed password' : 'Show confirmed password'}
+                  >
+                    {visiblePasswords.confirm ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {confirmPassword && confirmPassword !== newPassword && (
+                  <span className="settings-field__error">Passwords do not match.</span>
+                )}
+              </div>
+
+              {passwordMessage && <div className="settings-message settings-message--success"><span>{passwordMessage}</span></div>}
+              {passwordError && <div className="settings-message settings-message--error"><span>{passwordError}</span></div>}
+
+              <div className="settings-modal__actions">
+                <button
+                  className="settings-btn settings-btn--secondary"
+                  type="button"
+                  onClick={() => setShowPasswordChange(false)}
+                  disabled={passwordLoading}
+                >
+                  Cancel
+                </button>
+                <button className="settings-btn settings-btn--primary" type="submit" disabled={passwordLoading || !newPasswordValid || newPassword !== confirmPassword}>
+                  {passwordLoading ? 'Updating...' : 'Change password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showUsernameChange && (
+        <div className="settings-modal-overlay" onClick={() => !usernameLoading && setShowUsernameChange(false)}>
+          <div className="settings-modal settings-modal--username page-enter" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-modal__header">
+              <div>
+                <span className="settings-tag settings-tag--locked">Account security</span>
+                <h3 className="settings-modal__title">Change username</h3>
+              </div>
+              <button
+                className="settings-modal__close"
+                type="button"
+                onClick={() => setShowUsernameChange(false)}
+                disabled={usernameLoading}
+                aria-label="Close username change dialog"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form className="settings-modal__body" onSubmit={handleUsernameUpdate}>
+              <p className="settings-modal__intro">
+                Enter your current password to confirm this account change.
+              </p>
+              <p className="settings-field__hint settings-modal__username-hint">
+                Usernames may contain letters, numbers, underscores, and hyphens (3-32 characters), and must include at least one letter.
+              </p>
+
+              <div className="settings-field">
+                <label className="settings-field__label" htmlFor="settings-new-username">New username</label>
+                <input
+                  id="settings-new-username"
+                  className={`settings-input ${usernameError ? 'settings-input--error' : ''}`}
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => {
+                    setNewUsername(e.target.value);
+                    setUsernameError('');
+                  }}
+                  maxLength={CONSTRAINTS?.username?.maxLength || 32}
+                  autoComplete="username"
+                  autoFocus
+                />
+                <span className="settings-field__counter">
+                  {newUsername.length} / {CONSTRAINTS?.username?.maxLength || 32} chars
+                </span>
+              </div>
+
+              <div className="settings-field">
+                <label className="settings-field__label" htmlFor="settings-username-password">Current password</label>
+                <div className="settings-input-wrapper">
+                  <input
+                    id="settings-username-password"
+                    className={`settings-input ${usernameError ? 'settings-input--error' : ''}`}
+                    type={showUsernamePassword ? 'text' : 'password'}
+                    value={usernamePassword}
+                    onChange={(e) => {
+                      setUsernamePassword(e.target.value);
+                      setUsernameError('');
+                    }}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    className="settings-input-toggle"
+                    type="button"
+                    onClick={() => setShowUsernamePassword((visible) => !visible)}
+                    aria-label={showUsernamePassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showUsernamePassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+
+              {usernameError && (
+                <div className="settings-message settings-message--error">
+                  <span>{usernameError}</span>
+                </div>
+              )}
+
+              <div className="settings-modal__actions">
+                <button
+                  className="settings-btn settings-btn--secondary"
+                  type="button"
+                  onClick={() => setShowUsernameChange(false)}
+                  disabled={usernameLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="settings-btn settings-btn--primary"
+                  type="submit"
+                  disabled={usernameLoading || !usernamePassword || !usernameChanged}
+                >
+                  {usernameLoading ? 'Updating...' : 'Submit change'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Report Detail Modal */}
       {selectedReport && (

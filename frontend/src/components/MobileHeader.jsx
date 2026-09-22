@@ -148,7 +148,7 @@ export default function MobileHeader() {
           About us
         </button>
         {isLoggedIn && (
-          <button className="mobile-header__item" onClick={() => go('/journey')}>
+          <button className="mobile-header__item" onClick={() => go('/analytics')}>
             <span className="mobile-header__item-icon">📊</span>
             Your Verif-AI Journey
           </button>
