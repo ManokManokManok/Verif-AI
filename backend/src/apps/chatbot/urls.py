@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     # Send message to chatbot (creates new or continues existing conversation)
     path('message/', views.send_message, name='chatbot_send_message'),
+    path('static-message/', views.send_static_message, name='chatbot_send_static_message'),
     path('image-analysis/', views.analyze_image, name='chatbot_analyze_image'),
     
     # Get/clear current conversation history

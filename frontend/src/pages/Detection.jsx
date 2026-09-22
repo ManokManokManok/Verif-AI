@@ -556,7 +556,7 @@ function Detection() {
   };
 
   return (
-    <div className="detect page-enter">
+    <div className="detect page-enter" style={{ gridTemplateColumns: sidebarOpen ? '320px 1fr' : '72px 1fr' }}>
       <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
         <button
           className="detect__sidebtn detect__sidebtn--menu"
@@ -649,7 +649,7 @@ function Detection() {
         )}
       </aside>
 
-      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
+      <div className="detect__main">
         <header className="nav nav--detect">
           <div className="brand brand--small">Verif-AI Detection</div>
           <nav className="nav__links">

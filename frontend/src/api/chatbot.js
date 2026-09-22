@@ -47,6 +47,34 @@ export async function sendChatMessage(message, accessToken = null, conversationI
   return await response.json();
 }
 
+export async function sendStaticChatMessage(topic, accessToken = null, conversationId = null) {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  } else {
+    headers['X-Session-ID'] = getOrCreateSessionId();
+  }
+
+  const body = { topic };
+  if (conversationId) body.conversation_id = conversationId;
+
+  const response = await fetch(`${API_BASE_URL}/api/chat/static-message/`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || 'Failed to send static chatbot message');
+  }
+
+  return await response.json();
+}
+
 export async function analyzeImage(imageFileOrBlob, accessToken = null) {
   const formData = new FormData();
   formData.append('image', imageFileOrBlob, 'image.png');
