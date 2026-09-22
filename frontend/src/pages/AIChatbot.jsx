@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   sendChatMessage, 
+  sendStaticChatMessage,
   getConversations, 
   getChatHistory, 
   deleteConversation,
@@ -36,7 +39,51 @@ function AIChatbot() {
   const [autoScroll, setAutoScroll] = useState(() => localStorage.getItem('chatbot-autoscroll') !== 'false');
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('chatbot-sound') !== 'false');
   const [copiedIndex, setCopiedIndex] = useState(null);
+  const [composerHeight, setComposerHeight] = useState(150);
   const messagesEndRef = useRef(null);
+  const composerDockRef = useRef(null);
+  const chatTextareaRef = useRef(null);
+
+  const syncChatTextareaHeight = () => {
+    const el = chatTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  };
+
+  const handleChatTextChange = (e) => {
+    setText(e.target.value);
+    requestAnimationFrame(syncChatTextareaHeight);
+  };
+
+  const handleChatKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessageDirect();
+    }
+  };
+
+  // Collapse the textarea back to a single line once it's cleared (e.g. after sending)
+  useEffect(() => {
+    if (!text) {
+      const el = chatTextareaRef.current;
+      if (el) el.style.height = 'auto';
+    }
+  }, [text]);
+
+  // Keep the scroll area's bottom padding in sync with the fixed composer's actual height
+  // so messages never end up hidden behind it, regardless of composer content changes.
+  useEffect(() => {
+    const node = composerDockRef.current;
+    if (!node) return undefined;
+
+    const updateHeight = () => setComposerHeight(node.offsetHeight);
+    updateHeight();
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const scrollToBottom = () => {
     if (autoScroll) {
@@ -62,47 +109,39 @@ function AIChatbot() {
     }, 50);
   };
 
-  const renderFormattedContent = (content) => {
+  const renderFormattedContent = (content, isUser = false) => {
     if (!content) return null;
 
-    const lines = content.split('\n');
+    if (isUser) {
+      return <div className="chatbot__plain-content">{content}</div>;
+    }
 
-    return lines.map((line, lineIndex) => {
-      if (!line.trim() && lines.length > 1) {
-        return <div key={lineIndex} className="chatbot__text-spacer" />;
-      }
-
-      const isBullet = /^\s*[\*\-•]\s+/.test(line);
-      const cleanLine = isBullet ? line.replace(/^\s*[\*\-•]\s+/, '') : line;
-
-      // Split bold markers **bold text**
-      const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
-      const renderedParts = parts.map((part, pIdx) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return (
-            <strong key={pIdx} className="chatbot__bold">
-              {part.slice(2, -2)}
-            </strong>
-          );
-        }
-        return part;
-      });
-
-      if (isBullet) {
-        return (
-          <div key={lineIndex} className="chatbot__bullet-item">
-            <span className="chatbot__bullet-dot">•</span>
-            <span className="chatbot__bullet-text">{renderedParts}</span>
-          </div>
-        );
-      }
-
-      return (
-        <div key={lineIndex} className="chatbot__text-line">
-          {renderedParts}
-        </div>
-      );
-    });
+    return (
+      <div className="chatbot__markdown">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ node, ...props }) => (
+              <a {...props} target="_blank" rel="noreferrer" />
+            ),
+            code: ({ inline, className, children, ...props }) => {
+              const language = className?.replace('language-', '') || '';
+              if (inline) {
+                return <code className="chatbot__inline-code" {...props}>{children}</code>;
+              }
+              return (
+                <div className="chatbot__code-block">
+                  {language && <span className="chatbot__code-language">{language}</span>}
+                  <pre><code className={className} {...props}>{children}</code></pre>
+                </div>
+              );
+            },
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -334,6 +373,38 @@ function AIChatbot() {
     }
   };
 
+  const handleStaticPrompt = async (topic) => {
+    if (isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const response = await sendStaticChatMessage(topic, accessToken, currentConversationId);
+      const timestamp = new Date().toISOString();
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: response.message, timestamp },
+        { role: 'assistant', content: response.response, timestamp },
+      ]);
+
+      if (response.disclaimer) setDisclaimer(response.disclaimer);
+      if (response.is_new_conversation || !currentConversationId) {
+        setCurrentConversationId(response.conversation_id);
+        setCurrentTitle(response.title || response.message.substring(0, 50));
+        if (isLoggedIn) fetchConversations();
+      }
+    } catch (error) {
+      console.error('Static chat topic error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: new Date().toISOString(),
+        isError: true,
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSendMessage = (e) => {
     e.preventDefault();
     handleSendMessageDirect();
@@ -374,7 +445,7 @@ function AIChatbot() {
   };
 
   return (
-    <div className="detect detect--chatbot page-enter" style={{ height: '100vh', overflow: 'hidden' }}>
+    <div className="detect detect--chatbot page-enter">
       <aside className={`detect__sidebar detect__sidebar--chatbot${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
         <button
           className="detect__sidebtn detect__sidebtn--menu"
@@ -384,16 +455,7 @@ function AIChatbot() {
         >
           {sidebarOpen ? '✕' : '☰'}
         </button>
-        <button 
-          className="detect__sidebtn" 
-          type="button" 
-          aria-label="New Detection"
-          onClick={openDetection}
-          title="New Detection"
-        >
-          ✎
-        </button>
-        
+
         {/* Conversation History - Only shown when sidebar is open and logged in */}
         {sidebarOpen && isLoggedIn && (
           <div className="chatbot__history-panel">
@@ -459,17 +521,30 @@ function AIChatbot() {
             </button>
           </div>
         )}
-        
-        <div className="detect__spacer" />
-        <button 
-          className="detect__sidebtn" 
-          type="button" 
-          aria-label="Settings"
-          onClick={handleSettingsClick}
-          title="Settings"
-        >
-          ⚙
-        </button>
+
+        {!sidebarOpen && (
+          <>
+            <button
+              className="detect__sidebtn"
+              type="button"
+              aria-label="New Detection"
+              onClick={openDetection}
+              title="New Detection"
+            >
+              ✎
+            </button>
+            <div className="detect__spacer" />
+            <button
+              className="detect__sidebtn"
+              type="button"
+              aria-label="Settings"
+              onClick={handleSettingsClick}
+              title="Settings"
+            >
+              ⚙
+            </button>
+          </>
+        )}
       </aside>
 
       <div className="detect__main" style={{ 
@@ -477,7 +552,7 @@ function AIChatbot() {
         marginLeft: sidebarOpen ? 320 : 72,
         display: 'flex',
         flexDirection: 'column',
-        height: '100vh',
+        minHeight: '100vh',
       }}>
         <header className="nav nav--detect" style={{ flexShrink: 0 }}>
           <div className="brand brand--small">
@@ -562,8 +637,7 @@ function AIChatbot() {
           display: 'flex',
           flexDirection: 'column',
           flex: 1,
-          minHeight: 0,
-          overflow: 'hidden',
+          overflow: 'visible',
           padding: '16px 20px 10px',
         }}>
           {disclaimer && (
@@ -573,10 +647,10 @@ function AIChatbot() {
           )}
           <div className="chatbot__panel page-enter">
             <div className="chatbot__messages-wrap" style={{ 
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              padding: '20px 24px',
+              flex: 'none',
+              minHeight: 'auto',
+              overflowY: 'visible',
+              padding: `20px 24px ${messages.length === 0 ? 20 : composerHeight + 34 + 24}px`,
               display: 'flex',
               flexDirection: 'column',
             }}>
@@ -612,32 +686,32 @@ function AIChatbot() {
                             icon: '🛡️',
                             title: 'Common Phishing Tactics',
                             desc: 'How do scammers use urgent SMS or email links to steal credentials?',
-                            query: 'What are the most common phishing tactics used by scammers today?',
+                            topic: 'phishing_tactics',
                           },
                           {
                             icon: '✉️',
                             title: 'Spotting Fake Emails',
                             desc: 'What key red flags identify spoofed email addresses and fake domain names?',
-                            query: 'How can I spot a fake or spoofed email address?',
+                            topic: 'fake_emails',
                           },
                           {
                             icon: '🚨',
                             title: 'Scam Recovery Steps',
                             desc: 'What immediate actions should I take if I accidentally clicked a phishing link?',
-                            query: 'What should I do immediately if I entered my details on a suspicious website?',
+                            topic: 'scam_recovery',
                           },
                           {
                             icon: '💔',
                             title: 'Romance & Investment Scams',
                             desc: 'How do fake romance and crypto investment scams operate?',
-                            query: 'What are the red flags of romance and crypto investment scams?',
+                            topic: 'romance_investment_scams',
                           },
                         ].map((prompt, idx) => (
                           <button
                             key={idx}
                             type="button"
                             className="chatbot__prompt-card"
-                            onClick={() => handlePromptSubmit(prompt.query)}
+                            onClick={() => handleStaticPrompt(prompt.topic)}
                             disabled={isLoading}
                           >
                             <div className="chatbot__prompt-icon">{prompt.icon}</div>
@@ -758,9 +832,6 @@ function AIChatbot() {
                     className={`chatbot__message-wrap${isUser ? ' chatbot__message-wrap--user' : ''}`}
                   >
                     <div className="chatbot__message-header">
-                      <span className="chatbot__avatar">
-                        {isUser ? '👤' : '🤖'}
-                      </span>
                       <span className={`chatbot__message-name${isUser ? ' chatbot__message-name--user' : ''}`}>
                         {displayName}
                       </span>
@@ -778,7 +849,7 @@ function AIChatbot() {
                             className="chatbot__message-image"
                           />
                         )}
-                        {renderFormattedContent(msg.content)}
+                        {renderFormattedContent(msg.content, isUser)}
                       </div>
 
                       {!isUser && !msg.isError && (
@@ -805,7 +876,6 @@ function AIChatbot() {
               {isLoading && (
                 <div className="chatbot__message-wrap">
                   <div className="chatbot__message-header">
-                    <span className="chatbot__avatar">🤖</span>
                     <span className="chatbot__message-name">Verif-AI</span>
                   </div>
                   <div className="chatbot__message-bubble">
@@ -822,70 +892,59 @@ function AIChatbot() {
             </div>
           </div>
 
-          {/* Quick Action Chips Bar above input */}
-          <div className="chatbot__quick-chips">
-            <button
-              type="button"
-              className="chatbot__chip"
-              onClick={() => handlePromptSubmit('How do I verify if a link or message is safe?')}
-              disabled={isLoading}
-            >
-              🛡️ How to verify links
-            </button>
-            <button
-              type="button"
-              className="chatbot__chip"
-              onClick={() => handlePromptSubmit('What are signs of phishing emails?')}
-              disabled={isLoading}
-            >
-              📧 Signs of fake emails
-            </button>
-            <button
-              type="button"
-              className="chatbot__chip"
-              onClick={() => handlePromptSubmit('What should I do if my bank account details were compromised?')}
-              disabled={isLoading}
-            >
-              🚨 Compromised account steps
-            </button>
-          </div>
-
-          <form onSubmit={handleSendMessage} className="detect__inputRow detect__inputRow--chatbot" style={{ flexShrink: 0 }}>
-            <button className="detect__plus" type="button" aria-label="Upload" title="Upload attachment (coming soon)">
-              +
-            </button>
-            <input
-              className="detect__input"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Ask Verif-AI about scam prevention, link safety, or suspicious messages..."
-              disabled={isLoading}
-              maxLength={2000}
-            />
-            <button 
-              className={`detect__cta ${text.trim() ? 'detect__cta--active' : ''}`}
-              type="submit"
-              disabled={isLoading || !text.trim()}
-            >
-              {isLoading ? (
-                <>
+          <div
+            ref={composerDockRef}
+            className="chatbot__composer-dock"
+            style={{
+              left: sidebarOpen ? 320 : 72,
+              width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 72px)',
+              '--composer-top': `${composerHeight + 34 - 8}px`,
+            }}
+          >
+            <form onSubmit={handleSendMessage} className="detect__inputRow detect__inputRow--chatbot">
+              <textarea
+                ref={chatTextareaRef}
+                className="detect__input detect__input--chatbot"
+                value={text}
+                onChange={handleChatTextChange}
+                onKeyDown={handleChatKeyDown}
+                placeholder="Ask Verif-AI about scam prevention, link safety, or suspicious messages..."
+                disabled={isLoading}
+                maxLength={2000}
+                rows={1}
+              />
+              <button 
+                className={`detect__cta detect__cta--chatbot ${text.trim() ? 'detect__cta--active' : ''}`}
+                type="submit"
+                disabled={isLoading || !text.trim()}
+                aria-label="Send message"
+                title="Send message"
+              >
+                {isLoading ? (
                   <span className="settings-spinner"></span>
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <span>Send</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
                   </svg>
-                </>
-              )}
-            </button>
-          </form>
+                )}
+              </button>
+            </form>
+            {text.length > 1800 && (
+              <div className="chatbot__charCount">
+                {text.length} / 2000
+              </div>
+            )}
+          </div>
         </main>
 
-        <footer className="detect__footer" style={{ flexShrink: 0 }}>
+        <footer
+          className="detect__footer detect__footer--chatbot"
+          style={{
+            left: sidebarOpen ? 320 : 72,
+            width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 72px)',
+          }}
+        >
           <div className="detect__copyright">
             © 2026 VerifAI Technologies Inc. All rights reserved.
           </div>

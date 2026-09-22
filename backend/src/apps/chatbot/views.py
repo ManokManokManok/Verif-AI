@@ -433,6 +433,76 @@ def send_message(request: Request) -> Response:
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('api_write')
+def send_static_message(request: Request) -> Response:
+    """Save a predefined chatbot topic exchange without invoking the LLM."""
+    from ...use_cases.chatbot.general_chatbot import STATIC_CHAT_PROMPTS
+
+    topic = request.data.get('topic', '')
+    if topic not in STATIC_CHAT_PROMPTS:
+        return Response({
+            'error': {
+                'code': 'VALIDATION_ERROR',
+                'message': 'Unknown chatbot topic',
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    user_id = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        try:
+            from ...infrastructure.jwt_service import JWTService
+            import os
+            token = auth_header.split(' ', 1)[1]
+            jwt_service = JWTService(os.getenv('JWT_SECRET_KEY'), 900, 604800, None)
+            payload = jwt_service.verify_access_token(token)
+            user_id = payload.get('user_id')
+        except Exception as jwt_error:
+            logger.warning(f"[CHATBOT] Invalid/expired token for static topic: {jwt_error}")
+
+    if not user_id:
+        session_id = _get_session_id(request)
+        prompt = STATIC_CHAT_PROMPTS[topic]
+        history = _anonymous_conversations.setdefault(session_id, [])
+        history.extend([
+            {'role': 'user', 'content': prompt['message']},
+            {'role': 'assistant', 'content': prompt['response']},
+        ])
+        return Response({
+            'message': prompt['message'],
+            'response': prompt['response'],
+            'conversation_id': None,
+            'message_count': len(history),
+            'is_new_conversation': False,
+            'is_authenticated': False,
+            'disclaimer': (
+                'Thank you for trying out our guidance mode! Since you are not logged in, '
+                'this conversation will not be saved and may be limited, but still feel free '
+                'to continue conversing.'
+            ),
+        }, status=status.HTTP_200_OK)
+
+    try:
+        chatbot = GeneralChatbotUseCase(None, get_conversation_repository())
+        result = chatbot.save_static_exchange(
+            user_id,
+            topic,
+            request.data.get('conversation_id'),
+        )
+        result['is_authenticated'] = True
+        return Response(result, status=status.HTTP_200_OK)
+    except Exception as error:
+        logger.error(f"[CHATBOT] Static topic save failed: {error}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'Unable to save chatbot topic',
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @rate_limit('api_read')
