@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import loginImage from '../../assets/image/login.png';
 import { isAdmin as checkIsAdmin, sendMfaCodeRequest, verifyMfaCodeRequest } from '../api/client';
+import EmailVerificationCode from '../components/auth/EmailVerificationCode';
 
 /**
  * Format error message for display.
@@ -193,6 +194,7 @@ function AlertIcon() {
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { refreshUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
@@ -200,12 +202,24 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
   // MFA state
   const [mfaStep, setMfaStep] = useState(false);
   const [mfaCode, setMfaCode] = useState(['', '', '', '', '', '']);
   const codeRefs = useRef([]);
+
+  // Email verification step (shown when logging in/signing up with an unverified email)
+  const [verifyStep, setVerifyStep] = useState(false);
+  const [verifyMessage, setVerifyMessage] = useState('');
+
+  useEffect(() => {
+    if (location.state?.verifiedEmail) {
+      setEmail(location.state.verifiedEmail);
+      setInfoMessage('Email verified! Please log in.');
+    }
+  }, [location.state]);
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -219,6 +233,7 @@ function Login() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    setInfoMessage('');
     setLoading(true);
 
     try {
@@ -226,7 +241,28 @@ function Login() {
       await sendMfaCodeRequest({ email, password });
       setMfaStep(true);
     } catch (err) {
-      setError(err.message || 'Failed to log in');
+      if (err.payload?.error?.code === 'EMAIL_NOT_VERIFIED') {
+        setVerifyMessage(err.message || 'A new verification code has been sent to your email.');
+        setVerifyStep(true);
+      } else {
+        setError(err.message || 'Failed to log in');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailVerified = async () => {
+    setVerifyStep(false);
+    setError('');
+    setLoading(true);
+    try {
+      // Continue the login flow now that the email is verified
+      await sendMfaCodeRequest({ email, password });
+      setMfaStep(true);
+    } catch (err) {
+      setInfoMessage('Email verified! Please log in.');
+      setError(err.message || '');
     } finally {
       setLoading(false);
     }
@@ -363,7 +399,14 @@ function Login() {
           </button>
         </div>
 
-        {!mfaStep ? (
+        {verifyStep ? (
+          <EmailVerificationCode
+            email={email}
+            initialMessage={verifyMessage}
+            onVerified={handleEmailVerified}
+            onBack={() => { setVerifyStep(false); setVerifyMessage(''); }}
+          />
+        ) : !mfaStep ? (
           <>
             <h1 className="auth__title">Log in</h1>
             <p className="auth__subtitle">
@@ -374,6 +417,12 @@ function Login() {
                 Register here !
               </Link>
             </p>
+
+            {infoMessage && (
+              <p className="auth__subtitle" style={{ textAlign: 'center', color: '#4CAF50' }}>
+                {infoMessage}
+              </p>
+            )}
 
             <form
               className="auth__form"

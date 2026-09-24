@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Analytics.css';
 import { useAuth } from '../context/AuthContext';
-import { getUserSafetySummary, getGlobalSafetySummary } from '../api/analytics';
+import { getUserSafetySummary, getGlobalSafetySummary, getUserAiSummary, getUserAiSummaryCached } from '../api/analytics';
 
 function BarChart({ items, emptyText, horizontal = false }) {
   if (!items.length) return <p className="journey__empty">{emptyText}</p>;
@@ -178,6 +178,90 @@ function formatSubmissionDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Date unavailable';
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+}
+
+function formatUpdatedAt(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const isToday = date.toDateString() === new Date().toDateString();
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
+  return isToday ? `Updated today at ${time}` : `Updated ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
+}
+
+function AIInsightSection({ insight, loading, error, onRequest }) {
+  if (!insight && !loading) {
+    return (
+      <section className="journey__ai-insight journey__ai-insight--prompt" aria-labelledby="ai-insight-title">
+        <div className="journey__ai-insight-icon" aria-hidden="true">✨</div>
+        <div className="journey__ai-insight-body">
+          <h2 id="ai-insight-title">Want this explained simply?</h2>
+          <p>We can turn your safety summary into a short, plain-language explanation.</p>
+          {error && <p className="journey__ai-insight-error">{error}</p>}
+          <button type="button" className="journey__ai-insight-button" onClick={onRequest}>
+            Explain my summary in plain language
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (loading) {
+    return (
+      <section className="journey__ai-insight" aria-live="polite">
+        <div className="journey__ai-insight-icon" aria-hidden="true">✨</div>
+        <div className="journey__ai-insight-body">
+          <p className="journey__ai-insight--loading">Putting your summary into plain words...</p>
+        </div>
+      </section>
+    );
+  }
+
+  const riskTag = insight.risk_tag || 'low';
+  const sections = [
+    { key: 'current_status', title: 'Where you stand right now', items: insight.current_status },
+    { key: 'your_journey', title: 'Your journey so far', items: insight.your_journey },
+    { key: 'community_trends', title: "What's happening around you", items: insight.community_trends },
+  ];
+
+  return (
+    <section className="journey__ai-insight" aria-labelledby="ai-insight-title">
+      <div className="journey__ai-insight-icon" aria-hidden="true">✨</div>
+      <div className="journey__ai-insight-body">
+        <div className="journey__ai-insight-head">
+          <h2 id="ai-insight-title">{insight.headline || 'Your safety at a glance'}</h2>
+          <span className={`journey__ai-insight-tag journey__ai-insight-tag--${riskTag}`}>{riskTag} risk</span>
+        </div>
+
+        {sections.map((section) => (
+          (section.items || []).length > 0 && (
+            <div className="journey__ai-insight-section" key={section.key}>
+              <p className="journey__ai-insight-section-title">{section.title}</p>
+              {section.items.map((line, index) => (
+                <p key={index}>{line}</p>
+              ))}
+            </div>
+          )
+        ))}
+
+        {(insight.watch_list || []).length > 0 && (
+          <div className="journey__ai-insight-section">
+            <p className="journey__ai-insight-section-title">What to watch out for</p>
+            <ul className="journey__ai-insight-watchlist">
+              {insight.watch_list.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {insight.tip && <p className="journey__ai-insight-tip"><strong>Tip:</strong> {insight.tip}</p>}
+        {insight.generated_at && (
+          <p className="journey__ai-insight-meta">{formatUpdatedAt(insight.generated_at)}</p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function dedupeRecentSubmissions(submissions = []) {
@@ -408,6 +492,9 @@ export default function Analytics() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [personal, setPersonal] = useState(null);
   const [community, setCommunity] = useState(null);
+  const [aiInsight, setAiInsight] = useState(null);
+  const [aiInsightLoading, setAiInsightLoading] = useState(false);
+  const [aiInsightError, setAiInsightError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -415,6 +502,21 @@ export default function Analytics() {
     await logout();
     setShowUserMenu(false);
     navigate('/');
+  };
+
+  const requestAiInsight = () => {
+    setAiInsightLoading(true);
+    setAiInsightError('');
+    getUserAiSummary()
+      .then((response) => {
+        if (response?.data?.success) {
+          setAiInsight(response.data.data);
+        } else {
+          setAiInsightError('We could not build your summary. Please try again.');
+        }
+      })
+      .catch(() => setAiInsightError('We could not build your summary. Please try again.'))
+      .finally(() => setAiInsightLoading(false));
   };
 
   useEffect(() => {
@@ -430,6 +532,13 @@ export default function Analytics() {
       })
       .catch((requestError) => setError(requestError.message || 'We could not load your analytics.'))
       .finally(() => setLoading(false));
+
+    // Show a previously generated summary immediately, if one exists, without calling Gemini again.
+    getUserAiSummaryCached()
+      .then((response) => {
+        if (response?.data?.success && response.data.data) setAiInsight(response.data.data);
+      })
+      .catch(() => {});
   }, [isLoggedIn, navigate]);
 
   if (!isLoggedIn) return null;
@@ -507,6 +616,15 @@ export default function Analytics() {
                   <p className="journey__scope-note">{personal?.analytics_scope_note || 'Based only on your authenticated Verif-AI checks.'}</p>
                 </div>
               </section>
+            </Reveal>
+
+            <Reveal className="journey__reveal--wide" delay={80}>
+              <AIInsightSection
+                insight={aiInsight}
+                loading={aiInsightLoading}
+                error={aiInsightError}
+                onRequest={requestAiInsight}
+              />
             </Reveal>
 
             <Reveal className="journey__reveal--wide" delay={80}>

@@ -90,6 +90,48 @@ class GeminiProvider:
             raise RuntimeError("Gemini returned an empty response")
         return {"choices": [{"message": {"content": text}}]}
 
+    def create_structured_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        response_schema: Dict[str, Any],
+        **options: Any,
+    ) -> str:
+        """Request a response constrained to a fixed JSON schema.
+
+        Returns the raw JSON text (still needs json.loads + validation by the caller).
+        """
+        from google.genai import types  # type: ignore
+
+        system_parts = [item["content"] for item in messages if item.get("role") == "system"]
+        contents = []
+        for item in messages:
+            role = item.get("role")
+            if role == "system":
+                continue
+            parts = item.get("parts") or [{"text": item.get("content", "")}]
+            contents.append({
+                "role": "model" if role == "assistant" else "user",
+                "parts": parts,
+            })
+
+        config = types.GenerateContentConfig(
+            system_instruction="\n\n".join(system_parts) or None,
+            max_output_tokens=options.get("max_tokens"),
+            temperature=options.get("temperature"),
+            response_mime_type="application/json",
+            response_schema=response_schema,
+            thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"),
+        )
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=contents,
+            config=config,
+        )
+        text = getattr(response, "text", None)
+        if not text or not text.strip():
+            raise RuntimeError("Gemini returned an empty structured response")
+        return text
+
     @staticmethod
     def _stop_sequences(value: Any) -> Optional[List[str]]:
         if not value:
@@ -154,6 +196,22 @@ class GenAIProvider:
             user_prompt=user_prompt,
             **options,
         )
+
+    def create_structured_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        response_schema: Dict[str, Any],
+        **options: Any,
+    ) -> str:
+        """Schema-constrained JSON completion. No Gemma fallback - callers should
+        catch failures and use a deterministic, non-AI fallback instead."""
+        if self.gemini is None:
+            raise RuntimeError("Gemini is unavailable; structured completion has no local fallback")
+        text = self.gemini.create_structured_completion(
+            messages=messages, response_schema=response_schema, **options
+        )
+        logger.warning("[GENAI] Provider used: GEMINI (structured)")
+        return text
 
     @staticmethod
     def _gemini_enabled() -> bool:

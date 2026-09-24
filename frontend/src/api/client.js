@@ -426,6 +426,28 @@ export async function verifyEmailRequest(token) {
 }
 
 /**
+ * Send a 6-digit email verification code (code-based alternative to the
+ * link sent by verifyEmailRequest). Used for new signups and to unblock
+ * accounts that never verified before trying to log in again.
+ */
+export async function sendEmailVerificationCodeRequest(email) {
+  return apiRequest('/auth/verify-email/send-code/', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  });
+}
+
+/**
+ * Verify the 6-digit email verification code sent by sendEmailVerificationCodeRequest.
+ */
+export async function verifyEmailCodeRequest({ email, code }) {
+  return apiRequest('/auth/verify-email/verify-code/', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase(), code: code.trim() }),
+  });
+}
+
+/**
  * Request a password reset email.
  */
 export async function requestPasswordResetRequest(email) {

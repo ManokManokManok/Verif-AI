@@ -47,6 +47,8 @@ class EmailServiceProtocol(Protocol):
 
     def send_password_change_code_email(self, email: str, code: str) -> bool: ...
 
+    def send_verification_code_email(self, email: str, code: str) -> bool: ...
+
 
 class _TemplatedEmailServiceBase:
     """Shared email template/link behavior for all providers."""
@@ -70,6 +72,9 @@ class _TemplatedEmailServiceBase:
 
     def send_password_change_code_email(self, email: str, code: str) -> bool:
         return self._send(email, "Password Change Verification Code - Verif-AI", _password_change_code_html(code))
+
+    def send_verification_code_email(self, email: str, code: str) -> bool:
+        return self._send(email, "Verify Your Email - Verif-AI", _email_verification_code_html(code))
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +166,16 @@ def _password_change_code_html(code: str) -> str:
 <div class="code">{code}</div>
 <p><strong>This code will expire in 5 minutes.</strong></p>
 <p>If you did not request a password change, you can ignore this email. Your password will not change without your current password.</p>
+""")
+
+
+def _email_verification_code_html(code: str) -> str:
+    return _base_html(f"""
+<h2>Verify Your Email</h2>
+<p>Enter this code to verify your Verif-AI account:</p>
+<div class="code">{code}</div>
+<p><strong>This code will expire in 15 minutes.</strong></p>
+<p class="footer">If you didn't create an account, please ignore this email.</p>
 """)
 
 
@@ -410,6 +425,12 @@ class MockEmailService(_TemplatedEmailServiceBase):
         logger.info(f"[MockEmail] Password change code email to {email}")
         logger.info(f"[MockEmail] Code: {code}")
         print(f"MOCK: Password change code to {email} | Code: {code}")
+        return True
+
+    def send_verification_code_email(self, email: str, code: str) -> bool:
+        logger.info(f"[MockEmail] Verification code email to {email}")
+        logger.info(f"[MockEmail] Code: {code}")
+        print(f"MOCK: Verification code to {email} | Code: {code}")
         return True
 
 

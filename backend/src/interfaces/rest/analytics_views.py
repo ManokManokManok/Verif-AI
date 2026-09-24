@@ -323,15 +323,8 @@ def require_admin(view_func):
     return wrapper
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
-@rate_limit('api_read')
-def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
-    """Provide a simple safety overview for the logged-in user."""
-    user_id = _extract_user_id_from_request(request)
-    if not user_id:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
-
+def _compute_user_safety_summary(user_id: str) -> Dict[str, Any]:
+    """Build the personal safety summary dict for a user (shared by both endpoints)."""
     collection = _get_analysis_collection()
     docs = list(collection.find({
         'user_id': user_id,
@@ -339,24 +332,21 @@ def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
     }).sort('created_at', -1))
 
     if not docs:
-        return JsonResponse({
-            'success': True,
-            'data': {
-                'total_checks': 0,
-                'high_risk_count': 0,
-                'high_risk_rate': 0,
-                'recent_high_risk_count': 0,
-                'most_common_type': None,
-                'risk_level': 'No data yet',
-                'summary': 'You have not checked any messages yet. Try a message to see your safety summary.',
-                'trend': [],
-                'top_types': [],
-                'type_insights': [],
-                'recent_submissions': [],
-                'activity_insight': 'Keep checking messages here to reveal how your risk pattern changes over time.',
-                'analytics_scope_note': 'Based only on your authenticated Verif-AI checks. Message content is not shown here.',
-            }
-        })
+        return {
+            'total_checks': 0,
+            'high_risk_count': 0,
+            'high_risk_rate': 0,
+            'recent_high_risk_count': 0,
+            'most_common_type': None,
+            'risk_level': 'No data yet',
+            'summary': 'You have not checked any messages yet. Try a message to see your safety summary.',
+            'trend': [],
+            'top_types': [],
+            'type_insights': [],
+            'recent_submissions': [],
+            'activity_insight': 'Keep checking messages here to reveal how your risk pattern changes over time.',
+            'analytics_scope_note': 'Based only on your authenticated Verif-AI checks. Message content is not shown here.',
+        }
 
     high_risk_count = 0
     recent_high_risk_count = 0
@@ -389,36 +379,91 @@ def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
     elif high_risk_count >= max(1, len(docs) * 0.15):
         risk_level = 'Medium risk'
 
-    return JsonResponse({
-        'success': True,
-        'data': {
-            'total_checks': len(docs),
-            'high_risk_count': high_risk_count,
-            'high_risk_rate': _safe_percent(high_risk_count, len(docs)),
-            'recent_high_risk_count': recent_high_risk_count,
-            'total_scam_checks': scam_total,
-            'most_common_type': most_common['type'] if most_common else None,
-            'risk_level': risk_level,
-            'summary': summary,
-            'trend': trend,
-            'top_types': top_types,
-            'type_insights': type_insights,
-            'recent_submissions': _build_recent_submissions(docs),
-            'activity_insight': _build_activity_insight(docs, high_risk_count),
-            'analytics_scope_note': 'Based only on your authenticated Verif-AI checks. Message content is not shown here.',
-        }
-    })
+    return {
+        'total_checks': len(docs),
+        'high_risk_count': high_risk_count,
+        'high_risk_rate': _safe_percent(high_risk_count, len(docs)),
+        'recent_high_risk_count': recent_high_risk_count,
+        'total_scam_checks': scam_total,
+        'most_common_type': most_common['type'] if most_common else None,
+        'risk_level': risk_level,
+        'summary': summary,
+        'trend': trend,
+        'top_types': top_types,
+        'type_insights': type_insights,
+        'recent_submissions': _build_recent_submissions(docs),
+        'activity_insight': _build_activity_insight(docs, high_risk_count),
+        'analytics_scope_note': 'Based only on your authenticated Verif-AI checks. Message content is not shown here.',
+    }
 
 
 @csrf_exempt
 @require_http_methods(["GET"])
 @rate_limit('api_read')
-def get_global_safety_summary(request: HttpRequest) -> JsonResponse:
-    """Provide a simple platform-wide trend summary for all users."""
-    user = extract_user_from_request(request)
-    if not user:
+def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
+    """Provide a simple safety overview for the logged-in user."""
+    user_id = _extract_user_id_from_request(request)
+    if not user_id:
         return JsonResponse({'error': 'Authentication required'}, status=401)
 
+    return JsonResponse({'success': True, 'data': _compute_user_safety_summary(user_id)})
+
+
+def _get_ai_summary_repository():
+    from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
+    from ...infrastructure.mongodb.ai_summary_repository import AIAnalyticsSummaryRepository
+    client = get_mongo_client()
+    db_name = get_database_name()
+    return AIAnalyticsSummaryRepository(client, db_name)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@rate_limit('api_read')
+def get_user_ai_summary(request: HttpRequest) -> JsonResponse:
+    """Provide an AI-generated, plain-language explanation of the user's safety summary.
+
+    Cooled down and persisted per-user (see AnalyticsPlainLanguageSummaryUseCase) so
+    repeated page loads never trigger repeated Gemini calls.
+    """
+    from ...infrastructure.ai.genai_provider import get_genai_provider
+    from ...use_cases.ai.analytics_summary import AnalyticsPlainLanguageSummaryUseCase
+
+    user_id = _extract_user_id_from_request(request)
+    if not user_id:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    personal_summary = _compute_user_safety_summary(user_id)
+    community_summary = _compute_global_safety_summary()
+    use_case = AnalyticsPlainLanguageSummaryUseCase(get_genai_provider(), _get_ai_summary_repository())
+    result = use_case.get_summary(user_id, personal_summary, community_summary)
+
+    return JsonResponse({'success': True, 'data': result})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@rate_limit('api_read')
+def get_user_ai_summary_cached(request: HttpRequest) -> JsonResponse:
+    """Return a previously generated AI summary, if one exists, without calling Gemini.
+
+    Used on page load so a returning user immediately sees their last summary
+    instead of being asked to press the button again every visit.
+    """
+    from ...use_cases.ai.analytics_summary import AnalyticsPlainLanguageSummaryUseCase
+
+    user_id = _extract_user_id_from_request(request)
+    if not user_id:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    use_case = AnalyticsPlainLanguageSummaryUseCase(None, _get_ai_summary_repository())
+    result = use_case.get_cached_summary(user_id)
+
+    return JsonResponse({'success': True, 'data': result})
+
+
+def _compute_global_safety_summary() -> Dict[str, Any]:
+    """Build the platform-wide trend summary dict (shared by both endpoints)."""
     collection = _get_analysis_collection()
     docs = list(collection.find({
         'user_id': {'$nin': [None, '']},
@@ -426,19 +471,16 @@ def get_global_safety_summary(request: HttpRequest) -> JsonResponse:
     }).sort('created_at', -1))
 
     if not docs:
-        return JsonResponse({
-            'success': True,
-            'data': {
-                'total_checks': 0,
-                'scam_rate': 0,
-                'most_common_type': None,
-                'summary': 'There are not enough checks yet to show a platform trend.',
-                'trend': [],
-                'trend_insight': None,
-                'seasonal_insight': _build_seasonal_insight(),
-                'top_types': [],
-            }
-        })
+        return {
+            'total_checks': 0,
+            'scam_rate': 0,
+            'most_common_type': None,
+            'summary': 'There are not enough checks yet to show a platform trend.',
+            'trend': [],
+            'trend_insight': None,
+            'seasonal_insight': _build_seasonal_insight(),
+            'top_types': [],
+        }
 
     scam_total = sum(1 for doc in docs if doc.get('is_scam'))
     high_risk_total = sum(
@@ -450,20 +492,29 @@ def get_global_safety_summary(request: HttpRequest) -> JsonResponse:
     most_common = top_types[0] if top_types else None
     summary = _global_risk_summary_text(high_risk_total, len(docs))
 
-    return JsonResponse({
-        'success': True,
-        'data': {
-            'total_checks': len(docs),
-            'scam_rate': _safe_percent(scam_total, len(docs)),
-            'high_risk_total': high_risk_total,
-            'most_common_type': most_common['type'] if most_common else None,
-            'summary': summary,
-            'trend': trend,
-            'trend_insight': _build_global_trend_insight(docs),
-            'seasonal_insight': _build_seasonal_insight(),
-            'top_types': top_types,
-        }
-    })
+    return {
+        'total_checks': len(docs),
+        'scam_rate': _safe_percent(scam_total, len(docs)),
+        'high_risk_total': high_risk_total,
+        'most_common_type': most_common['type'] if most_common else None,
+        'summary': summary,
+        'trend': trend,
+        'trend_insight': _build_global_trend_insight(docs),
+        'seasonal_insight': _build_seasonal_insight(),
+        'top_types': top_types,
+    }
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@rate_limit('api_read')
+def get_global_safety_summary(request: HttpRequest) -> JsonResponse:
+    """Provide a simple platform-wide trend summary for all users."""
+    user = extract_user_from_request(request)
+    if not user:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    return JsonResponse({'success': True, 'data': _compute_global_safety_summary()})
 
 
 def parse_date_params(request: HttpRequest) -> tuple[Optional[datetime], Optional[datetime]]:

@@ -32,6 +32,13 @@
 
 /* Carousel swipe/fade animation */
 .carousel-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
   opacity: 1;
   transform: translateX(0);
 }
@@ -97,6 +104,16 @@
   to {
     opacity: 0;
     transform: translateX(60px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carousel-text-anim,
+  .anim-in.anim-right,
+  .anim-in.anim-left,
+  .anim-out.anim-right,
+  .anim-out.anim-left {
+    animation: none !important;
   }
 }
 
@@ -306,7 +323,7 @@ button {
 /* Hero: carousel + right panel */
 .landing__hero {
   flex: 0 0 auto;
-  padding: 48px 80px 56px;
+  padding: 56px 80px 64px;
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   gap: 56px;
@@ -332,8 +349,8 @@ button {
   justify-content: stretch;
   color: #111827;
   position: relative;
-  min-height: 320px;
-  max-height: 360px;
+  min-height: 380px;
+  max-height: 460px;
   width: 100%;
   margin: 0 auto 0 0;
   overflow: hidden;
@@ -341,18 +358,40 @@ button {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
 }
 
-.carousel .swiper,
-.carousel .swiper-wrapper,
-.carousel .swiper-slide {
-  width: 100%;
-  height: 100%;
+.carousel__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(5, 8, 20, 0.55);
+  color: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 6;
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
-.carousel img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+.carousel__arrow:hover {
+  background: rgba(59, 130, 246, 0.85);
+  transform: translateY(-50%) scale(1.06);
+}
+
+.carousel__arrow:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.carousel__arrow--prev {
+  left: 14px;
+}
+
+.carousel__arrow--next {
+  right: 14px;
 }
 
 .carousel__panel {
@@ -377,22 +416,31 @@ button {
 }
 
 .carousel__dots {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  z-index: 6;
   display: flex;
   justify-content: center;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 0;
 }
 
 .carousel__dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #9ca3af;
+  background: rgba(249, 250, 251, 0.5);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .carousel__dot--active {
-  width: 18px;
-  background: #111827;
+  width: 22px;
+  background: #60a5fa;
 }
 
 .landing__admin-btn {
@@ -414,19 +462,19 @@ button {
 }
 
 .landing__title {
-  font-size: 36px;
+  font-size: 42px;
   font-weight: 700;
   margin: 0 0 16px;
   color: #f9fafb;
-  line-height: 1.2;
+  line-height: 1.15;
   letter-spacing: -0.02em;
 }
 
 .landing__body {
   color: #e5e7eb;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.7;
-  max-width: 480px;
+  max-width: 520px;
   margin: 0;
 }
 
@@ -1396,6 +1444,7 @@ button {
   }
 
   .landing__mobile-carousel {
+    position: relative;
     width: 100%;
     border-radius: 8px;
     overflow: hidden;
@@ -1408,6 +1457,19 @@ button {
     height: 100%;
     object-fit: cover;
     display: block;
+  }
+
+  .carousel__arrow {
+    width: 36px;
+    height: 36px;
+  }
+
+  .carousel__arrow--prev {
+    left: 8px;
+  }
+
+  .carousel__arrow--next {
+    right: 8px;
   }
 
   .landing__mobile-text {

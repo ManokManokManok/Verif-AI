@@ -4,6 +4,7 @@ import { signupRequest } from '../api/client.js';
 import { useTheme } from '../context/ThemeContext';
 import { getPasswordRequirements, validateUsername } from '../utils/validation.js';
 import signupImage from '../../assets/image/signup.png';
+import EmailVerificationCode from '../components/auth/EmailVerificationCode';
 
 function EyeIcon({ slashed }) {
   return (
@@ -162,7 +163,8 @@ function Signup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
-  const [registered, setRegistered] = useState(false);
+  const [verifyStep, setVerifyStep] = useState(false);
+  const [verifyMessage, setVerifyMessage] = useState('');
   const [agreed, setAgreed] = useState(false);
 
   // Dynamic password requirements
@@ -192,8 +194,13 @@ function Signup() {
     setLoading(true);
 
     try {
-      await signupRequest({ email, username, password });
-      setRegistered(true);
+      const data = await signupRequest({ email, username, password });
+      setVerifyMessage(
+        data?.already_registered
+          ? 'We sent you a new code since you left without verifying.'
+          : "We've sent a 6-digit code to your email."
+      );
+      setVerifyStep(true);
     } catch (err) {
       // Store structured validation errors if available
       if (err.isValidationError && err.validationErrors) {
@@ -203,6 +210,10 @@ function Signup() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEmailVerified = () => {
+    navigate('/login', { state: { verifiedEmail: email } });
   };
 
   // Parse error message into list for multi-error display
@@ -255,26 +266,13 @@ function Signup() {
           </button>
         </div>
 
-        {registered ? (
-          <div style={{ textAlign: 'center', marginTop: 32 }}>
-            <div className="verify-icon verify-icon--success">✓</div>
-            <h1 className="auth__title" style={{ marginTop: 20 }}>Check Your Email</h1>
-            <p className="auth__subtitle" style={{ marginTop: 12, lineHeight: 1.6 }}>
-              We&apos;ve sent a verification link to <strong>{email}</strong>.
-              <br />
-              Please click the link in your email to verify your account before logging in.
-            </p>
-            <button
-              className="auth__submit"
-              style={{ marginTop: 28 }}
-              onClick={() => navigate('/login')}
-            >
-              <span>Go to Login</span>
-              <span className="auth__submit-arrow">→</span>
-            </button>
-            <p className="auth__subtitle" style={{ marginTop: 16, fontSize: 12 }}>
-              Didn&apos;t receive the email? Check your spam folder.
-            </p>
+        {verifyStep ? (
+          <div style={{ marginTop: 32 }}>
+            <EmailVerificationCode
+              email={email}
+              initialMessage={verifyMessage}
+              onVerified={handleEmailVerified}
+            />
           </div>
         ) : (
         <>
