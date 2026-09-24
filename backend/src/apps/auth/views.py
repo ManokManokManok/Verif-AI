@@ -4,5 +4,6 @@ from ...interfaces.rest.views import (
     reset_password, password_reset_token_status, resend_password_reset_link,
     logout, refresh_token,
     send_mfa_code, verify_mfa_code,
+    send_email_verification_code, verify_email_code,
     update_username, send_password_change_code, change_password, delete_account
 )

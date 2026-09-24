@@ -33,6 +33,47 @@
 .journey__stat strong { display: block; margin-top: 12px; color: #f8fafc; font-size: 25px; line-height: 1.2; }
 .journey__chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; }
 .journey__panel { padding: 12px 0 32px; }
+
+.journey__ai-insight {
+  display: flex; gap: 20px; align-items: flex-start; margin: 0 0 40px; padding: 24px;
+  border-radius: 16px; background: rgba(15, 29, 49, 0.55); border: 1px solid rgba(103, 232, 249, 0.22);
+}
+.journey__ai-insight-icon {
+  display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px;
+  font-size: 20px; background: rgba(103, 232, 249, 0.14); color: #67e8f9;
+}
+.journey__ai-insight-body { flex: 1; min-width: 0; }
+.journey__ai-insight-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.journey__ai-insight-head h2 { margin: 0; color: #f8fafc; font-size: 20px; }
+.journey__ai-insight-tag {
+  padding: 3px 11px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.journey__ai-insight-tag--low { background: rgba(52, 211, 153, 0.16); color: #34d399; }
+.journey__ai-insight-tag--medium { background: rgba(250, 204, 21, 0.16); color: #facc15; }
+.journey__ai-insight-tag--high { background: rgba(251, 113, 133, 0.16); color: #fb7185; }
+.journey__ai-insight-body p { margin: 10px 0 0; color: #cbd5e1; line-height: 1.65; font-size: 15px; }
+.journey__ai-insight-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.14); }
+.journey__ai-insight-section:first-of-type { margin-top: 18px; padding-top: 0; border-top: none; }
+.journey__ai-insight-section-title {
+  margin: 0 0 6px !important; color: #67e8f9 !important; font-size: 12px !important; font-weight: 800;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.journey__ai-insight-watchlist { margin: 6px 0 0; padding-left: 20px; color: #cbd5e1; line-height: 1.7; font-size: 15px; }
+.journey__ai-insight-watchlist li { margin-bottom: 4px; }
+.journey__ai-insight-tip {
+  margin-top: 18px; padding: 12px 14px; border-radius: 10px; background: rgba(103, 232, 249, 0.08);
+  color: #67e8f9 !important; font-size: 14px !important;
+}
+.journey__ai-insight-meta { margin-top: 14px; color: #64748b; font-size: 11px; }
+.journey__ai-insight--loading { color: #94a3b8; font-size: 14px; }
+.journey__ai-insight--prompt p { margin: 8px 0 0; color: #94a3b8; }
+.journey__ai-insight-error { color: #fb7185 !important; font-size: 13px !important; }
+.journey__ai-insight-button {
+  margin-top: 16px; padding: 11px 20px; border: none; border-radius: 999px; cursor: pointer;
+  background: #67e8f9; color: #082f49; font-weight: 700; font-size: 14px;
+}
+.journey__ai-insight-button:hover { background: #a5f3fc; }
 .journey__panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
 .journey__panel-mark { color: #64748b; font-size: 12px; }
 .journey__bar-graph {

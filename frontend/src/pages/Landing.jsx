@@ -1,38 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Autoplay, Pagination } from 'swiper/modules';
 import { useAuth } from '../context/AuthContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 import LandingHeroMobile from '../components/LandingHeroMobile';
-
-import 'swiper/css';
-import 'swiper/css/pagination';
 
 // Automatically import all images from the carousel folder
 const imageModules = import.meta.glob('../assets/carousel/*.{jpg,jpeg,png,gif,webp}', { eager: true });
 const imageFiles = Object.values(imageModules).map((mod) => mod.default).sort();
 
+// Narrative intro sequence: what VerifAI is, who it's for, how it feels to use, and privacy.
 const CAROUSEL_SLIDES = [
   {
     src: imageFiles[0],
-    title: 'AI-powered scam detection',
-    description: 'Paste any message, email, or promo—our AI analyzes it in seconds and tells you if it’s a scam. Built on BERT and LLM models for accuracy you can trust.',
+    title: 'What is VerifAI?',
+    description: 'VerifAI checks messages, emails, and links for you — and tells you in plain terms if something looks like a scam.',
   },
   {
     src: imageFiles[1],
-    title: 'Clear verdicts and explanations',
-    description: 'Get a scam vs. legit score, scam type classification, and key linguistic markers. Understand why something was flagged, not just that it was.',
+    title: 'Built for real people, not tech experts',
+    description: 'Scams increasingly target people through texts and calls. VerifAI gives you a clear second opinion before you trust anything.',
   },
   {
     src: imageFiles[2],
-    title: 'Trusted analysis records',
-    description: 'Review analysis history with clear timestamps, classifications, and confidence details for every check.',
+    title: 'Paste a message, get a clear answer',
+    description: 'You\u2019ll see a simple verdict — Likely Scam or Looks Safe — with an easy explanation, not confusing tech jargon.',
   },
   {
     src: imageFiles[3],
-    title: 'Privacy-first and secure',
-    description: 'We keep raw messages private and focus on the minimum data needed to deliver useful results.',
+    title: 'Your privacy comes first',
+    description: 'Your messages aren\u2019t stored or shared. We only look at what\u2019s needed to give you an answer.',
   },
 ];
 
@@ -70,8 +66,8 @@ const HOW_IT_WORKS = [
 function Landing() {
   const navigate = useNavigate();
   const { isLoggedIn, isAdmin, logout, user } = useAuth();
-  const swiperRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [imgAnimClass, setImgAnimClass] = useState('anim-in anim-right');
   const [textAnimClass, setTextAnimClass] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -114,28 +110,32 @@ function Landing() {
     navigate('/admin');
   };
 
-  // Click left/right overlay to navigate
-  const handleSideClick = (e) => {
-    if (!swiperRef.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    if (x < rect.width / 2) {
-      swiperRef.current.slidePrev();
-    } else {
-      swiperRef.current.slideNext();
-    }
+  // Advance to a slide, restarting the image/text animations (skipped for reduced motion)
+  const goToSlide = (nextIndex, direction) => {
+    setActiveIndex(nextIndex);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setImgAnimClass('');
+    setTextAnimClass('');
+    if (reduceMotion) return;
+    requestAnimationFrame(() => {
+      setImgAnimClass(`anim-in anim-${direction}`);
+      setTextAnimClass('carousel-text-anim');
+    });
   };
 
-  // Sync text with Swiper's active index
-  const handleSlideChange = (swiper) => {
-    setActiveIndex(swiper.realIndex);
-    // Remove and re-add animation class to restart animation
-    if (textRef.current) {
-      setTextAnimClass('');
-      // Force reflow
-      void textRef.current.offsetWidth;
-      setTextAnimClass('carousel-text-anim');
-    }
+  const handlePrevSlide = () => {
+    const nextIndex = (activeIndex - 1 + CAROUSEL_SLIDES.length) % CAROUSEL_SLIDES.length;
+    goToSlide(nextIndex, 'left');
+  };
+
+  const handleNextSlide = () => {
+    const nextIndex = (activeIndex + 1) % CAROUSEL_SLIDES.length;
+    goToSlide(nextIndex, 'right');
+  };
+
+  const handleDotClick = (idx) => {
+    if (idx === activeIndex) return;
+    goToSlide(idx, idx > activeIndex ? 'right' : 'left');
   };
 
   // Play animation on first mount
@@ -225,37 +225,55 @@ function Landing() {
         ) : (
           <section className="landing__hero">
             <div className="landing__left">
-              <div className="carousel" style={{ overflow: 'hidden', position: 'relative', height: '100%' }}>
-              <Swiper
-                modules={[Autoplay, Pagination]}
-                slidesPerView={1}
-                loop={true}
-                autoplay={{ delay: 4000, disableOnInteraction: false }}
-                pagination={{ clickable: true }}
-                style={{ width: '100%', height: '100%' }}
-                onSwiper={(swiper) => { swiperRef.current = swiper; }}
-                onSlideChange={handleSlideChange}
+              <div
+                className="carousel"
+                role="region"
+                aria-roledescription="carousel"
+                aria-label="Introduction to VerifAI"
               >
-                {CAROUSEL_SLIDES.map((slide, idx) => (
-                  <SwiperSlide key={idx}>
-                    <img
-                      src={slide.src}
-                      alt={slide.title}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                <img
+                  key={activeIndex}
+                  src={CAROUSEL_SLIDES[activeIndex].src}
+                  alt={CAROUSEL_SLIDES[activeIndex].title}
+                  className={`carousel-img ${imgAnimClass}`}
+                />
+
+                <button
+                  type="button"
+                  className="carousel__arrow carousel__arrow--prev"
+                  aria-label="Previous slide"
+                  onClick={handlePrevSlide}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="carousel__arrow carousel__arrow--next"
+                  aria-label="Next slide"
+                  onClick={handleNextSlide}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+
+                <div className="carousel__dots" role="tablist" aria-label="Slide navigation">
+                  {CAROUSEL_SLIDES.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      role="tab"
+                      aria-selected={idx === activeIndex}
+                      aria-label={`Go to slide ${idx + 1}`}
+                      className={`carousel__dot ${idx === activeIndex ? 'carousel__dot--active' : ''}`}
+                      onClick={() => handleDotClick(idx)}
                     />
-                  </SwiperSlide>
-                ))}
-              </Swiper>
-              <div
-                style={{ position: 'absolute', top: 0, left: 0, width: '50%', height: '100%', zIndex: 5, cursor: 'pointer' }}
-                onClick={() => swiperRef.current && swiperRef.current.slidePrev()}
-              />
-              <div
-                style={{ position: 'absolute', top: 0, right: 0, width: '50%', height: '100%', zIndex: 5, cursor: 'pointer' }}
-                onClick={() => swiperRef.current && swiperRef.current.slideNext()}
-              />
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
 
           <section className="landing__right">
             <div ref={textRef} className={textAnimClass}>
