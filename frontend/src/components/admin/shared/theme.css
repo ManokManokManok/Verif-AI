@@ -47,3 +47,28 @@
   --admin-transition: all 0.2s ease;
   --admin-transition-smooth: all 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+[data-theme="light"] {
+  /* Backgrounds - matching user-side light theme */
+  --admin-bg-dark: #f0f4f8;
+  --admin-bg-card: #ffffff;
+  --admin-bg-hover: #e2e8f0;
+  --admin-bg-secondary: #f8fafc;
+  
+  /* Borders */
+  --admin-border: #cbd5e1;
+  --admin-border-light: #e2e8f0;
+  
+  /* Text colors */
+  --admin-text: #0f172a;
+  --admin-text-secondary: #334155;
+  --admin-text-muted: #64748b;
+  --admin-text-dim: #94a3b8;
+  
+  /* Effects */
+  --admin-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --admin-shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.05);
+  --admin-shadow-glow: 0 0 0 1px rgba(59, 130, 246, 0.2), 0 16px 36px rgba(59, 130, 246, 0.12);
+  --admin-glass: linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
+}
+

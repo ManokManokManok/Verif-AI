@@ -1,22 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/pagination';
 
 const LandingHeroMobile = ({ slides = [] }) => {
+  const navigate = useNavigate();
   const swiperRef = useRef(null);
   const [active, setActive] = useState(0);
 
   useEffect(() => {
-    // start simple autoplay sync
     const interval = setInterval(() => {
       if (swiperRef.current) {
         try {
           swiperRef.current.slideNext();
         } catch (e) {}
       }
-    }, 4000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -43,7 +44,9 @@ const LandingHeroMobile = ({ slides = [] }) => {
         <h2 className="landing__mobile-title">{slides[active]?.title}</h2>
         <p className="landing__mobile-body">{slides[active]?.description}</p>
         <div className="landing__mobile-actions">
-          <button type="button" className="landing__cta">Get Started</button>
+          <button type="button" className="landing__cta" onClick={() => navigate('/detection')}>
+            Check a Message Now
+          </button>
         </div>
       </div>
     </section>
