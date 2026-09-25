@@ -17,6 +17,18 @@
   --admin-bg-tertiary: #111827;
 }
 
+[data-theme="light"] .website-analytics {
+  --admin-text-primary: #0f172a;
+  --admin-text-secondary: #334155;
+  --admin-text-tertiary: #64748b;
+  --admin-text-muted: #64748b;
+  --admin-text-dim: #94a3b8;
+  --admin-bg-secondary: #ffffff;
+  --admin-bg-tertiary: #f8fafc;
+  --admin-bg-card: #ffffff;
+  --admin-border: rgba(15, 23, 42, 0.12);
+}
+
 
 .analytics-chart h4 {
   margin: 0 0 1.5rem 0;
