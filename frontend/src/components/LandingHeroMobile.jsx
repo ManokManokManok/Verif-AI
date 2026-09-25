@@ -1,28 +1,30 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Autoplay, Pagination } from 'swiper/modules';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
+import 'swiper/css/pagination';
 
 const LandingHeroMobile = ({ slides = [] }) => {
   const navigate = useNavigate();
+  const swiperRef = useRef(null);
   const [active, setActive] = useState(0);
   const [animClass, setAnimClass] = useState('anim-in anim-right');
 
-  // Advance to a slide, restarting the image animation (skipped for reduced motion)
-  const goToSlide = (nextIndex, direction) => {
-    setActive(nextIndex);
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setAnimClass('');
-    if (reduceMotion) return;
-    requestAnimationFrame(() => setAnimClass(`anim-in anim-${direction}`));
-  };
-
   const handlePrev = () => {
-    const nextIndex = (active - 1 + slides.length) % slides.length;
-    goToSlide(nextIndex, 'left');
+    swiperRef.current?.slidePrev();
   };
 
   const handleNext = () => {
-    const nextIndex = (active + 1) % slides.length;
-    goToSlide(nextIndex, 'right');
+    swiperRef.current?.slideNext();
+  };
+
+  const handleSlideChange = (swiper) => {
+    setActive(swiper.realIndex);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setAnimClass('');
+    if (reduceMotion) return;
+    requestAnimationFrame(() => setAnimClass('anim-in anim-right'));
   };
 
   const slide = slides[active];
@@ -35,14 +37,26 @@ const LandingHeroMobile = ({ slides = [] }) => {
         aria-roledescription="carousel"
         aria-label="Introduction to VerifAI"
       >
-        {slide && (
-          <img
-            key={active}
-            src={slide.src}
-            alt={slide.title}
-            className={`landing__mobile-image carousel-img ${animClass}`}
-          />
-        )}
+        <Swiper
+          modules={[Autoplay, Pagination]}
+          slidesPerView={1}
+          loop={slides.length > 1}
+          autoplay={{ delay: 5000, disableOnInteraction: false }}
+          pagination={{ clickable: true }}
+          onSwiper={(swiper) => { swiperRef.current = swiper; }}
+          onSlideChange={handleSlideChange}
+          style={{ width: '100%', height: '100%' }}
+        >
+          {slides.map((item, index) => (
+            <SwiperSlide key={`${item.src}-${index}`}>
+              <img
+                src={item.src}
+                alt={item.title}
+                className={`landing__mobile-image carousel-img ${index === active ? animClass : ''}`}
+              />
+            </SwiperSlide>
+          ))}
+        </Swiper>
 
         <button type="button" className="carousel__arrow carousel__arrow--prev" aria-label="Previous slide" onClick={handlePrev}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -55,19 +69,6 @@ const LandingHeroMobile = ({ slides = [] }) => {
           </svg>
         </button>
 
-        <div className="carousel__dots" role="tablist" aria-label="Slide navigation">
-          {slides.map((_, idx) => (
-            <button
-              key={idx}
-              type="button"
-              role="tab"
-              aria-selected={idx === active}
-              aria-label={`Go to slide ${idx + 1}`}
-              className={`carousel__dot ${idx === active ? 'carousel__dot--active' : ''}`}
-              onClick={() => goToSlide(idx, idx > active ? 'right' : 'left')}
-            />
-          ))}
-        </div>
       </div>
 
       <div className="landing__mobile-text">
