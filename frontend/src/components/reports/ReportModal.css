@@ -314,3 +314,104 @@
   font-size: 0.9375rem;
   line-height: 1.5;
 }
+
+/* Light Theme Overrides */
+[data-theme="light"] .report-modal__overlay {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+[data-theme="light"] .report-modal__container {
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18), 0 0 30px rgba(79, 70, 229, 0.08);
+}
+
+[data-theme="light"] .report-modal__header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .report-modal__title {
+  color: #0f172a;
+}
+
+[data-theme="light"] .report-modal__close {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+}
+
+[data-theme="light"] .report-modal__close:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="light"] .report-modal__label {
+  color: #334155;
+}
+
+[data-theme="light"] .report-modal__select,
+[data-theme="light"] .report-modal__input,
+[data-theme="light"] .report-modal__textarea {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme="light"] .report-modal__select::placeholder,
+[data-theme="light"] .report-modal__input::placeholder,
+[data-theme="light"] .report-modal__textarea::placeholder {
+  color: #94a3b8;
+}
+
+[data-theme="light"] .report-modal__select:focus,
+[data-theme="light"] .report-modal__input:focus,
+[data-theme="light"] .report-modal__textarea:focus {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+[data-theme="light"] .report-modal__select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+[data-theme="light"] .report-modal__hint {
+  color: #4f46e5;
+}
+
+[data-theme="light"] .report-modal__char-count {
+  color: #64748b;
+}
+
+[data-theme="light"] .report-modal__context {
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #4338ca;
+}
+
+[data-theme="light"] .report-modal__actions {
+  border-top: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .report-modal__btn--cancel {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+}
+
+[data-theme="light"] .report-modal__btn--cancel:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme="light"] .report-modal__success h3 {
+  color: #0f172a;
+}
+
+[data-theme="light"] .report-modal__success p {
+  color: #64748b;
+}
+

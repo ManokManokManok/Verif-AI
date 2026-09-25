@@ -187,9 +187,9 @@
 }
 
 .admin-btn--secondary {
-  background: rgba(31, 41, 55, 0.7);
-  color: var(--admin-text, #f9fafb);
-  border: 1px solid var(--admin-border, #374151);
+  background: var(--admin-bg-secondary);
+  color: var(--admin-text);
+  border: 1px solid var(--admin-border);
 }
 
 .admin-btn--secondary:hover:not(:disabled) {

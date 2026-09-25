@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import './Settings.css';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import {
   changePasswordRequest,
   deleteAccountRequest,
@@ -15,6 +16,7 @@ import { getPasswordRequirements, validatePassword, validateUsername, CONSTRAINT
 export default function Settings() {
   const navigate = useNavigate();
   const { user, isLoggedIn, logout, refreshUser, accessToken } = useAuth();
+  const { theme, toggleTheme, setTheme } = useTheme();
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState('account'); // 'account' | 'reports' | 'danger'
@@ -442,6 +444,44 @@ export default function Settings() {
                     <span>{usernameSuccess}</span>
                   </div>
                 )}
+              </div>
+
+              {/* Appearance & Theme Preference Card */}
+              <div className="settings-card settings-account-card settings-account-card--theme">
+                <div className="settings-card__header">
+                  <h3 className="settings-card__title">Appearance &amp; Theme</h3>
+                  <span className="settings-tag settings-tag--active">
+                    {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                  </span>
+                </div>
+                <p className="settings-field__hint" style={{ marginBottom: '16px' }}>
+                  Choose your preferred visual mode for Verif-AI. Your selection is automatically remembered across all pages and future sessions.
+                </p>
+                <div className="settings-theme-options">
+                  <button
+                    type="button"
+                    className={`settings-theme-btn ${theme === 'dark' ? 'settings-theme-btn--active' : ''}`}
+                    onClick={() => setTheme('dark')}
+                  >
+                    <span className="settings-theme-btn__icon">🌙</span>
+                    <div className="settings-theme-btn__info">
+                      <strong>Dark Mode</strong>
+                      <small>Dark navy background for low light environments</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`settings-theme-btn ${theme === 'light' ? 'settings-theme-btn--active' : ''}`}
+                    onClick={() => setTheme('light')}
+                  >
+                    <span className="settings-theme-btn__icon">☀️</span>
+                    <div className="settings-theme-btn__info">
+                      <strong>Light Mode</strong>
+                      <small>Clean, high-contrast light theme for bright environments</small>
+                    </div>
+                  </button>
+                </div>
               </div>
                 </>
               )}

@@ -9,6 +9,11 @@
   background: var(--admin-bg-dark, #050b16);
 }
 
+[data-theme="light"] .admin-dashboard {
+  background: #f0f4f8;
+  color: #0f172a;
+}
+
 /* ============================================
    MAIN CONTENT AREA
    ============================================ */

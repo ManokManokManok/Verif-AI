@@ -21,8 +21,15 @@ function AIChatbot() {
   const location = useLocation();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const [text, setText] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('New Conversation');
@@ -158,7 +165,7 @@ function AIChatbot() {
   }, [soundEnabled]);
 
   const handleSettingsClick = () => {
-    setShowSettingsModal(true);
+    navigate('/settings');
   };
 
   const closeSettingsModal = () => {
@@ -446,7 +453,10 @@ function AIChatbot() {
 
   return (
     <div className="detect detect--chatbot page-enter">
-      <aside className={`detect__sidebar detect__sidebar--chatbot${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
+      <aside 
+        className={`detect__sidebar detect__sidebar--chatbot${sidebarOpen ? ' detect__sidebar--open' : ''}`} 
+        style={{ width: isMobile ? (sidebarOpen ? 320 : 0) : (sidebarOpen ? 320 : 72) }}
+      >
         <button
           className="detect__sidebtn detect__sidebtn--menu"
           type="button"
@@ -476,7 +486,6 @@ function AIChatbot() {
                 <div
                   key={conv.id}
                   onClick={() => {
-                    // Load analysis-guided conversations differently
                     if (conv.conversation_type === 'analysis_guided') {
                       loadAnalysisGuidedConversation(conv.id);
                     } else {
@@ -494,7 +503,7 @@ function AIChatbot() {
                       className="chatbot__history-delete"
                       title="Delete conversation"
                     >
-                      🗑️
+                      Delete
                     </button>
                   </div>
                   <div className="chatbot__history-meta">
@@ -509,7 +518,6 @@ function AIChatbot() {
         {/* Anonymous user message when sidebar is open */}
         {sidebarOpen && !isLoggedIn && (
           <div className="chatbot__anonymous-box">
-            <div className="chatbot__anonymous-icon">💬</div>
             <div className="chatbot__anonymous-text">
               Login to save your conversations
             </div>
@@ -522,7 +530,7 @@ function AIChatbot() {
           </div>
         )}
 
-        {!sidebarOpen && (
+        {!sidebarOpen && !isMobile && (
           <>
             <button
               className="detect__sidebtn"
@@ -549,7 +557,7 @@ function AIChatbot() {
 
       <div className="detect__main" style={{ 
         transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', 
-        marginLeft: sidebarOpen ? 320 : 72,
+        marginLeft: isMobile ? 0 : (sidebarOpen ? 320 : 72),
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
@@ -658,10 +666,6 @@ function AIChatbot() {
                 <div className="chatbot__empty-state">
                   {conversationType === 'analysis_guided' && analysisContext ? (
                     <div className="chatbot__empty-guided">
-                      <div className="chatbot__empty-badge">
-                        <span className="chatbot__empty-badge-dot"></span>
-                        Analysis Guided Session
-                      </div>
                       <h2 className="chatbot__empty-title">Inspection Guidance Ready</h2>
                       <p className="chatbot__empty-subtitle">
                         Ask any questions regarding the detection report below or request immediate next-step instructions.
@@ -670,10 +674,6 @@ function AIChatbot() {
                   ) : (
                     <>
                       <div className="chatbot__empty-header">
-                        <div className="chatbot__empty-badge">
-                          <span className="chatbot__empty-badge-dot"></span>
-                          Verif-AI Security Assistant Active
-                        </div>
                         <h2 className="chatbot__empty-title">How can I protect you today?</h2>
                         <p className="chatbot__empty-subtitle">
                           Ask any question or pick a suggested topic below to analyze security risks and spot scams.
@@ -683,25 +683,21 @@ function AIChatbot() {
                       <div className="chatbot__prompts-grid">
                         {[
                           {
-                            icon: '🛡️',
                             title: 'Common Phishing Tactics',
                             desc: 'How do scammers use urgent SMS or email links to steal credentials?',
                             topic: 'phishing_tactics',
                           },
                           {
-                            icon: '✉️',
                             title: 'Spotting Fake Emails',
                             desc: 'What key red flags identify spoofed email addresses and fake domain names?',
                             topic: 'fake_emails',
                           },
                           {
-                            icon: '🚨',
                             title: 'Scam Recovery Steps',
                             desc: 'What immediate actions should I take if I accidentally clicked a phishing link?',
                             topic: 'scam_recovery',
                           },
                           {
-                            icon: '💔',
                             title: 'Romance & Investment Scams',
                             desc: 'How do fake romance and crypto investment scams operate?',
                             topic: 'romance_investment_scams',
@@ -714,12 +710,10 @@ function AIChatbot() {
                             onClick={() => handleStaticPrompt(prompt.topic)}
                             disabled={isLoading}
                           >
-                            <div className="chatbot__prompt-icon">{prompt.icon}</div>
                             <div className="chatbot__prompt-body">
                               <h4 className="chatbot__prompt-title">{prompt.title}</h4>
                               <p className="chatbot__prompt-desc">{prompt.desc}</p>
                             </div>
-                            <span className="chatbot__prompt-arrow">&rarr;</span>
                           </button>
                         ))}
                       </div>
@@ -749,7 +743,7 @@ function AIChatbot() {
                   <div className="chatbot__analysis-top">
                     <div className="chatbot__analysis-header">
                       <span className={`chatbot__risk-pill ${analysisContext.is_scam ? 'chatbot__risk-pill--high' : 'chatbot__risk-pill--low'}`}>
-                        {analysisContext.is_scam ? '🔴 High Risk Scam' : '🟢 Low Risk / Safe'}
+                        {analysisContext.is_scam ? 'High Risk Scam' : 'Low Risk / Safe'}
                       </span>
                       {analysisContext.scam_type && (
                         <span className="chatbot__analysis-type-tag">
@@ -812,7 +806,7 @@ function AIChatbot() {
                       onClick={() => handlePromptSubmit('What immediate safety steps should I take based on this analysis?')}
                       disabled={isLoading}
                     >
-                      ⚡ Quick Question: What immediate steps should I take next?
+                      What immediate steps should I take next?
                     </button>
                   </div>
                 </div>
@@ -860,7 +854,7 @@ function AIChatbot() {
                             onClick={() => handleCopyMessage(msg.content, index)}
                             title="Copy response to clipboard"
                           >
-                            {copiedIndex === index ? '✓ Copied' : '📋 Copy'}
+                            {copiedIndex === index ? '✓ Copied' : 'Copy'}
                           </button>
                         </div>
                       )}
@@ -896,8 +890,8 @@ function AIChatbot() {
             ref={composerDockRef}
             className="chatbot__composer-dock"
             style={{
-              left: sidebarOpen ? 320 : 72,
-              width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 72px)',
+              left: isMobile ? 0 : (sidebarOpen ? 320 : 72),
+              width: isMobile ? '100%' : (sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 72px)'),
               '--composer-top': `${composerHeight + 34 - 8}px`,
             }}
           >
@@ -908,7 +902,7 @@ function AIChatbot() {
                 value={text}
                 onChange={handleChatTextChange}
                 onKeyDown={handleChatKeyDown}
-                placeholder="Ask Verif-AI about scam prevention, link safety, or suspicious messages..."
+                placeholder={isMobile ? "Ask Verif-AI a question..." : "Ask Verif-AI about scam prevention, link safety, or suspicious messages..."}
                 disabled={isLoading}
                 maxLength={2000}
                 rows={1}
@@ -938,17 +932,19 @@ function AIChatbot() {
           </div>
         </main>
 
-        <footer
-          className="detect__footer detect__footer--chatbot"
-          style={{
-            left: sidebarOpen ? 320 : 72,
-            width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 72px)',
-          }}
-        >
-          <div className="detect__copyright">
-            © 2026 VerifAI Technologies Inc. All rights reserved.
-          </div>
-        </footer>
+        {!isMobile && (
+          <footer
+            className="detect__footer detect__footer--chatbot"
+            style={{
+              left: sidebarOpen ? 320 : 72,
+              width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 72px)',
+            }}
+          >
+            <div className="detect__copyright">
+              © 2026 VerifAI Technologies Inc. All rights reserved.
+            </div>
+          </footer>
+        )}
       </div>
 
       {isStartingDetection && (
