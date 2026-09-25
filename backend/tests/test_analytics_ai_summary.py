@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from src.domain.ai_summary_entities import AIAnalyticsSummary, SummarySource
-from src.use_cases.ai.analytics_summary import AnalyticsPlainLanguageSummaryUseCase
+from src.use_cases.ai.analytics_summary import AnalyticsPlainLanguageSummaryUseCase, _SUMMARY_VERSION
 
 
 class _FakeLLM:
@@ -143,7 +143,7 @@ class AnalyticsPlainLanguageSummaryUseCaseTests(unittest.TestCase):
         repo = _FakeRepository()
         repo._latest = AIAnalyticsSummary(
             user_id='user-1',
-            input_hash='some-other-hash',
+            input_hash=f'{_SUMMARY_VERSION}:some-other-hash',
             headline='Cached headline',
             risk_tag='low',
             current_status=['cached'],

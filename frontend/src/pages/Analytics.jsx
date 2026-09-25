@@ -189,7 +189,36 @@ function formatUpdatedAt(value) {
   return isToday ? `Updated today at ${time}` : `Updated ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
 }
 
+function formatNextGenerationAt(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `Another summary will be available after ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}.`;
+}
+
+function formatSummaryMonthYear(value) {
+  if (!value) return 'this month';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'this month';
+  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date);
+}
+
+function formatSummaryGeneratedDate(value) {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
 function AIInsightSection({ insight, loading, error, onRequest }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (!insight && !loading) {
     return (
       <section className="journey__ai-insight journey__ai-insight--prompt" aria-labelledby="ai-insight-title">
@@ -218,6 +247,8 @@ function AIInsightSection({ insight, loading, error, onRequest }) {
   }
 
   const riskTag = insight.risk_tag || 'low';
+  const nextGenerationAt = insight.next_generation_at ? new Date(insight.next_generation_at) : null;
+  const canRequestAnother = !nextGenerationAt || Number.isNaN(nextGenerationAt.getTime()) || nextGenerationAt <= new Date();
   const sections = [
     { key: 'current_status', title: 'Where you stand right now', items: insight.current_status },
     { key: 'your_journey', title: 'Your journey so far', items: insight.your_journey },
@@ -228,37 +259,80 @@ function AIInsightSection({ insight, loading, error, onRequest }) {
     <section className="journey__ai-insight" aria-labelledby="ai-insight-title">
       <div className="journey__ai-insight-icon" aria-hidden="true">✨</div>
       <div className="journey__ai-insight-body">
-        <div className="journey__ai-insight-head">
-          <h2 id="ai-insight-title">{insight.headline || 'Your safety at a glance'}</h2>
+        <div className="journey__ai-insight-kicker">
+          <span>Your summary for {formatSummaryMonthYear(insight.generated_at)}</span>
           <span className={`journey__ai-insight-tag journey__ai-insight-tag--${riskTag}`}>{riskTag} risk</span>
         </div>
+        <div className="journey__ai-insight-head">
+          <h2 id="ai-insight-title">{insight.headline || 'Your safety at a glance'}</h2>
+          <button
+            type="button"
+            className="journey__ai-insight-toggle"
+            onClick={() => setIsExpanded((expanded) => !expanded)}
+            aria-expanded={isExpanded}
+            aria-controls="ai-insight-details"
+          >
+            {isExpanded ? 'Hide summary' : 'Show summary'}
+          </button>
+          <button
+            type="button"
+            className="journey__ai-insight-button journey__ai-insight-button--secondary"
+            onClick={onRequest}
+            disabled={!canRequestAnother || loading}
+          >
+            {canRequestAnother ? 'Request new summary' : 'Monthly refresh used'}
+          </button>
+        </div>
 
-        {sections.map((section) => (
-          (section.items || []).length > 0 && (
-            <div className="journey__ai-insight-section" key={section.key}>
-              <p className="journey__ai-insight-section-title">{section.title}</p>
-              {section.items.map((line, index) => (
-                <p key={index}>{line}</p>
-              ))}
-            </div>
-          )
-        ))}
+        <div
+          id="ai-insight-details"
+          className={`journey__ai-insight-details${isExpanded ? ' journey__ai-insight-details--expanded' : ''}`}
+          aria-hidden={!isExpanded}
+        >
+          <div className="journey__ai-insight-details-inner">
+            <p className="journey__ai-insight-generated">Summary generated on {formatSummaryGeneratedDate(insight.generated_at)}.</p>
+            {sections.map((section, sectionIndex) => (
+              (section.items || []).length > 0 && (
+                <article className="journey__ai-insight-section" key={section.key}>
+                  <div className="journey__ai-insight-section-heading">
+                    <span className="journey__ai-insight-section-number">0{sectionIndex + 1}</span>
+                    <p className="journey__ai-insight-section-title">{section.title}</p>
+                  </div>
+                  <div className="journey__ai-insight-copy">
+                    {section.items.map((line, index) => <p key={index}>{line}</p>)}
+                  </div>
+                </article>
+              )
+            ))}
 
-        {(insight.watch_list || []).length > 0 && (
-          <div className="journey__ai-insight-section">
-            <p className="journey__ai-insight-section-title">What to watch out for</p>
-            <ul className="journey__ai-insight-watchlist">
-              {insight.watch_list.map((item, index) => (
-                <li key={index}>{item}</li>
-              ))}
-            </ul>
+            {(insight.watch_list || []).length > 0 && (
+              <article className="journey__ai-insight-section journey__ai-insight-section--watch">
+                <div className="journey__ai-insight-section-heading">
+                  <span className="journey__ai-insight-section-number">0{sections.length + 1}</span>
+                  <p className="journey__ai-insight-section-title">What to watch out for</p>
+                </div>
+                <ul className="journey__ai-insight-watchlist">
+                  {insight.watch_list.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            )}
+
+            {insight.tip && (
+              <aside className="journey__ai-insight-tip">
+                <span className="journey__ai-insight-tip-mark" aria-hidden="true">→</span>
+                <p><strong>One useful next step</strong>{insight.tip}</p>
+              </aside>
+            )}
+            {insight.generated_at && (
+              <p className="journey__ai-insight-meta">{formatUpdatedAt(insight.generated_at)}</p>
+            )}
+            {!canRequestAnother && (
+              <p className="journey__ai-insight-meta">{formatNextGenerationAt(insight.next_generation_at)}</p>
+            )}
           </div>
-        )}
-
-        {insight.tip && <p className="journey__ai-insight-tip"><strong>Tip:</strong> {insight.tip}</p>}
-        {insight.generated_at && (
-          <p className="journey__ai-insight-meta">{formatUpdatedAt(insight.generated_at)}</p>
-        )}
+        </div>
       </div>
     </section>
   );
