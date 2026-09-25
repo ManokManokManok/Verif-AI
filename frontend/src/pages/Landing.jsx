@@ -1,36 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
-import LandingHeroMobile from '../components/LandingHeroMobile';
-
-// Automatically import all images from the carousel folder
-const imageModules = import.meta.glob('../assets/carousel/*.{jpg,jpeg,png,gif,webp}', { eager: true });
-const imageFiles = Object.values(imageModules).map((mod) => mod.default).sort();
-
-// Narrative intro sequence: what VerifAI is, who it's for, how it feels to use, and privacy.
-const CAROUSEL_SLIDES = [
-  {
-    src: imageFiles[0],
-    title: 'What is VerifAI?',
-    description: 'VerifAI checks messages, emails, and links for you — and tells you in plain terms if something looks like a scam.',
-  },
-  {
-    src: imageFiles[1],
-    title: 'Built for real people, not tech experts',
-    description: 'Scams increasingly target people through texts and calls. VerifAI gives you a clear second opinion before you trust anything.',
-  },
-  {
-    src: imageFiles[2],
-    title: 'Paste a message, get a clear answer',
-    description: 'You\u2019ll see a simple verdict — Likely Scam or Looks Safe — with an easy explanation, not confusing tech jargon.',
-  },
-  {
-    src: imageFiles[3],
-    title: 'Your privacy comes first',
-    description: 'Your messages aren\u2019t stored or shared. We only look at what\u2019s needed to give you an answer.',
-  },
-];
 
 const FEATURES = [
   {
@@ -61,18 +32,64 @@ const HOW_IT_WORKS = [
   { step: 3, title: 'Get your result', detail: 'See verdict, scores, scam type, and a short summary with markers.' },
 ];
 
+const WORKFLOW_STAGES = [
+  {
+    number: '01',
+    label: 'Submit',
+    title: 'Bring the suspicious message',
+    detail: 'Paste a text, email, offer, or link. Remove passwords and payment details first.',
+    content: <div className="workflow__message"><span>SMS</span><p>“Pay a small delivery fee to reschedule: bit.ly/...”</p></div>,
+  },
+  {
+    number: '02',
+    label: 'Scan',
+    title: 'Signals are checked',
+    detail: 'The analysis looks for pressure, impersonation, payment requests, and suspicious links.',
+    content: <div className="workflow__scan"><span className="workflow__scan-line" /><i>Urgency language</i><i>Shortened link</i><i>Payment request</i></div>,
+  },
+  {
+    number: '03',
+    label: 'Assess',
+    title: 'Risk is explained',
+    detail: 'You get a risk assessment plus the specific signals that shaped the result.',
+    content: <div className="workflow__assessment"><span>Risk assessment</span><strong>Likely scam</strong><b>High risk</b></div>,
+  },
+  {
+    number: '04',
+    label: 'Act',
+    title: 'Take the safer next step',
+    detail: 'Pause, avoid the suspicious request, and verify through an official channel you trust.',
+    content: <div className="workflow__action"><strong>Do not click or pay.</strong><span>Verify through the official delivery app.</span></div>,
+  },
+];
+
+const FAQS = [
+  {
+    question: 'What can I check?',
+    answer: 'You can check suspicious messages, emails, links, promotions, and screenshots. Remove passwords, payment details, and verification codes before submitting anything.',
+  },
+  {
+    question: 'Can VerifAI guarantee a result?',
+    answer: 'No. A result is guidance, not proof. We explain the signals we found and tell you when the model is uncertain so you can verify through an official channel.',
+  },
+  {
+    question: 'What if I already paid or shared information?',
+    answer: 'Contact your bank, card provider, or account provider through a trusted official number immediately. Do not use contact details from the suspicious message. VerifAI cannot recover funds or replace emergency support.',
+  },
+  {
+    question: 'Do I need an account?',
+    answer: 'You can start a detection without signing in. An account lets you revisit your analysis history and use additional features.',
+  },
+];
+
 
 
 function Landing() {
   const navigate = useNavigate();
   const { isLoggedIn, isAdmin, logout, user } = useAuth();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [imgAnimClass, setImgAnimClass] = useState('anim-in anim-right');
-  const [textAnimClass, setTextAnimClass] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const textRef = useRef(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [workflowStage, setWorkflowStage] = useState(0);
 
   // Handle logout button click - show confirmation modal
   const handleLogout = () => {
@@ -110,39 +127,6 @@ function Landing() {
     navigate('/admin');
   };
 
-  // Advance to a slide, restarting the image/text animations (skipped for reduced motion)
-  const goToSlide = (nextIndex, direction) => {
-    setActiveIndex(nextIndex);
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setImgAnimClass('');
-    setTextAnimClass('');
-    if (reduceMotion) return;
-    requestAnimationFrame(() => {
-      setImgAnimClass(`anim-in anim-${direction}`);
-      setTextAnimClass('carousel-text-anim');
-    });
-  };
-
-  const handlePrevSlide = () => {
-    const nextIndex = (activeIndex - 1 + CAROUSEL_SLIDES.length) % CAROUSEL_SLIDES.length;
-    goToSlide(nextIndex, 'left');
-  };
-
-  const handleNextSlide = () => {
-    const nextIndex = (activeIndex + 1) % CAROUSEL_SLIDES.length;
-    goToSlide(nextIndex, 'right');
-  };
-
-  const handleDotClick = (idx) => {
-    if (idx === activeIndex) return;
-    goToSlide(idx, idx > activeIndex ? 'right' : 'left');
-  };
-
-  // Play animation on first mount
-  useEffect(() => {
-    setTextAnimClass('carousel-text-anim');
-  }, []);
-
   // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = () => setShowUserMenu(false);
@@ -153,11 +137,27 @@ function Landing() {
   }, [showUserMenu]);
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 600px)');
-    const update = () => setIsMobile(!!mq.matches);
-    update();
-    mq.addEventListener?.('change', update);
-    return () => mq.removeEventListener?.('change', update);
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const interval = window.setInterval(() => {
+      setWorkflowStage((current) => (current + 1) % WORKFLOW_STAGES.length);
+    }, 4200);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const revealItems = document.querySelectorAll('.landing-reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('landing-reveal--visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+
+    revealItems.forEach((item) => observer.observe(item));
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -165,10 +165,10 @@ function Landing() {
       <header className="nav">
         <div className="brand">VerifAI</div>
         <nav className="nav__links">
-          <button className="nav__link nav__btn" type="button">About us</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>How it works</button>
           {isLoggedIn && <button className="nav__link nav__btn" type="button" onClick={() => navigate('/analytics')}>Your Verif-AI Journey</button>}
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Check a message</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>Get guidance</button>
         </nav>
 
         {isLoggedIn ? (
@@ -220,79 +220,79 @@ function Landing() {
       </header>
 
       <main className="landing">
-        {isMobile ? (
-          <LandingHeroMobile slides={CAROUSEL_SLIDES} />
-        ) : (
-          <section className="landing__hero">
-            <div className="landing__left">
-              <div
-                className="carousel"
-                role="region"
-                aria-roledescription="carousel"
-                aria-label="Introduction to VerifAI"
-              >
-                <img
-                  key={activeIndex}
-                  src={CAROUSEL_SLIDES[activeIndex].src}
-                  alt={CAROUSEL_SLIDES[activeIndex].title}
-                  className={`carousel-img ${imgAnimClass}`}
-                />
-
-                <button
-                  type="button"
-                  className="carousel__arrow carousel__arrow--prev"
-                  aria-label="Previous slide"
-                  onClick={handlePrevSlide}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  className="carousel__arrow carousel__arrow--next"
-                  aria-label="Next slide"
-                  onClick={handleNextSlide}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </button>
-
-                <div className="carousel__dots" role="tablist" aria-label="Slide navigation">
-                  {CAROUSEL_SLIDES.map((_, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      role="tab"
-                      aria-selected={idx === activeIndex}
-                      aria-label={`Go to slide ${idx + 1}`}
-                      className={`carousel__dot ${idx === activeIndex ? 'carousel__dot--active' : ''}`}
-                      onClick={() => handleDotClick(idx)}
-                    />
-                  ))}
-                </div>
-              </div>
+        <section className="landing__hero landing__hero--trust">
+          <div className="landing__hero-copy">
+            <p className="landing__eyebrow"><span aria-hidden="true">●</span> A calmer second opinion</p>
+            <h1 className="landing__title">Know before you click, pay, or reply.</h1>
+            <p className="landing__body">VerifAI checks suspicious messages, links, and offers for common scam signals, then explains what it found in plain language.</p>
+            <div className="landing__actions">
+              <button type="button" className="landing__cta" onClick={() => navigate('/detection')}>Check something now <span aria-hidden="true">→</span></button>
+              <button type="button" className="landing__cta landing__cta--quiet" onClick={() => navigate('/chatbot')}>I think I’ve been scammed</button>
             </div>
-
-          <section className="landing__right">
-            <div ref={textRef} className={textAnimClass}>
-              <h1 className="landing__title">
-                {CAROUSEL_SLIDES[activeIndex]?.title}
-              </h1>
-              <p className="landing__body">
-                {CAROUSEL_SLIDES[activeIndex]?.description}
-              </p>
-              <button type="button" className="landing__cta" onClick={() => navigate('/detection')}>
-                Get Started
-              </button>
-            </div>
-          </section>
+            <p className="landing__fine-print">No account required to start. Never share passwords, bank details, or verification codes.</p>
+          </div>
+          <div className="landing__hero-panel" aria-label="What happens when you check a message">
+            <div className="landing__panel-top"><span className="landing__status-dot" aria-hidden="true" /> VerifAI safety check <span>Just now</span></div>
+            <div className="landing__message-preview"><span>SMS</span><p>“Your delivery is waiting. Pay a small fee to reschedule: bit.ly/...”</p></div>
+            <div className="landing__result"><div><span className="landing__result-label">Risk assessment</span><strong>Likely scam</strong></div><span className="landing__risk">High risk</span></div>
+            <ul className="landing__signals"><li><span aria-hidden="true">!</span> Shortened link hides the destination</li><li><span aria-hidden="true">!</span> Urgent payment request</li><li><span aria-hidden="true">!</span> Delivery company is not named</li></ul>
+            <p className="landing__panel-note">We show the signals behind every result so you can decide what to do next.</p>
+          </div>
         </section>
-        )}
 
-        <section className="landing__features" id="features">
-          <h2 className="landing__section-title">What VerifAI offers</h2>
+        <div className="landing__trust-strip" aria-label="VerifAI trust commitments">
+          <span><b aria-hidden="true">✓</b> Plain-language explanations</span>
+          <span><b aria-hidden="true">✓</b> Privacy-conscious analysis</span>
+          <span><b aria-hidden="true">✓</b> Honest about uncertainty</span>
+        </div>
+
+        <section className="landing__proof landing-reveal" aria-labelledby="proof-title">
+          <div>
+            <p className="landing__eyebrow">Built for the moment you hesitate</p>
+            <h2 id="proof-title" className="landing__section-title">A clear second opinion beats a rushed decision.</h2>
+          </div>
+          <div className="landing__proof-list">
+            <article><strong>01</strong><h3>See the reason</h3><p>Every result points to concrete signals such as pressure, impersonation, or suspicious links.</p></article>
+            <article><strong>02</strong><h3>Keep control</h3><p>Start without an account and decide what to do after you understand the risk.</p></article>
+            <article><strong>03</strong><h3>Know the limit</h3><p>Uncertain results are called out clearly. Verification through a trusted channel still matters.</p></article>
+          </div>
+        </section>
+
+        <section className="landing__how landing__workflow landing-reveal" id="how-it-works" aria-labelledby="workflow-title">
+          <div className="workflow__heading">
+            <p className="landing__eyebrow">Watch the process</p>
+            <h2 id="workflow-title" className="landing__section-title">From hesitation to a safer decision.</h2>
+            <p>Each stage is visible, explainable, and designed to keep you in control.</p>
+          </div>
+          <div className="workflow__stage-panel" aria-live="polite">
+            <div className="workflow__stage-top">
+              <span>Stage {workflowStage + 1} of {WORKFLOW_STAGES.length}</span>
+              <div className="workflow__progress" aria-hidden="true"><span style={{ width: `${((workflowStage + 1) / WORKFLOW_STAGES.length) * 100}%` }} /></div>
+            </div>
+            <div className="workflow__stage-content" key={workflowStage}>
+              <div>
+                <p className="workflow__stage-label">{WORKFLOW_STAGES[workflowStage].label}</p>
+                <h3>{WORKFLOW_STAGES[workflowStage].title}</h3>
+                <p>{WORKFLOW_STAGES[workflowStage].detail}</p>
+              </div>
+              {WORKFLOW_STAGES[workflowStage].content}
+            </div>
+          </div>
+          <div className="workflow__controls" role="tablist" aria-label="Detection workflow stages">
+            {WORKFLOW_STAGES.map((stage, index) => (
+              <button key={stage.number} type="button" role="tab" aria-selected={workflowStage === index} className={workflowStage === index ? 'is-active' : ''} onClick={() => setWorkflowStage(index)}>
+                <span>{stage.number}</span>{stage.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="landing__cta landing__cta--secondary" onClick={() => navigate('/detection')}>
+            Start a free check
+          </button>
+        </section>
+
+        <section className="landing__features landing-reveal" id="features">
+          <p className="landing__eyebrow">Useful by design</p>
+          <h2 className="landing__section-title">Protection that explains itself.</h2>
           <div className="landing__feature-grid">
             {FEATURES.map((feature, idx) => (
               <div key={idx} className="landing__feature-card">
@@ -304,22 +304,40 @@ function Landing() {
           </div>
         </section>
 
-        <section className="landing__how" id="how-it-works">
-          <h2 className="landing__section-title">How it works</h2>
-          <div className="landing__steps">
-            {HOW_IT_WORKS.map((item) => (
-              <div key={item.step} className="landing__step">
-                <span className="landing__step-num">{item.step}</span>
-                <div className="landing__step-content">
-                  <h3 className="landing__step-title">{item.title}</h3>
-                  <p className="landing__step-detail">{item.detail}</p>
-                </div>
-              </div>
+        <section className="landing__transparency landing-reveal" aria-labelledby="transparency-title">
+          <div className="landing__transparency-copy">
+            <p className="landing__eyebrow">Transparent by default</p>
+            <h2 id="transparency-title" className="landing__section-title">No mystery score. No inflated promise.</h2>
+            <p>VerifAI combines classification with readable indicators. It is designed to help you pause and verify, not to make decisions for you.</p>
+          </div>
+          <div className="landing__metric-list">
+            <div><strong>15+</strong><span>scam categories supported</span></div>
+            <div><strong>10 KB</strong><span>maximum message size</span></div>
+            <div><strong>2 ways</strong><span>to get help: detection or guidance</span></div>
+          </div>
+        </section>
+
+        <section className="landing__faq landing-reveal" aria-labelledby="faq-title">
+          <div className="landing__faq-heading">
+            <p className="landing__eyebrow">Before you begin</p>
+            <h2 id="faq-title" className="landing__section-title">Straight answers to common concerns.</h2>
+          </div>
+          <div className="landing__faq-list">
+            {FAQS.map((faq) => (
+              <details key={faq.question}>
+                <summary>{faq.question}<span aria-hidden="true">+</span></summary>
+                <p>{faq.answer}</p>
+              </details>
             ))}
           </div>
-          <button type="button" className="landing__cta landing__cta--secondary" onClick={() => navigate('/detection')}>
-            Try Detection
-          </button>
+        </section>
+
+        <section className="landing__final-cta landing-reveal" aria-labelledby="final-cta-title">
+          <p className="landing__eyebrow">Pause. Check. Then decide.</p>
+          <h2 id="final-cta-title">You are targeted, but you are not alone.</h2>
+          <p>Get a plain-language second opinion before you click, pay, or reply.</p>
+          <button type="button" className="landing__cta" onClick={() => navigate('/detection')}>Start a free check <span aria-hidden="true">→</span></button>
+          <small>VerifAI provides guidance and does not replace your bank, service provider, or emergency support.</small>
         </section>
       </main>
 
