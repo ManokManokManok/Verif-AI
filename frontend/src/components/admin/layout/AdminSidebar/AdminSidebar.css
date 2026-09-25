@@ -4,8 +4,8 @@
  */
 
 .admin-sidebar {
-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.96) 0%, rgba(15, 23, 42, 0.92) 100%);
-  border-right: 1px solid rgba(148, 163, 184, 0.22);
+  background: #111827;
+  border-right: 1px solid #374151;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -14,7 +14,7 @@
   width: 72px;
   transition: width 0.3s ease-in-out, padding 0.3s ease-in-out;
   overflow: hidden;
-  box-shadow: 6px 0 24px rgba(0, 0, 0, 0.32);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.18);
   position: fixed;
   left: 0;
   top: 0;
@@ -70,6 +70,13 @@
   color: #93c5fd;
   border-color: rgba(59, 130, 246, 0.5);
   transform: translateY(-1px);
+}
+
+.admin-sidebar__toggle:focus-visible,
+.admin-sidebar__button:focus-visible,
+.admin-sidebar__iconbtn:focus-visible {
+  outline: 3px solid rgba(96, 165, 250, 0.4);
+  outline-offset: 3px;
 }
 
 /* Sidebar Navigation */

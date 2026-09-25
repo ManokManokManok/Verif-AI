@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 import { ReportModal } from '../components/reports';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
+import DetectionSidebarFrame from '../components/DetectionSidebarFrame';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
@@ -498,6 +499,11 @@ function Detection() {
     return () => cancelAnimationFrame(t);
   }, [detectionResult]);
 
+  const scamLikelihood = Math.max(0, Number(graphScamWidth) || 0);
+  const legitLikelihood = Math.max(0, Number(graphLegitWidth) || 0);
+  const likelihoodTotal = scamLikelihood + legitLikelihood;
+  const scamShare = likelihoodTotal > 0 ? (scamLikelihood / likelihoodTotal) * 100 : 0;
+
   const handleAskAIGuidance = async () => {
     if (!detectionResult || isOpeningGuidance) return;
 
@@ -556,16 +562,11 @@ function Detection() {
   };
 
   return (
-    <div className="detect page-enter">
-      <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
-        <button
-          className="detect__sidebtn detect__sidebtn--menu"
-          type="button"
-          aria-label="Menu"
-          onClick={() => setSidebarOpen((open) => !open)}
-        >
-          {sidebarOpen ? '✕' : '☰'}
-        </button>
+    <div className={`detect page-enter${sidebarOpen ? ' detect--sidebar-open' : ''}`}>
+      <DetectionSidebarFrame
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen((open) => !open)}
+      >
         {sidebarOpen && (
           <div className="detect__chat-history">
             <div className="detect__chat-title">Chat History</div>
@@ -647,14 +648,14 @@ function Detection() {
             </button>
           </>
         )}
-      </aside>
+      </DetectionSidebarFrame>
 
-      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
-        <header className="nav nav--detect">
-          <div className="brand brand--small">Verif-AI Detection</div>
+      <div className="detect__main">
+        <header className="nav nav--detect" aria-label="Detection navigation">
+          <button className="brand brand--small" type="button" onClick={() => navigate('/')}>VerifAI</button>
           <nav className="nav__links">
             <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>
-              About us
+              Home
             </button>
             {isLoggedIn && (
               <button className="nav__link nav__btn" type="button" onClick={() => navigate('/analytics')}>
@@ -662,14 +663,14 @@ function Detection() {
               </button>
             )}
             <button className="nav__link nav__btn nav__btn--active" type="button">
-              Detection
+              Check a message
             </button>
             <button
               className="nav__link nav__btn"
               type="button"
               onClick={() => navigate('/chatbot')}
             >
-              AI Chatbot
+              Get guidance
             </button>
             {isAdmin && (
               <button
@@ -733,12 +734,12 @@ function Detection() {
           {!detectionResult ? (
             <>
               <h1 className="detect__title">
-                {imagePreview ? 'VerifAI Image Analysis' : 'Welcome to VerifAI'}
+                {imagePreview ? 'Check an image for scam signals' : 'Check before you act'}
               </h1>
               <p className="detect__subtitle">
                 {imagePreview
-                  ? 'Insert and crop the image you want analyzed for suspicious content.'
-                  : 'Write the promo/message you want to analyze, or press the plus button to submit a file'}
+                  ? 'Upload and crop the part of the image you want checked.'
+                  : 'Paste a suspicious message, email, or offer and get a plain-language second opinion.'}
               </p>
 
               {/* Error messages */}
@@ -902,7 +903,7 @@ function Detection() {
                   disabled={(!text.trim() && !selectedImage) || (selectedImage && !hasAppliedCrop) || isDetecting || validationError || isAnalyzingImage}
                   onClick={handleDetect}
                 >
-                  {isDetecting ? 'Analyzing...' : selectedImage ? 'Submit Image' : 'Detect'}
+                  {isDetecting ? 'Checking...' : selectedImage ? 'Check image' : 'Check message'}
                 </button>
               </div>}
 
@@ -1014,25 +1015,26 @@ function Detection() {
                 {/* Likelihood Graph */}
                 <div className="detect__resultCard detect__resultCard--graph detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Scam Likelihood</h3>
-                  <div className="detect__graph">
-                    <div className="detect__graphBar">
-                      <div
-                        className="detect__graphFill detect__graphFill--scam"
-                        style={{ width: `${graphScamWidth}%` }}
-                      />
-                      <div
-                        className="detect__graphFill detect__graphFill--legit"
-                        style={{ width: `${graphLegitWidth}%` }}
-                      />
+                  <div className="detect__likelihood">
+                    <div
+                      className="detect__donut"
+                      role="img"
+                      aria-label={`Scam likelihood ${scamLikelihood.toFixed(1)} percent, legitimate likelihood ${legitLikelihood.toFixed(1)} percent`}
+                      style={{ '--scam-share': `${scamShare}%` }}
+                    >
+                      <div className="detect__donutCenter">
+                        <strong>{scamLikelihood.toFixed(0)}%</strong>
+                        <span>scam risk</span>
+                      </div>
                     </div>
                     <div className="detect__graphLabels">
                       <div className="detect__graphLabel detect__graphLabel--scam">
                         <span className="detect__graphDot detect__graphDot--scam" />
-                        Scam: {(detectionResult.scam_score ?? 0).toFixed(1)}%
+                        Scam: {scamLikelihood.toFixed(1)}%
                       </div>
                       <div className="detect__graphLabel detect__graphLabel--legit">
                         <span className="detect__graphDot detect__graphDot--legit" />
-                        Legit: {(detectionResult.legit_score ?? 0).toFixed(1)}%
+                        Legit: {legitLikelihood.toFixed(1)}%
                       </div>
                     </div>
                   </div>

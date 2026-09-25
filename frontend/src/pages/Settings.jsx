@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import './Settings.css';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import {
   changePasswordRequest,
   deleteAccountRequest,
@@ -15,6 +16,7 @@ import { getPasswordRequirements, validatePassword, validateUsername, CONSTRAINT
 export default function Settings() {
   const navigate = useNavigate();
   const { user, isLoggedIn, logout, refreshUser, accessToken } = useAuth();
+  const { theme, toggleTheme, fontScale, setFontScale } = useTheme();
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState('account'); // 'account' | 'reports' | 'danger'
@@ -486,6 +488,55 @@ export default function Settings() {
 
                 {activeTab === 'privacy' && (
                 <>
+                  <section className="settings-feature-section settings-appearance-section">
+                    <div className="settings-feature-section__header">
+                      <div>
+                        <h3 className="settings-feature-section__title">Appearance</h3>
+                        <p className="settings-feature-section__description">
+                          Adjust how VerifAI looks and reads across every page.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="settings-appearance-controls">
+                      <div className="settings-preference-row">
+                        <div className="settings-preference-copy">
+                          <strong>Theme</strong>
+                          <small>{theme === 'dark' ? 'Dark mode' : 'Light mode'} is saved on this device.</small>
+                        </div>
+                        <button
+                          className={`settings-theme-switch${theme === 'light' ? ' settings-theme-switch--light' : ''}`}
+                          type="button"
+                          role="switch"
+                          aria-checked={theme === 'light'}
+                          aria-label={`Theme: ${theme === 'dark' ? 'dark mode enabled' : 'light mode enabled'}. Activate to switch to ${theme === 'dark' ? 'light' : 'dark'} mode.`}
+                          onClick={toggleTheme}
+                        >
+                          <span aria-hidden="true" />
+                        </button>
+                      </div>
+                      <div className="settings-preference-row settings-preference-row--font">
+                        <div className="settings-preference-copy">
+                          <strong>Text size</strong>
+                          <small>Scale interface text without changing your layout.</small>
+                        </div>
+                        <div className="settings-font-control">
+                          <output htmlFor="settings-font-scale">{fontScale}%</output>
+                          <input
+                            id="settings-font-scale"
+                            type="range"
+                            min="90"
+                            max="120"
+                            step="10"
+                            value={fontScale}
+                            onChange={(event) => setFontScale(Number(event.target.value))}
+                            aria-label="Global text size"
+                          />
+                          <div className="settings-font-scale-labels" aria-hidden="true"><span>A</span><span>A</span><span>A</span><span>A</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
                   <section className="settings-feature-section">
                   <div className="settings-feature-section__header">
                     <div>

@@ -10,6 +10,7 @@ import {
 } from '../api/chatbot';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import DetectionSidebarFrame from '../components/DetectionSidebarFrame';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 
 function AIChatbot() {
@@ -374,16 +375,12 @@ function AIChatbot() {
   };
 
   return (
-    <div className="detect detect--chatbot page-enter" style={{ height: '100vh', overflow: 'hidden' }}>
-      <aside className={`detect__sidebar detect__sidebar--chatbot${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
-        <button
-          className="detect__sidebtn detect__sidebtn--menu"
-          type="button"
-          aria-label="Menu"
-          onClick={() => setSidebarOpen((open) => !open)}
-        >
-          {sidebarOpen ? '✕' : '☰'}
-        </button>
+    <div className={`detect detect--chatbot page-enter${sidebarOpen ? ' detect--sidebar-open' : ''}`} style={{ height: '100vh', overflow: 'hidden' }}>
+      <DetectionSidebarFrame
+        variant="chatbot"
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen((open) => !open)}
+      >
         <button 
           className="detect__sidebtn" 
           type="button" 
@@ -470,11 +467,9 @@ function AIChatbot() {
         >
           ⚙
         </button>
-      </aside>
+      </DetectionSidebarFrame>
 
-      <div className="detect__main" style={{ 
-        transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', 
-        marginLeft: sidebarOpen ? 320 : 72,
+      <div className="detect__main" style={{
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',

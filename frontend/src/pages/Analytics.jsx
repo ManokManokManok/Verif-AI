@@ -4,23 +4,39 @@ import './Analytics.css';
 import { useAuth } from '../context/AuthContext';
 import { getUserSafetySummary, getGlobalSafetySummary } from '../api/analytics';
 
-function BarChart({ items, emptyText, horizontal = false }) {
+const CHART_COLORS = ['#60a5fa', '#818cf8', '#38bdf8', '#34d399', '#fbbf24'];
+
+function DistributionDonut({ items, emptyText }) {
   if (!items.length) return <p className="journey__empty">{emptyText}</p>;
 
-  const maxCount = Math.max(...items.map((item) => item.count), 1);
+  const total = items.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  let offset = 0;
+  const segments = items.slice(0, 5).map((item, index) => {
+    const share = total > 0 ? (Number(item.count || 0) / total) * 100 : 0;
+    const segment = `${CHART_COLORS[index % CHART_COLORS.length]} ${offset}% ${offset + share}%`;
+    offset += share;
+    return { ...item, share, color: CHART_COLORS[index % CHART_COLORS.length], segment };
+  });
+
   return (
-    <div className={`journey__bar-graph ${horizontal ? 'journey__bar-graph--horizontal' : ''}`} aria-label="Scam types chart">
-      {items.map((item) => (
-        <div className="journey__bar-graph-item" key={item.type}>
-          <div className="journey__bar-graph-label"><span title={item.type}>{item.type}</span><b>{item.count}</b></div>
-          <div className="journey__bar-graph-track">
-            <span style={horizontal
-              ? { width: `${Math.max((item.count / maxCount) * 100, 10)}%`, flex: `0 0 ${Math.max((item.count / maxCount) * 100, 10)}%` }
-              : { height: `${Math.max((item.count / maxCount) * 100, 16)}%` }} />
+    <div className="journey__distribution" aria-label="Scam pattern distribution">
+      <div
+        className="journey__distribution-donut"
+        role="img"
+        aria-label={`${total} scam checks distributed across ${segments.length} patterns`}
+        style={{ '--distribution-gradient': `conic-gradient(${segments.map((item) => item.segment).join(', ')})` }}
+      >
+        <div className="journey__distribution-center"><strong>{total}</strong><span>checks</span></div>
+      </div>
+      <div className="journey__distribution-legend">
+        {segments.map((item) => (
+          <div className="journey__distribution-item" key={item.type}>
+            <span className="journey__distribution-swatch" style={{ background: item.color }} aria-hidden="true" />
+            <span className="journey__distribution-name" title={item.type}>{item.type}</span>
+            <strong>{item.share.toFixed(0)}%</strong>
           </div>
-          {!horizontal && <div className="journey__bar-graph-name" title={item.type}>{item.type}</div>}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -28,18 +44,48 @@ function BarChart({ items, emptyText, horizontal = false }) {
 function TrendChart({ points, emptyText }) {
   if (!points.length) return <p className="journey__empty">{emptyText}</p>;
 
-  const maxCount = Math.max(...points.map((point) => point.count), 1);
+  const width = 640;
+  const height = 220;
+  const padding = { top: 24, right: 18, bottom: 38, left: 18 };
+  const maxCount = Math.max(...points.map((point) => Number(point.count || 0)), 1);
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const coordinates = points.map((point, index) => ({
+    ...point,
+    x: padding.left + (points.length === 1 ? chartWidth / 2 : (index / (points.length - 1)) * chartWidth),
+    y: padding.top + chartHeight - (Number(point.count || 0) / maxCount) * chartHeight,
+  }));
+  const linePoints = coordinates.map((point) => `${point.x},${point.y}`).join(' ');
+  const areaPoints = `${padding.left},${height - padding.bottom} ${linePoints} ${width - padding.right},${height - padding.bottom}`;
+
   return (
-    <div className="journey__trend-chart" aria-label="Monthly activity chart">
-      {points.map((point) => (
-        <div className="journey__trend-column" key={point.label}>
-          <div className="journey__trend-value">{point.count}</div>
-          <div className="journey__trend-track">
-            <span style={{ '--bar-height': `${Math.max((point.count / maxCount) * 100, 8)}%` }} />
-          </div>
-          <span className="journey__trend-label">{point.label}</span>
-        </div>
-      ))}
+    <div className="journey__trend-chart journey__trend-chart--area" aria-label="Monthly activity trend">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Activity trend across ${points.length} periods`} preserveAspectRatio="none">
+        <line className="journey__trend-axis" x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} />
+        <polygon className="journey__trend-area" points={areaPoints} />
+        <polyline className="journey__trend-line" points={linePoints} />
+        {coordinates.map((point) => (
+          <g className="journey__trend-point-group" key={point.label}>
+            <circle
+              className="journey__trend-point"
+              cx={point.x}
+              cy={point.y}
+              r="5"
+              tabIndex="0"
+              role="img"
+              aria-label={`${point.label}: ${point.count} checks`}
+            >
+              <title>{`${point.label}: ${point.count} checks`}</title>
+            </circle>
+            <text className="journey__trend-tooltip" x={point.x} y={Math.max(point.y - 14, 14)} textAnchor="middle">
+              {point.count}
+            </text>
+          </g>
+        ))}
+      </svg>
+      <div className="journey__trend-labels">
+        {points.map((point) => <span key={point.label}>{point.label}</span>)}
+      </div>
     </div>
   );
 }
@@ -437,12 +483,12 @@ export default function Analytics() {
   return (
     <div className="journey page-enter">
       <header className="nav nav--journey">
-        <div className="brand brand--small">Verif-AI</div>
+        <button className="brand brand--small" type="button" onClick={() => navigate('/')}>VerifAI</button>
         <nav className="nav__links">
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>About us</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>Home</button>
           <button className="nav__link nav__btn nav__btn--active" type="button">Your Verif-AI Journey</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Check a message</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>Get guidance</button>
         </nav>
         <div className="journey__actions">
           <div className="nav__user-menu" onClick={(event) => event.stopPropagation()}>
@@ -486,9 +532,13 @@ export default function Analytics() {
 
       <main className="journey__content">
         <section className="journey__intro">
-          <p className="journey__eyebrow">Your time at Verif-AI</p>
-          <h1>Understand what you&apos;re seeing.</h1>
-          <p>See your checking habits, the scam patterns around you, and the simple steps that can help you stay safer.</p>
+          <p className="journey__eyebrow">Your Verif-AI Journey</p>
+          <h1>Learn from what you&apos;ve checked.</h1>
+          <p>Review your checks, understand recurring warning signs, and build safer habits without turning your safety into a score.</p>
+          <div className="journey__intro-actions">
+            <button type="button" className="journey__primary-action" onClick={() => navigate('/detection')}>Check something new <span aria-hidden="true">→</span></button>
+            <span className="journey__privacy-note">Private to your account</span>
+          </div>
         </section>
 
         {loading ? (
@@ -606,7 +656,7 @@ export default function Analytics() {
                 </div>
                 <AdviceCarousel community={community} />
                 <div className="journey__community-grid">
-                  <BarChart items={community?.top_types || []} emptyText="Community trends will appear as more checks are made." />
+                  <DistributionDonut items={community?.top_types || []} emptyText="Community trends will appear as more checks are made." />
                   <TrendChart points={community?.trend || []} emptyText="Community activity will appear here soon." />
                 </div>
               </section>

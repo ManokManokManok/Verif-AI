@@ -28,14 +28,7 @@ function ProtectedRoute({ children, requireAdmin = false }) {
   // Show loading state while checking auth
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '100vh',
-        background: '#0f0f0f',
-        color: '#fff'
-      }}>
+      <div className="app-loading">
         Loading...
       </div>
     );
