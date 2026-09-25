@@ -531,3 +531,554 @@
 [data-theme="light"] .journey__section-number {
   color: #cbd5e1;
 }
+
+/* Alternative chart visualizations */
+.journey__distribution {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(0, 1.2fr);
+  gap: 28px;
+  align-items: center;
+  min-height: 230px;
+  padding: 12px 0;
+}
+
+.journey__distribution-donut {
+  display: grid;
+  width: 178px;
+  height: 178px;
+  place-items: center;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--distribution-gradient);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18), 0 16px 34px rgba(0, 0, 0, 0.2);
+}
+
+.journey__distribution-donut::before {
+  content: '';
+  grid-area: 1 / 1;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: #111827;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+
+.journey__distribution-center {
+  z-index: 1;
+  grid-area: 1 / 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.journey__distribution-center strong {
+  color: #f9fafb;
+  font-size: 31px;
+  line-height: 1;
+}
+
+.journey__distribution-center span {
+  color: #94a3b8;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.journey__distribution-legend {
+  display: grid;
+  gap: 12px;
+}
+
+.journey__distribution-item {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+}
+
+.journey__distribution-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.journey__distribution-name {
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journey__distribution-item strong {
+  color: #f9fafb;
+  font-size: 12px;
+}
+
+.journey__trend-chart--area {
+  display: block;
+  min-height: 0;
+  padding: 10px 0 0;
+  border-bottom: 0;
+}
+
+.journey__trend-chart--area svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+}
+
+.journey__trend-axis {
+  stroke: #374151;
+  stroke-width: 1;
+}
+
+.journey__trend-area {
+  fill: rgba(37, 99, 235, 0.18);
+  opacity: 0;
+}
+
+.journey__trend-line {
+  fill: none;
+  stroke: #60a5fa;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+  stroke-dasharray: 900;
+  stroke-dashoffset: 900;
+}
+
+.journey__trend-point {
+  fill: #111827;
+  stroke: #93c5fd;
+  stroke-width: 3;
+  opacity: 0;
+}
+
+.journey__reveal.is-visible .journey__trend-area {
+  animation: journeyAreaFade 700ms 180ms ease forwards;
+}
+
+.journey__reveal.is-visible .journey__trend-line {
+  animation: journeyLineDraw 1000ms 180ms ease forwards;
+}
+
+.journey__reveal.is-visible .journey__trend-point {
+  animation: journeyPointIn 320ms 650ms ease forwards;
+}
+
+@keyframes journeyAreaFade {
+  to { opacity: 1; }
+}
+
+@keyframes journeyLineDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes journeyPointIn {
+  from { opacity: 0; transform: scale(0.5); transform-origin: center; }
+  to { opacity: 1; transform: scale(1); transform-origin: center; }
+}
+
+.journey__trend-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 18px 0;
+}
+
+.journey__trend-labels span {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .journey__distribution {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .journey__distribution-donut {
+    width: 164px;
+    height: 164px;
+  }
+
+  .journey__distribution-donut::before {
+    width: 120px;
+    height: 120px;
+  }
+
+  .journey__trend-chart--area svg {
+    height: 190px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey__trend-area,
+  .journey__trend-line,
+  .journey__trend-point {
+    animation: none !important;
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Chart hover interactions: transform, color, and tooltip fade. */
+.journey__distribution-donut {
+  will-change: transform;
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+
+.journey__distribution-donut:hover,
+.journey__distribution-donut:focus-visible {
+  transform: scale(1.045);
+  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.5), 0 20px 40px rgba(37, 99, 235, 0.2);
+}
+
+.journey__distribution-item {
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.journey__distribution-item:hover,
+.journey__distribution-item:focus-within {
+  border-color: rgba(96, 165, 250, 0.25);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.journey__distribution-item:hover .journey__distribution-name,
+.journey__distribution-item:focus-within .journey__distribution-name {
+  color: #f9fafb;
+}
+
+.journey__distribution-swatch {
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.journey__distribution-item:hover .journey__distribution-swatch,
+.journey__distribution-item:focus-within .journey__distribution-swatch {
+  transform: scale(1.35);
+  box-shadow: 0 0 10px currentColor;
+}
+
+.journey__trend-point-group {
+  cursor: pointer;
+}
+
+.journey__trend-point {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 180ms ease, fill 180ms ease, stroke 180ms ease;
+}
+
+.journey__trend-point-group:hover .journey__trend-point,
+.journey__trend-point:focus-visible {
+  fill: #60a5fa;
+  stroke: #dbeafe;
+  transform: scale(1.65);
+}
+
+.journey__trend-tooltip {
+  pointer-events: none;
+  fill: #f9fafb;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+  transform: translateY(5px);
+}
+
+.journey__trend-point-group:hover .journey__trend-tooltip,
+.journey__trend-point:focus-visible + .journey__trend-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.journey__trend-chart--area:hover .journey__trend-line {
+  stroke: #93c5fd;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey__distribution-donut,
+  .journey__distribution-item,
+  .journey__distribution-swatch,
+  .journey__trend-point,
+  .journey__trend-tooltip,
+  .journey__trend-line {
+    transition: none;
+  }
+}
+
+/* Shared VerifAI journey theme */
+.journey {
+  background: radial-gradient(circle at 78% 0%, rgba(37, 99, 235, 0.16), transparent 32%), #050b16;
+  color: #f9fafb;
+}
+
+.journey .nav--journey {
+  min-height: 76px;
+  padding: 0 clamp(22px, 7vw, 104px);
+  background: rgba(17, 24, 39, 0.88);
+  border-bottom-color: rgba(55, 65, 81, 0.8);
+  backdrop-filter: blur(14px);
+}
+
+.journey .brand--small {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f9fafb;
+  cursor: pointer;
+  letter-spacing: -0.03em;
+}
+
+.journey .nav__btn {
+  color: #94a3b8;
+}
+
+.journey .nav__btn:hover,
+.journey .nav__btn--active {
+  color: #93c5fd;
+}
+
+.journey .nav__login {
+  border-radius: 7px;
+  background: #1f2937;
+  border-color: #374151;
+}
+
+.journey .nav__login:hover {
+  background: #374151;
+  border-color: #4b5563;
+}
+
+.journey__content {
+  width: min(1120px, calc(100% - 40px));
+  padding: 76px 0 96px;
+}
+
+.journey__intro {
+  max-width: 760px;
+  margin-bottom: 44px;
+}
+
+.journey__eyebrow {
+  color: #60a5fa;
+}
+
+.journey__intro h1 {
+  color: #f9fafb;
+  font-size: clamp(38px, 5vw, 66px);
+  letter-spacing: -0.055em;
+}
+
+.journey__intro > p:last-of-type {
+  max-width: 620px;
+  color: #94a3b8;
+}
+
+.journey__intro-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+.journey__primary-action {
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1px solid #2563eb;
+  border-radius: 7px;
+  background: #2563eb;
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.journey__primary-action:hover {
+  background: #3b82f6;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.28);
+  transform: translateY(-1px);
+}
+
+.journey__primary-action span {
+  margin-left: 12px;
+  font-size: 17px;
+}
+
+.journey__privacy-note {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.journey__summary {
+  gap: 18px;
+  padding: 22px 0;
+  border-top-color: rgba(96, 165, 250, 0.42);
+  border-bottom-color: rgba(96, 165, 250, 0.18);
+}
+
+.journey__summary-icon {
+  width: 48px;
+  height: 48px;
+  flex-basis: 48px;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 22px;
+}
+
+.journey__summary h2,
+.journey__panel h2,
+.journey__community h2,
+.journey__section-heading h2 {
+  color: #f9fafb;
+}
+
+.journey__summary p:last-child,
+.journey__community-summary,
+.journey__section-heading p:last-child {
+  color: #94a3b8;
+}
+
+.journey__summary .journey__scope-note {
+  color: #60a5fa;
+}
+
+.journey__stat-grid {
+  gap: 22px;
+  margin-bottom: 68px;
+  border-bottom-color: #374151;
+}
+
+.journey__stat {
+  border-right-color: #374151;
+}
+
+.journey__stat--alert {
+  border-color: #f87171;
+}
+
+.journey__stat span,
+.journey__stat strong {
+  color: #f9fafb;
+}
+
+.journey__stat span {
+  color: #94a3b8;
+}
+
+.journey__focus-scene,
+.journey__community {
+  border-top-color: #374151;
+}
+
+.journey__section-heading {
+  border-bottom-color: #374151;
+}
+
+.journey__section-number {
+  color: #1e3a5f;
+}
+
+.journey__mini-pill,
+.journey__mini-pill--secondary {
+  border-color: rgba(96, 165, 250, 0.35);
+  border-radius: 7px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+}
+
+.journey__signal-row.is-active {
+  border-left-color: #60a5fa;
+}
+
+.journey__signal-row::before {
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.2), rgba(15, 38, 53, 0.12) 58%, transparent 88%);
+}
+
+.journey__signal-row.is-active .journey__signal-rank,
+.journey__signal-row.is-active .journey__signal-status,
+.journey__signal-copy span {
+  color: #93c5fd;
+}
+
+.journey__signal-meter span,
+.journey__trend-track span,
+.journey__bar-graph--horizontal .journey__bar-graph-track span {
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
+  box-shadow: 0 0 12px rgba(37, 99, 235, 0.3);
+}
+
+.journey__insight {
+  border-left-color: #60a5fa;
+  background: rgba(17, 24, 39, 0.56);
+}
+
+.journey__insight-score,
+.journey__pattern-lead-stat strong,
+.journey__metric-large,
+.journey__compare-arrow {
+  color: #60a5fa;
+}
+
+.journey__insight-action strong,
+.journey__compact-line strong {
+  color: #bfdbfe;
+}
+
+.journey__advice {
+  border-color: rgba(251, 191, 36, 0.28);
+  border-radius: 9px;
+  background: linear-gradient(105deg, rgba(120, 53, 15, 0.14), rgba(15, 23, 42, 0.82));
+}
+
+.journey__community-rate {
+  border-radius: 7px;
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.journey__loading,
+.journey__error {
+  border: 1px solid #374151;
+  border-radius: 10px;
+  background: #111827;
+}
+
+@media (max-width: 800px) {
+  .journey .nav--journey {
+    min-height: 64px;
+    padding: 0 18px;
+  }
+
+  .journey__content {
+    width: min(100% - 32px, 620px);
+    padding-top: 52px;
+  }
+
+  .journey__intro h1 {
+    font-size: 42px;
+  }
+
+  .journey__intro-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .journey__primary-action {
+    width: 100%;
+  }
+}

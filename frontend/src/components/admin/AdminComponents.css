@@ -39,6 +39,20 @@
   --admin-radius-sm: 8px;
 }
 
+:root[data-theme="light"] {
+  --admin-bg-dark: #f1f5f9;
+  --admin-bg-card: #ffffff;
+  --admin-bg-hover: #e2e8f0;
+  --admin-bg-secondary: #f8fafc;
+  --admin-border: #cbd5e1;
+  --admin-border-light: #94a3b8;
+  --admin-text: #0f172a;
+  --admin-text-secondary: #1e293b;
+  --admin-text-muted: #475569;
+  --admin-text-dim: #64748b;
+  --admin-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
 /* === Stat Card === */
 .admin-stat-card {
   background: var(--admin-bg-card);
