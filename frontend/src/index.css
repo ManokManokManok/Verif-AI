@@ -8201,3 +8201,224 @@ button {
     transition: none;
   }
 }
+
+/* Landing light theme must come after the shared dark landing overrides. */
+[data-theme="light"] .page--landing {
+  background: #f4f1e9;
+  color: #152b2a;
+}
+
+[data-theme="light"] .page--landing .nav {
+  background: rgba(244, 241, 233, 0.94);
+  border-bottom-color: rgba(21, 43, 42, 0.1);
+}
+
+[data-theme="light"] .page--landing .brand {
+  color: #152b2a;
+}
+
+[data-theme="light"] .page--landing .nav__btn {
+  color: #4c6661;
+}
+
+[data-theme="light"] .page--landing .nav__btn:hover {
+  color: #152b2a;
+}
+
+[data-theme="light"] .page--landing .nav__login {
+  background: #152b2a;
+  border-color: #152b2a;
+  color: #fffdf8;
+}
+
+[data-theme="light"] .page--landing .nav__login:hover {
+  background: #264d47;
+  border-color: #264d47;
+}
+
+[data-theme="light"] .page--landing .nav__dropdown {
+  background: #fffdf8;
+  border-color: rgba(21, 43, 42, 0.16);
+  box-shadow: 0 12px 28px rgba(21, 43, 42, 0.14);
+}
+
+[data-theme="light"] .page--landing .nav__dropdown-item {
+  color: #536965;
+}
+
+[data-theme="light"] .page--landing .nav__dropdown-item:hover {
+  background: #e9f0eb;
+  color: #152b2a;
+}
+
+[data-theme="light"] .page--landing .nav__dropdown-item--logout:hover {
+  background: #fbe8e3;
+  color: #a84f2d;
+}
+
+[data-theme="light"] .page--landing .landing {
+  background: radial-gradient(circle at 82% 16%, rgba(238, 177, 83, 0.22), transparent 27%), #f4f1e9;
+}
+
+[data-theme="light"] .page--landing .landing__eyebrow {
+  color: #9a4f2c;
+}
+
+[data-theme="light"] .page--landing .landing__title,
+[data-theme="light"] .page--landing .landing__section-title,
+[data-theme="light"] .page--landing .workflow__heading .landing__section-title,
+[data-theme="light"] .page--landing .landing__proof-list h3,
+[data-theme="light"] .page--landing .landing__feature-title,
+[data-theme="light"] .page--landing .landing__final-cta h2 {
+  color: #152b2a;
+}
+
+[data-theme="light"] .page--landing .landing__body,
+[data-theme="light"] .page--landing .landing__proof-list p,
+[data-theme="light"] .page--landing .landing__feature-desc,
+[data-theme="light"] .page--landing .landing__transparency-copy > p:last-child,
+[data-theme="light"] .page--landing .landing__final-cta > p,
+[data-theme="light"] .page--landing .workflow__heading > p:last-child {
+  color: #536965;
+}
+
+[data-theme="light"] .page--landing .landing__fine-print,
+[data-theme="light"] .page--landing .landing__final-cta small {
+  color: #687a74;
+}
+
+[data-theme="light"] .page--landing .landing__cta {
+  border-color: #152b2a;
+  background: #152b2a;
+  color: #fffdf8;
+}
+
+[data-theme="light"] .page--landing .landing__cta:hover {
+  background: #264d47;
+  box-shadow: 0 10px 24px rgba(21, 43, 42, 0.18);
+}
+
+[data-theme="light"] .page--landing .landing__cta--quiet {
+  border-color: rgba(21, 43, 42, 0.2);
+  background: transparent;
+  color: #264d47;
+}
+
+[data-theme="light"] .page--landing .landing__cta--quiet:hover {
+  background: rgba(21, 43, 42, 0.06);
+  box-shadow: none;
+}
+
+[data-theme="light"] .page--landing .landing__hero-panel,
+[data-theme="light"] .page--landing .workflow__stage-panel {
+  border-color: rgba(21, 43, 42, 0.16);
+  background: #fffdf8;
+  box-shadow: 0 18px 45px rgba(21, 43, 42, 0.1);
+}
+
+[data-theme="light"] .page--landing .landing__panel-top {
+  border-bottom-color: rgba(21, 43, 42, 0.1);
+  color: #264d47;
+}
+
+[data-theme="light"] .page--landing .landing__panel-top > span:last-child,
+[data-theme="light"] .page--landing .landing__panel-note,
+[data-theme="light"] .page--landing .workflow__stage-top {
+  color: #687a74;
+}
+
+[data-theme="light"] .page--landing .landing__message-preview p,
+[data-theme="light"] .page--landing .landing__signals {
+  color: #455f59;
+}
+
+[data-theme="light"] .page--landing .landing__result {
+  background: #fff0e7;
+}
+
+[data-theme="light"] .page--landing .landing__result-label,
+[data-theme="light"] .page--landing .landing__result strong,
+[data-theme="light"] .page--landing .landing__risk {
+  color: #a84f2d;
+}
+
+[data-theme="light"] .page--landing .landing__trust-strip {
+  border-color: rgba(21, 43, 42, 0.1);
+  color: #58716a;
+}
+
+[data-theme="light"] .page--landing .landing__proof-list article,
+[data-theme="light"] .page--landing .landing__features,
+[data-theme="light"] .page--landing .landing__transparency,
+[data-theme="light"] .page--landing .landing__faq,
+[data-theme="light"] .page--landing .landing__faq-list,
+[data-theme="light"] .page--landing .landing__faq-list details,
+[data-theme="light"] .page--landing .workflow__controls {
+  border-color: rgba(21, 43, 42, 0.14);
+}
+
+[data-theme="light"] .page--landing .landing__feature-card,
+[data-theme="light"] .page--landing .landing__metric-list,
+[data-theme="light"] .page--landing .workflow__message,
+[data-theme="light"] .page--landing .workflow__scan,
+[data-theme="light"] .page--landing .workflow__assessment,
+[data-theme="light"] .page--landing .workflow__action {
+  border-color: rgba(21, 43, 42, 0.16);
+  background: rgba(255, 253, 248, 0.78);
+  box-shadow: 0 10px 24px rgba(21, 43, 42, 0.06);
+}
+
+[data-theme="light"] .page--landing .landing__metric-list div {
+  border-bottom-color: rgba(21, 43, 42, 0.14);
+}
+
+[data-theme="light"] .page--landing .landing__metric-list strong,
+[data-theme="light"] .page--landing .workflow__stage-label,
+[data-theme="light"] .page--landing .workflow__controls button span {
+  color: #9a4f2c;
+}
+
+[data-theme="light"] .page--landing .landing__metric-list span,
+[data-theme="light"] .page--landing .workflow__stage-content > div:first-child > p:last-child,
+[data-theme="light"] .page--landing .workflow__message p,
+[data-theme="light"] .page--landing .workflow__controls button {
+  color: #536965;
+}
+
+[data-theme="light"] .page--landing .landing__faq-list summary,
+[data-theme="light"] .page--landing .workflow__stage-content h3,
+[data-theme="light"] .page--landing .workflow__assessment strong,
+[data-theme="light"] .page--landing .workflow__action strong {
+  color: #152b2a;
+}
+
+[data-theme="light"] .page--landing .landing__faq-list summary span,
+[data-theme="light"] .page--landing .workflow__controls button:hover,
+[data-theme="light"] .page--landing .workflow__controls button.is-active {
+  color: #9a4f2c;
+}
+
+[data-theme="light"] .page--landing .landing__faq-list details p,
+[data-theme="light"] .page--landing .workflow__action span,
+[data-theme="light"] .page--landing .workflow__scan i {
+  color: #536965;
+}
+
+[data-theme="light"] .page--landing .landing__final-cta {
+  border-color: rgba(178, 93, 50, 0.28);
+  background: radial-gradient(circle at 50% 0%, rgba(238, 177, 83, 0.25), transparent 62%), #fffdf8;
+}
+
+[data-theme="light"] .page--landing .landing__footer {
+  background: #e9e5dc;
+  border-top-color: rgba(21, 43, 42, 0.14);
+}
+
+[data-theme="light"] .page--landing .landing__footer-link,
+[data-theme="light"] .page--landing .landing__footer-tagline {
+  color: #536965;
+}
+
+[data-theme="light"] .page--landing .landing__footer-link:hover {
+  color: #152b2a;
+}

@@ -167,8 +167,8 @@ function Landing() {
         <nav className="nav__links">
           <button className="nav__link nav__btn" type="button" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>How it works</button>
           {isLoggedIn && <button className="nav__link nav__btn" type="button" onClick={() => navigate('/analytics')}>Your Verif-AI Journey</button>}
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Check a message</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>Get guidance</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
+          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
         </nav>
 
         {isLoggedIn ? (
