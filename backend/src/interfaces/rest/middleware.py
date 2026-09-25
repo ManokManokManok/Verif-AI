@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository
+from ...infrastructure.token_blacklist_service import MongoDBTokenBlacklistService
 from ...domain.rbac import PermissionChecker
 from ...domain.entities import AuthenticationError
 
@@ -59,8 +60,17 @@ class AuthenticationMiddleware:
         
         access_lifetime = int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME', '900'))
         refresh_lifetime = int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME', '604800'))
+        token_blacklist_service = MongoDBTokenBlacklistService(
+            get_mongo_client(),
+            get_database_name(),
+        )
         
-        return JWTService(secret_key, access_lifetime, refresh_lifetime)
+        return JWTService(
+            secret_key,
+            access_lifetime,
+            refresh_lifetime,
+            token_blacklist_service,
+        )
 
 
 def require_permission(permission: str, resource: str = None):

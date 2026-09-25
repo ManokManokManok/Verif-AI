@@ -1,0 +1,81 @@
+{
+  "personal": {
+    "risk_level": "Medium risk",
+    "total_checks": 14,
+    "high_risk_count": 4,
+    "high_risk_rate": 28.6,
+    "recent_high_risk_count": 2,
+    "most_common_type": "Account Verification & Phishing",
+    "type_insights": [
+      {
+        "type": "Account Verification & Phishing",
+        "share": 50,
+        "trend_direction": "increasing",
+        "recent_count": 5,
+        "previous_count": 2
+      },
+      {
+        "type": "Delivery & Customs",
+        "share": 21.4,
+        "trend_direction": "stable",
+        "recent_count": 2,
+        "previous_count": 2
+      },
+      {
+        "type": "Prize, Raffle & Reward",
+        "share": 14.3,
+        "trend_direction": "decreasing",
+        "recent_count": 1,
+        "previous_count": 3
+      }
+    ],
+    "trend": [
+      {
+        "label": "2026-06",
+        "count": 1
+      },
+      {
+        "label": "2026-07",
+        "count": 3
+      },
+      {
+        "label": "2026-08",
+        "count": 4
+      },
+      {
+        "label": "2026-09",
+        "count": 6
+      }
+    ]
+  },
+  "community": {
+    "total_checks": 1840,
+    "scam_rate": 31.7,
+    "most_common_type": "Account Verification & Phishing",
+    "trend_insight": "Account verification scams increased by 18% this month.",
+    "seasonal_insight": "Back-to-school shopping and enrollment periods can bring more fake payment and account-confirmation requests.",
+    "top_types": [
+      {
+        "type": "Account Verification & Phishing",
+        "share": 34.2,
+        "trend_direction": "increasing",
+        "recent_count": 214,
+        "previous_count": 181
+      },
+      {
+        "type": "Delivery & Customs",
+        "share": 22.8,
+        "trend_direction": "increasing",
+        "recent_count": 143,
+        "previous_count": 119
+      },
+      {
+        "type": "Banking Access & Payment",
+        "share": 17.5,
+        "trend_direction": "stable",
+        "recent_count": 109,
+        "previous_count": 111
+      }
+    ]
+  }
+}
