@@ -182,6 +182,18 @@ function AIChatbot() {
     if (location.state) {
       const { conversationId, conversationType: navType, analysisContext: navContext, initialMessages } = location.state;
 
+      if (location.state.guidanceCategory) {
+        const category = String(location.state.guidanceCategory).slice(0, 100);
+        setConversationType('general');
+        setCurrentConversationId(null);
+        setCurrentTitle(`${category} guidance`);
+        setAnalysisContext(null);
+        setMessages([]);
+        setText(`I encountered a ${category} scam pattern. What warning signs should I look for, and how can I verify a message safely?`);
+        window.history.replaceState({}, document.title);
+        return;
+      }
+
       if (location.state.imageAnalysis) {
         setConversationType('general');
         setCurrentConversationId(conversationId || null);

@@ -8,9 +8,10 @@ Provides access to visit statistics, page analytics, and traffic patterns.
 import json
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Optional, Dict, Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_http_methods
@@ -30,6 +31,131 @@ def _safe_percent(part: float, total: float) -> float:
     if not total:
         return 0.0
     return round((part / total) * 100, 1)
+
+
+def _get_activity_timezone(timezone_name: str):
+    try:
+        return ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, TypeError, ValueError):
+        return timezone.utc
+
+
+def _parse_activity_datetime(value, local_timezone):
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(local_timezone)
+
+
+def _build_activity_data(docs, timezone_name: str = 'UTC', now=None) -> Dict[str, Any]:
+    local_timezone = _get_activity_timezone(timezone_name)
+    current_time = now or datetime.now(local_timezone)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=local_timezone)
+    else:
+        current_time = current_time.astimezone(local_timezone)
+
+    risk_mix = {'not_scam': 0, 'suspicious': 0, 'high_risk': 0}
+    monthly = defaultdict(lambda: {'not_scam': 0, 'suspicious': 0, 'high_risk': 0, 'total': 0})
+    weekdays = [
+        {'weekday': label, 'scam_count': 0, 'total_count': 0}
+        for label in ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+    ]
+    daily = defaultdict(lambda: {'count': 0, 'high_risk_count': 0, 'groups': defaultdict(int)})
+    recent = {'total_checks': 0, 'high_risk_count': 0}
+    previous = {'total_checks': 0, 'high_risk_count': 0}
+    last_high_risk = None
+    recent_start = current_time - timedelta(days=30)
+    previous_start = current_time - timedelta(days=60)
+    first_calendar_day = current_time.date() - timedelta(days=current_time.date().weekday() + 77)
+    current_month = current_time.strftime('%Y-%m')
+
+    for doc in docs:
+        created_at = _parse_activity_datetime(doc.get('created_at'), local_timezone)
+        if not created_at:
+            continue
+
+        is_scam = bool(doc.get('is_scam'))
+        score = doc.get('scam_score')
+        high_risk = is_scam and isinstance(score, (int, float)) and score >= 70
+        bucket = 'high_risk' if high_risk else 'suspicious' if is_scam else 'not_scam'
+        risk_mix[bucket] += 1
+
+        month_key = created_at.strftime('%Y-%m')
+        monthly[month_key][bucket] += 1
+        monthly[month_key]['total'] += 1
+
+        weekdays[created_at.weekday()]['total_count'] += 1
+        if is_scam:
+            weekdays[created_at.weekday()]['scam_count'] += 1
+
+        if first_calendar_day <= created_at.date() <= current_time.date():
+            day_bucket = daily[created_at.date().isoformat()]
+            day_bucket['count'] += 1
+            day_bucket['groups'][str(doc.get('scam_type') or 'Unknown')] += 1
+            if high_risk:
+                day_bucket['high_risk_count'] += 1
+
+        if recent_start <= created_at <= current_time:
+            recent['total_checks'] += 1
+            if high_risk:
+                recent['high_risk_count'] += 1
+        elif previous_start <= created_at < recent_start:
+            previous['total_checks'] += 1
+            if high_risk:
+                previous['high_risk_count'] += 1
+
+        if high_risk and (last_high_risk is None or created_at > last_high_risk):
+            last_high_risk = created_at
+
+    active_months = sorted(monthly.items())[-6:]
+    monthly_risk = [
+        {
+            'month': month,
+            'label': datetime.strptime(month, '%Y-%m').strftime('%b %Y'),
+            **values,
+        }
+        for month, values in active_months
+    ]
+    calendar_days = [
+        {
+            'date': (first_calendar_day + timedelta(days=offset)).isoformat(),
+            'count': daily[(first_calendar_day + timedelta(days=offset)).isoformat()]['count'],
+            'high_risk_count': daily[(first_calendar_day + timedelta(days=offset)).isoformat()]['high_risk_count'],
+            'groups': [
+                {'type': category, 'count': count}
+                for category, count in sorted(
+                    daily[(first_calendar_day + timedelta(days=offset)).isoformat()]['groups'].items(),
+                    key=lambda entry: (-entry[1], entry[0]),
+                )
+            ],
+        }
+        for offset in range(84)
+    ]
+
+    return {
+        'risk_mix': risk_mix,
+        'monthly_risk': monthly_risk,
+        'calendar_days': calendar_days,
+        'weekday_activity': weekdays,
+        'checks_this_month': monthly[current_month]['total'],
+        'recent_30_days': {
+            **recent,
+            'high_risk_rate': _safe_percent(recent['high_risk_count'], recent['total_checks']),
+        },
+        'previous_30_days': {
+            **previous,
+            'high_risk_rate': _safe_percent(previous['high_risk_count'], previous['total_checks']),
+        },
+        'last_high_risk_at': last_high_risk.isoformat() if last_high_risk else None,
+        'days_since_last_high_risk': (current_time.date() - last_high_risk.date()).days if last_high_risk else None,
+    }
 
 
 def _extract_user_id_from_request(request: HttpRequest) -> Optional[str]:
@@ -80,7 +206,26 @@ def _build_top_types(docs, limit: int = 4):
     return ranked[:limit]
 
 
-def _build_type_insights(docs, limit: int = 4):
+def _safe_red_flag_label(marker: str) -> str:
+    marker_text = marker.lower()
+    if any(term in marker_text for term in ('urgent', 'immediate', 'deadline', 'act now', 'pressure')):
+        return 'Urgency or pressure'
+    if any(term in marker_text for term in ('link', 'url', 'website', 'contact method', 'phone number')):
+        return 'Suspicious link or contact method'
+    if any(term in marker_text for term in ('password', 'verification code', 'personal information', 'account details', 'bank detail')):
+        return 'Request for sensitive information'
+    if any(term in marker_text for term in ('payment', 'transfer', 'fee', 'gift card', 'money')):
+        return 'Unusual payment request'
+    if any(term in marker_text for term in ('impersonat', 'pretend', 'authority', 'official')):
+        return 'Impersonation or false authority'
+    if any(term in marker_text for term in ('threat', 'suspend', 'legal action', 'penalty')):
+        return 'Threat or consequence'
+    if any(term in marker_text for term in ('guaranteed', 'prize', 'winner', 'too good', 'unrealistic')):
+        return 'Unrealistic offer or promise'
+    return 'Other repeated warning sign'
+
+
+def _build_type_insights(docs, limit: int = 4, timezone_name: str = 'UTC'):
     """Return category metrics that can support a user-facing insight."""
     descriptions = {
         'Banking Access & Payment': 'Requests for passwords, one-time codes, card details, or urgent transfers.',
@@ -94,9 +239,23 @@ def _build_type_insights(docs, limit: int = 4):
         doc for doc in docs
         if doc.get('is_scam') and (doc.get('scam_type') or '').lower() != 'not scam'
     ]
+    try:
+        local_timezone = ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, TypeError, ValueError):
+        local_timezone = timezone.utc
+    local_now = datetime.now(local_timezone)
     now = datetime.utcnow()
     recent_start = now - timedelta(days=30)
     previous_start = now - timedelta(days=60)
+    current_month_index = local_now.year * 12 + local_now.month - 1
+    month_points = []
+    for offset in range(5, -1, -1):
+        year, month_index = divmod(current_month_index - offset, 12)
+        month = month_index + 1
+        month_points.append({
+            'month': f'{year:04d}-{month:02d}',
+            'label': datetime(year, month, 1).strftime('%b'),
+        })
 
     def as_datetime(value):
         if isinstance(value, str):
@@ -111,6 +270,8 @@ def _build_type_insights(docs, limit: int = 4):
     insights = []
     for item in _build_top_types(docs, limit):
         matching = [doc for doc in scam_docs if (doc.get('scam_type') or 'Unknown') == item['type']]
+        monthly_counts = {point['month']: 0 for point in month_points}
+        marker_counts = defaultdict(int)
         scores = [
             float(doc['scam_score']) for doc in matching
             if isinstance(doc.get('scam_score'), (int, float))
@@ -124,6 +285,25 @@ def _build_type_insights(docs, limit: int = 4):
                 recent_count += 1
             elif created_at and created_at >= previous_start:
                 previous_count += 1
+
+            monthly_value = doc.get('created_at')
+            if isinstance(monthly_value, str):
+                try:
+                    monthly_value = datetime.fromisoformat(monthly_value.replace('Z', '+00:00'))
+                except ValueError:
+                    monthly_value = None
+            if isinstance(monthly_value, datetime):
+                if monthly_value.tzinfo is None:
+                    monthly_value = monthly_value.replace(tzinfo=timezone.utc)
+                month_key = monthly_value.astimezone(local_timezone).strftime('%Y-%m')
+                if month_key in monthly_counts:
+                    monthly_counts[month_key] += 1
+
+            markers = doc.get('key_markers')
+            if isinstance(markers, list):
+                for marker in {str(value).strip() for value in markers if value}:
+                    if marker and len(marker) <= 100:
+                        marker_counts[_safe_red_flag_label(marker)] += 1
 
         if recent_count > previous_count:
             trend_direction = 'increasing'
@@ -157,6 +337,14 @@ def _build_type_insights(docs, limit: int = 4):
             'previous_count': previous_count,
             'trend_direction': trend_direction,
             'sample_note': sample_note,
+            'monthly_counts': [
+                {**point, 'count': monthly_counts[point['month']]}
+                for point in month_points
+            ],
+            'common_red_flags': [
+                {'marker': marker, 'count': count}
+                for marker, count in sorted(marker_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:5]
+            ],
         })
     return insights
 
@@ -323,7 +511,7 @@ def require_admin(view_func):
     return wrapper
 
 
-def _compute_user_safety_summary(user_id: str) -> Dict[str, Any]:
+def _compute_user_safety_summary(user_id: str, timezone_name: str = 'UTC') -> Dict[str, Any]:
     """Build the personal safety summary dict for a user (shared by both endpoints)."""
     collection = _get_analysis_collection()
     docs = list(collection.find({
@@ -345,6 +533,7 @@ def _compute_user_safety_summary(user_id: str) -> Dict[str, Any]:
             'type_insights': [],
             'recent_submissions': [],
             'activity_insight': 'Keep checking messages here to reveal how your risk pattern changes over time.',
+            'activity': _build_activity_data([], timezone_name),
             'analytics_scope_note': 'Based only on your authenticated Verif-AI checks. Message content is not shown here.',
         }
 
@@ -368,7 +557,7 @@ def _compute_user_safety_summary(user_id: str) -> Dict[str, Any]:
             recent_high_risk_count += 1
 
     top_types = _build_top_types(docs, limit=4)
-    type_insights = _build_type_insights(docs, limit=4)
+    type_insights = _build_type_insights(docs, limit=20, timezone_name=timezone_name)
     trend = _build_trend_points(docs)
     most_common = top_types[0] if top_types else None
     summary = _user_risk_summary_text(high_risk_count, recent_high_risk_count, len(docs))
@@ -393,6 +582,7 @@ def _compute_user_safety_summary(user_id: str) -> Dict[str, Any]:
         'type_insights': type_insights,
         'recent_submissions': _build_recent_submissions(docs),
         'activity_insight': _build_activity_insight(docs, high_risk_count),
+        'activity': _build_activity_data(docs, timezone_name),
         'analytics_scope_note': 'Based only on your authenticated Verif-AI checks. Message content is not shown here.',
     }
 
@@ -406,7 +596,8 @@ def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
     if not user_id:
         return JsonResponse({'error': 'Authentication required'}, status=401)
 
-    return JsonResponse({'success': True, 'data': _compute_user_safety_summary(user_id)})
+    timezone_name = request.GET.get('timezone', 'UTC')
+    return JsonResponse({'success': True, 'data': _compute_user_safety_summary(user_id, timezone_name)})
 
 
 def _get_ai_summary_repository():
@@ -462,7 +653,165 @@ def get_user_ai_summary_cached(request: HttpRequest) -> JsonResponse:
     return JsonResponse({'success': True, 'data': result})
 
 
-def _compute_global_safety_summary() -> Dict[str, Any]:
+def _build_community_analytics(docs, timezone_name: str = 'UTC', now=None, minimum_users: int = 5) -> Dict[str, Any]:
+    local_timezone = _get_activity_timezone(timezone_name)
+    current_time = now or datetime.now(local_timezone)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=local_timezone)
+    else:
+        current_time = current_time.astimezone(local_timezone)
+
+    month_index = current_time.year * 12 + current_time.month - 1
+    months = []
+    for offset in range(11, -1, -1):
+        year, index = divmod(month_index - offset, 12)
+        month = index + 1
+        month_key = f'{year:04d}-{month:02d}'
+        months.append({'month': month_key, 'label': datetime(year, month, 1).strftime('%b %Y')})
+
+    distinct_users = set()
+    scam_docs = []
+    all_month_counts = defaultdict(int)
+    all_month_users = defaultdict(set)
+    category_counts = defaultdict(int)
+    category_users = defaultdict(set)
+    category_month_counts = defaultdict(int)
+    category_month_users = defaultdict(set)
+
+    for doc in docs:
+        user_id = str(doc.get('user_id') or '').strip()
+        if not user_id:
+            continue
+        distinct_users.add(user_id)
+        if not doc.get('is_scam') or (doc.get('scam_type') or '').lower() == 'not scam':
+            continue
+
+        category = str(doc.get('scam_type') or 'Unknown').strip() or 'Unknown'
+        scam_docs.append(doc)
+        category_counts[category] += 1
+        category_users[category].add(user_id)
+        created_at = _parse_activity_datetime(doc.get('created_at'), local_timezone)
+        if not created_at:
+            continue
+        month_key = created_at.strftime('%Y-%m')
+        if month_key not in {month['month'] for month in months}:
+            continue
+
+        all_month_counts[month_key] += 1
+        all_month_users[month_key].add(user_id)
+        category_month_counts[(category, month_key)] += 1
+        category_month_users[(category, month_key)].add(user_id)
+
+    month_series = []
+    for month in months:
+        user_count = len(all_month_users[month['month']])
+        enough_data = user_count >= minimum_users
+        month_series.append({
+            **month,
+            'count': all_month_counts[month['month']] if enough_data else None,
+            'distinct_users': user_count if enough_data else None,
+            'not_enough_data': not enough_data,
+        })
+
+    def ranked_types(counts, month_key=None):
+        denominator = sum(counts.values())
+        eligible = [
+            (category, count)
+            for category, count in counts.items()
+            if len(category_month_users[(category, month_key)]) >= minimum_users
+            if month_key is not None
+        ] if month_key is not None else [
+            (category, count)
+            for category, count in counts.items()
+            if len(category_users[category]) >= minimum_users
+        ]
+        result = []
+        for category, count in sorted(eligible, key=lambda item: (-item[1], item[0]))[:5]:
+            monthly_counts = []
+            for month in months:
+                month_user_count = len(category_month_users[(category, month['month'])])
+                enough_data = month_user_count >= minimum_users
+                monthly_counts.append({
+                    **month,
+                    'count': category_month_counts[(category, month['month'])] if enough_data else None,
+                    'distinct_users': month_user_count if enough_data else None,
+                    'not_enough_data': not enough_data,
+                })
+            result.append({
+                'type': category,
+                'count': count,
+                'share': _safe_percent(count, denominator),
+                'distinct_users': len(category_month_users[(category, month_key)]) if month_key is not None else len(category_users[category]),
+                'monthly_counts': monthly_counts,
+            })
+        return result
+
+    all_time_counts = {category: count for category, count in category_counts.items()}
+    category_monthly_series = [
+        {
+            'type': category,
+            'distinct_users': len(category_users[category]),
+            'monthly_counts': [
+                {
+                    **month,
+                    'count': category_month_counts[(category, month['month'])]
+                    if len(category_month_users[(category, month['month'])]) >= minimum_users else None,
+                    'distinct_users': len(category_month_users[(category, month['month'])])
+                    if len(category_month_users[(category, month['month'])]) >= minimum_users else None,
+                    'not_enough_data': len(category_month_users[(category, month['month'])]) < minimum_users,
+                }
+                for month in months
+            ],
+        }
+        for category in sorted(category_counts)
+        if len(category_users[category]) >= minimum_users
+    ]
+    this_month = current_time.strftime('%Y-%m')
+    previous_month_date = datetime(current_time.year, current_time.month, 1, tzinfo=local_timezone) - timedelta(days=1)
+    previous_month = previous_month_date.strftime('%Y-%m')
+    current_counts = {
+        category: category_month_counts[(category, this_month)]
+        for category in category_counts
+        if category_month_counts[(category, this_month)]
+    }
+    rising_scams = []
+    for category in category_counts:
+        current_users = len(category_month_users[(category, this_month)])
+        previous_users = len(category_month_users[(category, previous_month)])
+        if current_users < minimum_users or previous_users < minimum_users:
+            continue
+        current_count = category_month_counts[(category, this_month)]
+        previous_count = category_month_counts[(category, previous_month)]
+        rising_scams.append({
+            'type': category,
+            'current_count': current_count,
+            'previous_count': previous_count,
+            'change_percent': round(((current_count - previous_count) / previous_count) * 100, 1) if previous_count else None,
+            'is_new': previous_count == 0,
+            'monthly_counts': [
+                {
+                    **month,
+                    'count': category_month_counts[(category, month['month'])] if len(category_month_users[(category, month['month'])]) >= minimum_users else None,
+                    'not_enough_data': len(category_month_users[(category, month['month'])]) < minimum_users,
+                }
+                for month in months[-6:]
+            ],
+        })
+    rising_scams.sort(key=lambda item: (-(item['change_percent'] if item['change_percent'] is not None else 0), item['type']))
+
+    return {
+        'distinct_users': len(distinct_users),
+        'minimum_users': minimum_users,
+        'has_demo_data': any(bool(doc.get('analytics_demo_batch')) for doc in docs),
+        'top_types_all_time': ranked_types(all_time_counts),
+        'top_types_this_month': ranked_types(current_counts, this_month),
+        'category_monthly_series': category_monthly_series,
+        'rising_scams': rising_scams[:5],
+        'monthly_confirmed_scams': month_series,
+    }
+
+
+def _compute_global_safety_summary(timezone_name: str = 'UTC') -> Dict[str, Any]:
     """Build the platform-wide trend summary dict (shared by both endpoints)."""
     collection = _get_analysis_collection()
     docs = list(collection.find({
@@ -480,6 +829,7 @@ def _compute_global_safety_summary() -> Dict[str, Any]:
             'trend_insight': None,
             'seasonal_insight': _build_seasonal_insight(),
             'top_types': [],
+            'community_analytics': _build_community_analytics([], timezone_name),
         }
 
     scam_total = sum(1 for doc in docs if doc.get('is_scam'))
@@ -488,6 +838,7 @@ def _compute_global_safety_summary() -> Dict[str, Any]:
         if doc.get('is_scam') and isinstance(doc.get('scam_score'), (int, float)) and doc.get('scam_score') >= 70
     )
     top_types = _build_top_types(docs, limit=4)
+    community_analytics = _build_community_analytics(docs, timezone_name)
     trend = _build_scam_trend_points(docs)
     most_common = top_types[0] if top_types else None
     summary = _global_risk_summary_text(high_risk_total, len(docs))
@@ -502,6 +853,7 @@ def _compute_global_safety_summary() -> Dict[str, Any]:
         'trend_insight': _build_global_trend_insight(docs),
         'seasonal_insight': _build_seasonal_insight(),
         'top_types': top_types,
+        'community_analytics': community_analytics,
     }
 
 
@@ -514,7 +866,8 @@ def get_global_safety_summary(request: HttpRequest) -> JsonResponse:
     if not user:
         return JsonResponse({'error': 'Authentication required'}, status=401)
 
-    return JsonResponse({'success': True, 'data': _compute_global_safety_summary()})
+    timezone_name = request.GET.get('timezone', 'UTC')
+    return JsonResponse({'success': True, 'data': _compute_global_safety_summary(timezone_name)})
 
 
 def parse_date_params(request: HttpRequest) -> tuple[Optional[datetime], Optional[datetime]]:

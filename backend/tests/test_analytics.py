@@ -39,7 +39,7 @@ from src.infrastructure.middleware.analytics_repository import (
     DeviceBreakdown,
     TimeSeriesPoint,
 )
-from src.interfaces.rest.analytics_views import _build_type_insights
+from src.interfaces.rest.analytics_views import _build_activity_data, _build_community_analytics, _build_type_insights
 
 
 # ==================== Fixtures ====================
@@ -248,6 +248,7 @@ class TestHelperFunctions:
                 'scam_score': 92,
                 'type_confidence': 88,
                 'created_at': now - timedelta(days=4),
+                'key_markers': ['Urgent action', 'Suspicious link'],
             },
             {
                 'is_scam': True,
@@ -255,6 +256,7 @@ class TestHelperFunctions:
                 'scam_score': 76,
                 'type_confidence': 80,
                 'created_at': now - timedelta(days=45),
+                'key_markers': ['Urgent action'],
             },
             {
                 'is_scam': True,
@@ -273,6 +275,89 @@ class TestHelperFunctions:
         assert mobile['previous_count'] == 1
         assert mobile['trend_direction'] == 'stable'
         assert mobile['average_type_confidence'] == 84.0
+
+    def test_activity_data_splits_risk_and_buckets_local_time(self):
+        from zoneinfo import ZoneInfo
+
+        local_timezone = ZoneInfo('America/Los_Angeles')
+        now = datetime(2026, 9, 29, 12, tzinfo=local_timezone)
+        docs = [
+            {'created_at': datetime(2026, 9, 28, 23, tzinfo=local_timezone), 'is_scam': True, 'scam_score': 85},
+            {'created_at': datetime(2026, 9, 10, 9, tzinfo=local_timezone), 'is_scam': True, 'scam_score': 50},
+            {'created_at': datetime(2026, 8, 10, 9, tzinfo=local_timezone), 'is_scam': True, 'scam_score': 92},
+            {'created_at': datetime(2026, 9, 28, 8, tzinfo=local_timezone), 'is_scam': False, 'scam_score': 5},
+        ]
+
+        activity = _build_activity_data(docs, 'America/Los_Angeles', now)
+
+        assert activity['risk_mix'] == {'not_scam': 1, 'suspicious': 1, 'high_risk': 2}
+        september = next(month for month in activity['monthly_risk'] if month['month'] == '2026-09')
+        assert september == {
+            'month': '2026-09', 'label': 'Sep 2026', 'not_scam': 1,
+            'suspicious': 1, 'high_risk': 1, 'total': 3,
+        }
+        assert len(activity['calendar_days']) == 84
+        assert next(day for day in activity['calendar_days'] if day['date'] == '2026-09-28') == {
+            'date': '2026-09-28', 'count': 2, 'high_risk_count': 1,
+            'groups': [{'type': 'Unknown', 'count': 2}],
+        }
+        assert len(activity['weekday_activity']) == 7
+        assert activity['checks_this_month'] == 3
+        assert activity['recent_30_days']['high_risk_rate'] == 33.3
+        assert activity['previous_30_days']['high_risk_rate'] == 100.0
+        assert activity['days_since_last_high_risk'] == 1
+
+    def test_community_analytics_masks_low_user_buckets(self):
+        from zoneinfo import ZoneInfo
+
+        local_timezone = ZoneInfo('America/Los_Angeles')
+        now = datetime(2026, 9, 29, 12, tzinfo=local_timezone)
+        docs = []
+        for user_number in range(5):
+            docs.append({
+                'user_id': f'user-{user_number}',
+                'scam_type': 'Payment request',
+                'is_scam': True,
+                'created_at': datetime(2026, 9, 10 + user_number, 12, tzinfo=local_timezone),
+                'analytics_demo_batch': 'test-batch',
+            })
+        for user_number in range(4):
+            docs.append({
+                'user_id': f'small-{user_number}',
+                'scam_type': 'Rare category',
+                'is_scam': True,
+                'created_at': datetime(2026, 9, 12, 12, tzinfo=local_timezone),
+            })
+
+        community = _build_community_analytics(docs, 'America/Los_Angeles', now)
+
+        assert community['distinct_users'] == 9
+        assert community['has_demo_data'] is True
+        assert [item['type'] for item in community['top_types_all_time']] == ['Payment request']
+        assert community['top_types_all_time'][0]['count'] == 5
+        assert [item['type'] for item in community['category_monthly_series']] == ['Payment request']
+        september = next(month for month in community['monthly_confirmed_scams'] if month['month'] == '2026-09')
+        assert september['not_enough_data'] is False
+        assert september['count'] == 9
+        assert all(month['count'] is None for month in community['monthly_confirmed_scams'] if month['not_enough_data'])
+
+    def test_community_demo_seed_produces_privacy_qualified_rise(self):
+        from scripts.manage_analytics_demo_data import BATCH_FIELD, _build_demo_documents
+        from zoneinfo import ZoneInfo
+
+        local_timezone = ZoneInfo('America/Los_Angeles')
+        now = datetime(2026, 9, 29, 12, tzinfo=local_timezone)
+        documents = _build_demo_documents('test-presentation', now)
+
+        community = _build_community_analytics(documents, 'America/Los_Angeles', now)
+        rising = next(item for item in community['rising_scams'] if item['type'] == 'Impersonation and Authority')
+
+        assert len(documents) == 397
+        assert all(document[BATCH_FIELD] == 'test-presentation' for document in documents)
+        assert community['has_demo_data'] is True
+        assert rising['previous_count'] == 15
+        assert rising['current_count'] == 22
+        assert rising['change_percent'] == 46.7
 
 
 # ==================== Analytics Repository Tests ====================
