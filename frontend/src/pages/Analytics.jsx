@@ -2,7 +2,11 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Analytics.css';
 import { useAuth } from '../context/AuthContext';
+import AppNavLinks from '../components/AppNavLinks';
 import { getUserSafetySummary, getGlobalSafetySummary, getUserAiSummary, getUserAiSummaryCached } from '../api/analytics';
+
+const ANALYTICS_CACHE_TTL_MS = 60 * 1000;
+let analyticsCache = null;
 
 const ActivityRecharts = lazy(() => import('./ActivityRecharts.jsx'));
 const CommunityLineChart = lazy(() => import('./ActivityRecharts.jsx').then((module) => ({ default: module.CommunityLineChart })));
@@ -1123,11 +1127,32 @@ export default function Analytics() {
       return;
     }
 
+    // Reuse recent data when revisiting the page instead of hitting the API every time.
+    const owner = user?.username || user?.email || '';
+    if (analyticsCache && analyticsCache.owner !== owner) analyticsCache = null;
+    const cached = analyticsCache;
+    if (cached) {
+      setPersonal(cached.personal);
+      setCommunity(cached.community);
+      if (cached.aiInsight) setAiInsight(cached.aiInsight);
+      setLoading(false);
+      if (Date.now() - cached.at < ANALYTICS_CACHE_TTL_MS) return;
+    }
+
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     Promise.all([getUserSafetySummary(timezone), getGlobalSafetySummary(timezone)])
       .then(([personalResponse, communityResponse]) => {
         if (personalResponse?.data?.success) setPersonal(personalResponse.data.data);
         if (communityResponse?.data?.success) setCommunity(communityResponse.data.data);
+        if (personalResponse?.data?.success && communityResponse?.data?.success) {
+          analyticsCache = {
+            personal: personalResponse.data.data,
+            community: communityResponse.data.data,
+            aiInsight: analyticsCache?.aiInsight || null,
+            owner: user?.username || user?.email || '',
+            at: Date.now(),
+          };
+        }
       })
       .catch((requestError) => setError(requestError.message || 'We could not load your analytics.'))
       .finally(() => setLoading(false));
@@ -1135,7 +1160,10 @@ export default function Analytics() {
     // Show a previously generated summary immediately, if one exists, without calling Gemini again.
     getUserAiSummaryCached()
       .then((response) => {
-        if (response?.data?.success && response.data.data) setAiInsight(response.data.data);
+        if (response?.data?.success && response.data.data) {
+          setAiInsight(response.data.data);
+          if (analyticsCache) analyticsCache.aiInsight = response.data.data;
+        }
       })
       .catch(() => {});
   }, [isLoggedIn, navigate]);
@@ -1144,14 +1172,8 @@ export default function Analytics() {
 
   return (
     <div className="journey page-enter">
-      <header className="nav nav--journey">
-        <div className="brand brand--small">Verif-AI</div>
-        <nav className="nav__links">
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>About us</button>
-          <button className="nav__link nav__btn nav__btn--active" type="button">Your Verif-AI Journey</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
-        </nav>
+      <header className="nav nav--app">
+        <AppNavLinks active="journey" />
         <div className="journey__actions">
           <div className="nav__user-menu" onClick={(event) => event.stopPropagation()}>
             <button

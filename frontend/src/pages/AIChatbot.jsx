@@ -12,8 +12,10 @@ import {
   getAnalysisGuidedHistory
 } from '../api/chatbot';
 import { useAuth } from '../context/AuthContext';
+import AppNavLinks from '../components/AppNavLinks';
 import { useTheme } from '../context/ThemeContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
+import ChatHistoryList from '../components/ChatHistoryList';
 
 function AIChatbot() {
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -36,7 +38,7 @@ function AIChatbot() {
   const [conversationType, setConversationType] = useState('general'); // 'general' or 'analysis_guided'
   const [analysisContext, setAnalysisContext] = useState(null);
   const [expandedAnalysisImage, setExpandedAnalysisImage] = useState(null);
-  const [isStartingDetection, setIsStartingDetection] = useState(false);
+  const [isStartingChat, setIsStartingChat] = useState(false);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
@@ -71,11 +73,9 @@ function AIChatbot() {
   };
 
   // Collapse the textarea back to a single line once it's cleared (e.g. after sending)
+  // Also resizes for programmatic text (e.g. prefilled from Analytics), which bypasses onChange
   useEffect(() => {
-    if (!text) {
-      const el = chatTextareaRef.current;
-      if (el) el.style.height = 'auto';
-    }
+    syncChatTextareaHeight();
   }, [text]);
 
   // Keep the scroll area's bottom padding in sync with the fixed composer's actual height
@@ -172,11 +172,6 @@ function AIChatbot() {
     setShowSettingsModal(false);
   };
 
-  const openDetection = () => {
-    setIsStartingDetection(true);
-    window.setTimeout(() => navigate('/detection'), 800);
-  };
-
   // Handle navigation state for analysis-guided mode
   useEffect(() => {
     if (location.state) {
@@ -191,6 +186,13 @@ function AIChatbot() {
         setMessages([]);
         setText(`I encountered a ${category} scam pattern. What warning signs should I look for, and how can I verify a message safely?`);
         window.history.replaceState({}, document.title);
+        setTimeout(() => {
+          const el = chatTextareaRef.current;
+          if (el) {
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+          }
+        }, 60);
         return;
       }
 
@@ -297,10 +299,20 @@ function AIChatbot() {
     setSidebarOpen(false);
   };
 
+  const isFreshChat = messages.length === 0 && !currentConversationId;
+
+  const handleNewChatClick = () => {
+    if (isFreshChat || isStartingChat) return;
+    setIsStartingChat(true);
+    window.setTimeout(() => {
+      startNewConversation();
+      setIsStartingChat(false);
+    }, 500);
+  };
+
   // Delete a conversation
   const handleDeleteConversation = async (conversationId, e) => {
-    e.stopPropagation();
-    if (!window.confirm('Delete this conversation?')) return;
+    e?.stopPropagation();
     
     try {
       await deleteConversation(conversationId, accessToken);
@@ -480,65 +492,44 @@ function AIChatbot() {
 
         {/* Conversation History - Only shown when sidebar is open and logged in */}
         {sidebarOpen && isLoggedIn && (
-          <div className="chatbot__history-panel">
-            <div className="chatbot__history-title">
-              Chat History
-            </div>
-            
-            {isLoadingConversations ? (
-              <div className="chatbot__history-empty">
-                Loading...
-              </div>
-            ) : conversations.length === 0 ? (
-              <div className="chatbot__history-empty">
-                No conversations yet
-              </div>
-            ) : (
-              conversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  onClick={() => {
-                    if (conv.conversation_type === 'analysis_guided') {
-                      loadAnalysisGuidedConversation(conv.id);
-                    } else {
-                      loadConversation(conv.id);
-                    }
-                  }}
-                  className={`chatbot__history-item${conv.id === currentConversationId ? ' chatbot__history-item--active' : ''}`}
-                >
-                  <div className="chatbot__history-item-header">
-                    <div className="chatbot__history-item-title">
-                      {conv.title || 'Untitled'}
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteConversation(conv.id, e)}
-                      className="chatbot__history-delete"
-                      title="Delete conversation"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                  <div className="chatbot__history-meta">
-                    {conv.message_count || 0} messages · {formatDate(conv.updated_at)}
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="detect__chat-history">
+            <div className="detect__chat-title">Chat History</div>
+            <ChatHistoryList
+              loading={isLoadingConversations}
+              items={conversations
+                .filter((conv) => (conv.message_count || 0) > 0 || conv.id === currentConversationId)
+                .map((conv) => {
+                  const guided = conv.conversation_type === 'analysis_guided';
+                  return {
+                    id: conv.id,
+                    title: (conv.title || 'Untitled').replace(/^Guidance:\s*/i, ''),
+                    badge: guided ? 'Guidance' : null,
+                    date: conv.updated_at,
+                    active: conv.id === currentConversationId,
+                    onSelect: () => (guided ? loadAnalysisGuidedConversation(conv.id) : loadConversation(conv.id)),
+                    onDelete: () => handleDeleteConversation(conv.id),
+                  };
+                })}
+            />
           </div>
         )}
-        
-        {/* Anonymous user message when sidebar is open */}
+                {/* Anonymous user message when sidebar is open */}
         {sidebarOpen && !isLoggedIn && (
-          <div className="chatbot__anonymous-box">
-            <div className="chatbot__anonymous-text">
-              Login to save your conversations
+          <div className="detect__chat-history">
+            <div className="detect__chat-title">Chat History</div>
+            <div className="chatbot__anonymous-box" style={{ margin: '15px' }}>
+              <div className="chatbot__anonymous-icon">🛡️</div>
+              <div className="chatbot__anonymous-text">
+                You are using guest mode. Log in to save your conversations across devices.
+              </div>
+              <button
+                className="chatbot__anonymous-login"
+                type="button"
+                onClick={() => navigate('/login')}
+              >
+                Login / Sign Up
+              </button>
             </div>
-            <button
-              onClick={() => navigate('/login')}
-              className="chatbot__anonymous-login"
-            >
-              Login
-            </button>
           </div>
         )}
 
@@ -547,9 +538,9 @@ function AIChatbot() {
             <button
               className="detect__sidebtn"
               type="button"
-              aria-label="New Detection"
-              onClick={openDetection}
-              title="New Detection"
+              aria-label="New Chat"
+              onClick={handleNewChatClick}
+              title="New Chat"
             >
               ✎
             </button>
@@ -568,43 +559,14 @@ function AIChatbot() {
       </aside>
 
       <div className="detect__main" style={{ 
-        transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', 
+        transition: 'margin-left 0.3s ease-in-out',
         marginLeft: isMobile ? 0 : (sidebarOpen ? 320 : 72),
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
       }}>
-        <header className="nav nav--detect" style={{ flexShrink: 0 }}>
-          <div className="brand brand--small">
-            Verif-AI Assistant
-          </div>
-          <nav className="nav__links">
-            <button
-              className="nav__link nav__btn"
-              type="button"
-              onClick={() => navigate('/')}
-            >
-              About us
-            </button>
-            {isLoggedIn && (
-              <button className="nav__link nav__btn" type="button" onClick={() => navigate('/analytics')}>
-                Your Verif-AI Journey
-              </button>
-            )}
-            <button
-              className="nav__link nav__btn"
-              type="button"
-              onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}
-            >
-              Detection
-            </button>
-            <button
-              className="nav__link nav__btn nav__btn--active"
-              type="button"
-            >
-              AI Chatbot
-            </button>
-          </nav>
+        <header className="nav nav--detect nav--app" style={{ flexShrink: 0 }}>
+          <AppNavLinks active="chatbot" />
           {isLoggedIn ? (
             <div className="nav__user-menu" onClick={e => e.stopPropagation()}>
               <button
@@ -959,7 +921,7 @@ function AIChatbot() {
         )}
       </div>
 
-      {isStartingDetection && (
+      {isStartingChat && (
         <div className="detect__navigation-loading" role="status" aria-live="polite">
           <div className="detect__navigation-card">
             <div className="detect__navigation-mark" aria-hidden="true">
@@ -968,8 +930,8 @@ function AIChatbot() {
               <span />
             </div>
             <div className="detect__navigation-copy">
-              <strong>Opening Detection</strong>
-              <span>Loading the scam checker...</span>
+              <strong>Starting a new chat</strong>
+              <span>Clearing the current conversation...</span>
             </div>
             <div className="detect__navigation-progress" aria-hidden="true">
               <span />
