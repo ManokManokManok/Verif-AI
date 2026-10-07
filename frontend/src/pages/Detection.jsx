@@ -939,15 +939,16 @@ function Detection() {
                 <div className="detect__resultCard detect__resultCard--graph detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Scam Likelihood</h3>
                   <div className="detect__graph">
-                    <div className="detect__graphBar">
-                      <div
-                        className="detect__graphFill detect__graphFill--scam"
-                        style={{ width: `${graphScamWidth}%` }}
-                      />
-                      <div
-                        className="detect__graphFill detect__graphFill--legit"
-                        style={{ width: `${graphLegitWidth}%` }}
-                      />
+                    <div
+                      className="detect__donut"
+                      style={{ '--scam-percentage': `${graphScamWidth}%` }}
+                      role="img"
+                      aria-label={`Scam likelihood ${graphScamWidth.toFixed(1)} percent, legitimate likelihood ${graphLegitWidth.toFixed(1)} percent`}
+                    >
+                      <div className="detect__donutCenter">
+                        <strong>{graphScamWidth.toFixed(1)}%</strong>
+                        <span>scam</span>
+                      </div>
                     </div>
                     <div className="detect__graphLabels">
                       <div className="detect__graphLabel detect__graphLabel--scam">
