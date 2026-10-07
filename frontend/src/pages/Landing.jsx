@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
+import AppNavLinks from '../components/AppNavLinks';
 
 const FEATURES = [
   {
@@ -162,14 +163,8 @@ function Landing() {
 
   return (
     <div className="page page--landing page-enter">
-      <header className="nav">
-        <div className="brand">VerifAI</div>
-        <nav className="nav__links">
-          <button className="nav__link nav__btn" type="button" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>How it works</button>
-          {isLoggedIn && <button className="nav__link nav__btn" type="button" onClick={() => navigate('/analytics')}>Your Verif-AI Journey</button>}
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Check a message</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>Get guidance</button>
-        </nav>
+      <header className="nav nav--app">
+        <AppNavLinks active="about" />
 
         {isLoggedIn ? (
           <div className="nav__user-menu" onClick={(e) => e.stopPropagation()}>
