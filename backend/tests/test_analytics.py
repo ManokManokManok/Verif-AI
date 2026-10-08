@@ -274,6 +274,7 @@ class TestHelperFunctions:
         assert mobile['recent_count'] == 1
         assert mobile['previous_count'] == 1
         assert mobile['trend_direction'] == 'stable'
+        assert mobile['sample_note'].startswith('Early signal:')
         assert mobile['average_type_confidence'] == 84.0
 
     def test_activity_data_splits_risk_and_buckets_local_time(self):
@@ -293,9 +294,10 @@ class TestHelperFunctions:
         assert activity['risk_mix'] == {'not_scam': 1, 'suspicious': 1, 'high_risk': 2}
         september = next(month for month in activity['monthly_risk'] if month['month'] == '2026-09')
         assert september == {
-            'month': '2026-09', 'label': 'Sep 2026', 'not_scam': 1,
+            'month': '2026-09', 'label': 'Sep 2026', 'is_current_month': True, 'not_scam': 1,
             'suspicious': 1, 'high_risk': 1, 'total': 3,
         }
+        assert activity['as_of_date'] == '2026-09-29'
         assert len(activity['calendar_days']) == 84
         assert next(day for day in activity['calendar_days'] if day['date'] == '2026-09-28') == {
             'date': '2026-09-28', 'count': 2, 'high_risk_count': 1,
@@ -306,6 +308,19 @@ class TestHelperFunctions:
         assert activity['recent_30_days']['high_risk_rate'] == 33.3
         assert activity['previous_30_days']['high_risk_rate'] == 100.0
         assert activity['days_since_last_high_risk'] == 1
+
+    def test_activity_data_uses_null_rate_when_a_window_has_no_checks(self):
+        from zoneinfo import ZoneInfo
+
+        now = datetime(2026, 9, 29, 12, tzinfo=ZoneInfo('UTC'))
+        activity = _build_activity_data([], 'UTC', now)
+
+        assert activity['recent_30_days'] == {
+            'total_checks': 0, 'high_risk_count': 0, 'high_risk_rate': None,
+        }
+        assert activity['previous_30_days'] == {
+            'total_checks': 0, 'high_risk_count': 0, 'high_risk_rate': None,
+        }
 
     def test_community_analytics_masks_low_user_buckets(self):
         from zoneinfo import ZoneInfo
@@ -333,13 +348,55 @@ class TestHelperFunctions:
 
         assert community['distinct_users'] == 9
         assert community['has_demo_data'] is True
+        assert community['total_scam_checks'] == 9
         assert [item['type'] for item in community['top_types_all_time']] == ['Payment request']
         assert community['top_types_all_time'][0]['count'] == 5
         assert [item['type'] for item in community['category_monthly_series']] == ['Payment request']
+        assert community['category_monthly_series'][0]['count'] == 5
+        assert community['category_monthly_series'][0]['share'] == 55.6
+        assert community['category_monthly_series'][0]['distinct_users'] == 5
         september = next(month for month in community['monthly_confirmed_scams'] if month['month'] == '2026-09')
         assert september['not_enough_data'] is False
         assert september['count'] == 9
         assert all(month['count'] is None for month in community['monthly_confirmed_scams'] if month['not_enough_data'])
+
+    def test_community_month_to_date_compares_matching_calendar_days(self):
+        from zoneinfo import ZoneInfo
+
+        local_timezone = ZoneInfo('America/Los_Angeles')
+        now = datetime(2026, 9, 5, 12, tzinfo=local_timezone)
+        docs = []
+        for user_number in range(5):
+            docs.extend([
+                {
+                    'user_id': f'user-{user_number}',
+                    'scam_type': 'Payment request',
+                    'is_scam': True,
+                    'created_at': datetime(2026, 9, 2, 12, tzinfo=local_timezone),
+                },
+                {
+                    'user_id': f'user-{user_number}',
+                    'scam_type': 'Payment request',
+                    'is_scam': True,
+                    'created_at': datetime(2026, 8, 2, 12, tzinfo=local_timezone),
+                },
+            ])
+        for user_number in range(5, 10):
+            docs.append({
+                'user_id': f'user-{user_number}',
+                'scam_type': 'Payment request',
+                'is_scam': True,
+                'created_at': datetime(2026, 8, 20, 12, tzinfo=local_timezone),
+            })
+
+        community = _build_community_analytics(docs, 'America/Los_Angeles', now)
+        payment = next(item for item in community['rising_scams'] if item['type'] == 'Payment request')
+
+        assert payment['current_count'] == 5
+        assert payment['previous_count'] == 5
+        assert payment['change_percent'] == 0
+        assert payment['current_distinct_users'] == 5
+        assert payment['previous_distinct_users'] == 5
 
     def test_community_demo_seed_produces_privacy_qualified_rise(self):
         from scripts.manage_analytics_demo_data import BATCH_FIELD, _build_demo_documents

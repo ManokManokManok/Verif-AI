@@ -62,39 +62,66 @@ function ActivityEmptyState({ onAnalyze, message = 'Your activity map will appea
   );
 }
 
-function ActivityStatusRow({ activity, personal }) {
+function ActivityStatusRow({ activity }) {
   const recent = activity?.recent_30_days || {};
   const previous = activity?.previous_30_days || {};
-  const recentRate = recent.high_risk_rate ?? personal?.high_risk_rate ?? 0;
-  const rateChange = recentRate - (previous.high_risk_rate ?? 0);
-  const earlySignal = (recent.total_checks ?? 0) < 5 || (previous.total_checks ?? 0) < 5;
-  const verdict = earlySignal ? 'Early signal' : rateChange <= -5 ? 'Improving' : rateChange >= 5 ? 'Rising' : 'Steady';
-  const direction = rateChange < 0 ? 'down' : rateChange > 0 ? 'up' : 'unchanged';
+  const recentChecks = recent.total_checks ?? 0;
+  const previousChecks = previous.total_checks ?? 0;
+  const recentRate = recent.high_risk_rate;
+  const rateChange = recentRate == null || previous.high_risk_rate == null
+    ? null
+    : recentRate - previous.high_risk_rate;
+  const earlySignal = recentChecks > 0 && (recentChecks < 5 || previousChecks < 5);
+  const verdict = recentChecks === 0
+    ? 'No recent checks'
+    : earlySignal
+      ? 'Early signal'
+      : rateChange <= -5
+        ? 'Improving'
+        : rateChange >= 5
+          ? 'Rising'
+          : 'Steady';
+  const direction = rateChange == null ? 'unchanged' : rateChange < 0 ? 'down' : rateChange > 0 ? 'up' : 'unchanged';
   const daysSinceHighRisk = activity?.days_since_last_high_risk;
   const daysLabel = daysSinceHighRisk === 0 ? 'Today' : daysSinceHighRisk === 1 ? '1 day ago' : `${daysSinceHighRisk} days ago`;
+  const asOfDate = activity?.as_of_date
+    ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+      .format(new Date(`${activity.as_of_date}T12:00:00`))
+    : 'today';
 
   return (
     <div className="journey__activity-kpis" aria-label="Recent activity status">
       <article className="journey__activity-kpi journey__activity-kpi--rate">
-        <span className="journey__activity-kpi-label">High-risk rate</span>
-        <strong>{recentRate}<small>%</small></strong>
+        <span className="journey__activity-kpi-label">High-risk rate · last 30 days</span>
+        <strong>{recentChecks === 0 ? 'No checks' : recentRate == null ? 'Not available' : <>{recentRate}<small>%</small></>}</strong>
+        <span className="journey__activity-kpi-copy">
+          {recent.high_risk_count ?? 0} of {recentChecks} checks were high-risk
+        </span>
         <span className={`journey__activity-delta journey__activity-delta--${direction}`}>
-          {earlySignal
-            ? `Early signal · ${recent.total_checks ?? 0} checks in the last 30 days`
-            : `${Math.abs(rateChange).toFixed(1)} percentage points ${direction} vs previous 30 days`}
+          {recentChecks === 0
+            ? `No checks in the rolling 30-day window ending ${asOfDate}.`
+            : earlySignal
+              ? `Early signal · ${recentChecks} checks vs ${previousChecks} in the prior 30-day window.`
+              : `${Math.abs(rateChange).toFixed(1)} percentage points ${direction} vs the prior 30 days (${recent.high_risk_count}/${recentChecks} vs ${previous.high_risk_count}/${previousChecks}).`}
         </span>
       </article>
       <article className={`journey__activity-kpi journey__activity-kpi--${verdict.toLowerCase().replace(' ', '-')}`}>
         <span className="journey__activity-kpi-label">Trend verdict</span>
         <strong>{verdict}</strong>
-        <span className="journey__activity-kpi-copy">{personal?.activity_insight || 'Keep checking messages to see how your risk pattern changes over time.'}</span>
+        <span className="journey__activity-kpi-copy">
+          {recentChecks === 0
+            ? 'There is not enough recent activity to calculate a rate or trend.'
+            : earlySignal
+              ? `The comparison uses ${recentChecks} recent checks and ${previousChecks} in the prior window; trends need at least five in each.`
+              : 'Compared with the prior rolling 30-day window. Changes of 5 or more percentage points are marked rising or improving.'}
+        </span>
       </article>
       <article className="journey__activity-kpi journey__activity-kpi--last-risk">
         <span className="journey__activity-kpi-label">Since your last high-risk result</span>
         {daysSinceHighRisk == null ? (
-          <><strong>Checks this month</strong><span className="journey__activity-kpi-copy">{activity?.checks_this_month ?? personal?.total_checks ?? 0} checks so far</span></>
+          <><strong>No high-risk result yet</strong><span className="journey__activity-kpi-copy">{activity?.checks_this_month ?? 0} checks this month</span></>
         ) : (
-          <><strong>{daysLabel}</strong><span className="journey__activity-kpi-copy">Last high-risk result</span></>
+          <><strong>{daysLabel}</strong><span className="journey__activity-kpi-copy">Since your last high-risk result</span></>
         )}
       </article>
     </div>
@@ -132,9 +159,13 @@ function ActivityRiskMix({ activity, totalChecks, onAnalyze }) {
               <span key={segment.key}>
                 <i className={`journey__risk-mix-swatch journey__risk-mix-swatch--${segment.color}`} aria-hidden="true" />
                 <strong>{riskMix[segment.key] || 0}</strong> {segment.label}
+                <span>({total ? Math.round(((riskMix[segment.key] || 0) / total) * 100) : 0}%)</span>
               </span>
             ))}
           </div>
+          <p className="journey__risk-mix-note">
+            High-risk means a scam-flagged check with a score of 70 or higher. Other scam-flagged checks are shown as suspicious.
+          </p>
         </>
       )}
     </section>
@@ -174,7 +205,7 @@ function ActivityChartPanel({ activity, activeView, setActiveView, selectedDay, 
     insight = weekdayTotal < 5
       ? 'Early signal: a few more checks will make weekday patterns easier to compare.'
       : busiestWeekday?.scam_count
-        ? `Most scam checks reached you on ${longWeekday} with ${busiestWeekday.scam_count} checks.`
+        ? `Most scam checks reached you on ${longWeekday}: ${busiestWeekday.scam_count} scam-flagged checks out of ${busiestWeekday.total_count} total checks.`
         : 'No scam checks have been recorded by weekday yet.';
   }
 
@@ -202,6 +233,13 @@ function ActivityChartPanel({ activity, activeView, setActiveView, selectedDay, 
           >{tab.label}</button>
         ))}
       </div>
+      <p className="journey__activity-chart-note">
+        {activeView === 'monthly'
+          ? 'Monthly bars split your checks by result; * marks the current, in-progress month.'
+          : activeView === 'weekday'
+            ? 'Bars count scam-flagged checks; compare with the total checks shown for that weekday.'
+            : 'Calendar color shows check volume; a pink outline marks a day with at least one high-risk result.'}
+      </p>
       <div id="activity-chart-view" className="journey__activity-chart-view" role="tabpanel" aria-labelledby={`activity-tab-${activeView}`}>
         {totalChecks === 0 && <ActivityEmptyState onAnalyze={onAnalyze} />}
         {totalChecks > 0 && activeView === 'monthly' && (monthly.length ? (
@@ -727,10 +765,16 @@ function PatternInsightCarousel({ items, activeIndex, setActiveIndex, onAskGuida
   );
 }
 
-function PatternHero({ item, totalChecks, onAskGuidance }) {
+function PatternHero({ item, totalChecks, totalScamChecks, onAskGuidance }) {
   if (!item) return null;
 
-  const trendLabel = item.trend_direction === 'increasing' ? 'Rising' : item.trend_direction === 'decreasing' ? 'Easing' : 'Steady';
+  const trendLabel = item.sample_note
+    ? 'Early signal'
+    : item.trend_direction === 'increasing'
+      ? 'Rising'
+      : item.trend_direction === 'decreasing'
+        ? 'Easing'
+        : 'Steady';
   return (
     <article className="journey__check-hero">
       <div className="journey__check-hero-main">
@@ -738,7 +782,7 @@ function PatternHero({ item, totalChecks, onAskGuidance }) {
         <h3>{item.type}</h3>
         <p>{item.description}</p>
         <div className="journey__check-hero-stats">
-          <span><strong>{item.count}</strong> checks</span>
+          <span><strong>{item.count} of {totalScamChecks}</strong> scam checks</span>
           <span><strong>{item.share}%</strong> of scam checks</span>
           <span className={`journey__trend-chip journey__trend-chip--${item.trend_direction}`}>{trendLabel}</span>
         </div>
@@ -758,7 +802,7 @@ function PatternHero({ item, totalChecks, onAskGuidance }) {
   );
 }
 
-function PatternSignalBoard({ items, onAskGuidance, onAnalyze }) {
+function PatternSignalBoard({ items, totalScamChecks, onAskGuidance, onAnalyze }) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
@@ -792,12 +836,16 @@ function PatternSignalBoard({ items, onAskGuidance, onAnalyze }) {
             <span className="journey__signal-rank">0{index + 1}</span>
             <span className="journey__signal-copy">
               <strong>{item.type}</strong>
-              <span>{item.count} {item.count === 1 ? 'check' : 'checks'} · {item.share}% share</span>
+              <span>{item.count} of {totalScamChecks} scam checks · {item.share}% · {item.recent_count ?? 0} recent / {item.previous_count ?? 0} prior</span>
             </span>
             <span className="journey__signal-meter"><span style={{ width: `${Math.max((item.count / items[0].count) * 100, 8)}%` }} /></span>
             <span className={`journey__signal-status journey__signal-status--${item.trend_direction}`}>
-              <span aria-hidden="true">{item.trend_direction === 'increasing' ? '↑' : item.trend_direction === 'decreasing' ? '↓' : '→'}</span>{' '}
-              {item.trend_direction === 'increasing' ? 'Rising' : item.trend_direction === 'decreasing' ? 'Easing' : 'Steady'}
+              {item.sample_note ? 'Early signal' : (
+                <>
+                  <span aria-hidden="true">{item.trend_direction === 'increasing' ? '↑' : item.trend_direction === 'decreasing' ? '↓' : '→'}</span>{' '}
+                  {item.trend_direction === 'increasing' ? 'Rising' : item.trend_direction === 'decreasing' ? 'Easing' : 'Steady'}
+                </>
+              )}
             </span>
           </button>
         ))}
@@ -810,12 +858,18 @@ function PatternSignalBoard({ items, onAskGuidance, onAnalyze }) {
 function AdviceCarousel({ community, personal, onAskGuidance }) {
   const [slide, setSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const risingType = community?.community_analytics?.rising_scams?.[0]?.type;
+  const risingPattern = community?.community_analytics?.rising_scams?.[0];
+  const risingType = risingPattern
+    && (risingPattern.is_new || (risingPattern.change_percent ?? 0) > 0)
+    ? risingPattern.type
+    : null;
   const userType = personal?.top_types?.[0]?.type;
   const cards = [
     ...(risingType ? [{
-      title: `${risingType} is rising`,
-      body: `${community.community_analytics.rising_scams[0].change_percent ?? 'New'}${community.community_analytics.rising_scams[0].change_percent == null ? '' : '%'} more reports than last month. ${getGuidance(risingType).advice}`,
+      title: risingPattern.is_new ? `${risingType} is newly visible` : `${risingType} is rising`,
+      body: risingPattern.is_new
+        ? `${risingPattern.current_count} scam-flagged checks so far this month; none in the same dates last month. ${getGuidance(risingType).advice}`
+        : `${risingPattern.change_percent}% more scam-flagged checks so far this month than in the same dates last month (${risingPattern.current_count} vs ${risingPattern.previous_count}). ${getGuidance(risingType).advice}`,
       category: risingType,
       tag: 'Community alert',
     }] : []),
@@ -884,33 +938,39 @@ function AdviceCarousel({ community, personal, onAskGuidance }) {
 }
 
 function CommunityShareComparison({ personal, community }) {
-  const userTypes = personal?.top_types || [];
-  const communityTypes = community?.community_analytics?.top_types_all_time || [];
-  const userByType = new Map(userTypes.map((item) => [item.type, item.share]));
-  const communityByType = new Map(communityTypes.map((item) => [item.type, item.share]));
+  const userTypes = personal?.type_insights || personal?.top_types || [];
+  const analytics = community?.community_analytics;
+  const communityTypes = analytics?.category_monthly_series || analytics?.top_types_all_time || [];
+  const userByType = new Map(userTypes.map((item) => [item.type, item]));
+  const communityByType = new Map(communityTypes.map((item) => [item.type, item]));
   const categories = [...new Set([...communityTypes, ...userTypes].map((item) => item.type))]
-    .sort((a, b) => (communityByType.get(b) || 0) - (communityByType.get(a) || 0))
+    .sort((a, b) => (communityByType.get(b)?.share || 0) - (communityByType.get(a)?.share || 0))
     .slice(0, 5);
   const rows = categories.map((type) => ({
     type,
-    userShare: userByType.get(type) || 0,
-    communityShare: communityByType.has(type) ? communityByType.get(type) : null,
+    user: userByType.get(type) || null,
+    community: communityByType.get(type) || null,
   }));
   const leadingComparison = rows
-    .filter((row) => row.communityShare > 0 && row.userShare > row.communityShare)
-    .sort((a, b) => b.userShare / b.communityShare - a.userShare / a.communityShare)[0];
+    .filter((row) => row.community?.share > 0 && row.user?.share > row.community.share)
+    .sort((a, b) => b.user.share / b.community.share - a.user.share / a.community.share)[0];
   const insight = leadingComparison
-    ? `You see ${leadingComparison.type} ${(leadingComparison.userShare / leadingComparison.communityShare).toFixed(1)}× more than the community average.`
-    : rows.some((row) => row.communityShare !== null)
+    ? `Your share of ${leadingComparison.type} checks is ${(leadingComparison.user.share / leadingComparison.community.share).toFixed(1)}× the community share.`
+    : rows.some((row) => row.community !== null)
       ? 'Your pattern mix is broadly in line with the visible community trends.'
       : 'Not enough community data to compare patterns yet.';
+  const userTotal = personal?.total_scam_checks ?? 0;
+  const communityTotal = analytics?.total_scam_checks ?? 0;
 
   return (
     <section className="journey__community-compare-chart" aria-labelledby="community-compare-title">
       <div className="journey__community-card-heading">
         <div><p className="journey__eyebrow">You vs community</p><h3 id="community-compare-title">Share of scam checks</h3></div>
-        <span>Top 5 patterns</span>
+        <span>All-time · top 5</span>
       </div>
+      <p className="journey__community-data-note">
+        Shares use scam-flagged checks as the denominator. Community categories are only shown when at least {analytics?.minimum_users ?? 5} users have contributed.
+      </p>
       {rows.length ? (
         <div className="journey__compare-bars" role="img" aria-label="Your share compared with the community for the top scam categories">
           <div className="journey__compare-axis" aria-hidden="true"><span>Category</span><div><i>0%</i><i>25%</i><i>50%</i><i>75%</i><i>100%</i></div></div>
@@ -918,10 +978,18 @@ function CommunityShareComparison({ personal, community }) {
             <div className="journey__compare-category" key={row.type}>
               <strong title={row.type}>{row.type}</strong>
               <div className="journey__compare-pair">
-                <div className="journey__compare-track" aria-label={`You: ${row.userShare}%`}><span className="journey__compare-fill journey__compare-fill--you" style={{ width: `${row.userShare}%` }} /></div>
-                <b>{row.userShare}%</b>
-                <div className="journey__compare-track" aria-label={`Community: ${row.communityShare === null ? 'not enough data' : `${row.communityShare}%`}`}><span className="journey__compare-fill journey__compare-fill--community" style={{ width: `${row.communityShare || 0}%` }} /></div>
-                <b>{row.communityShare === null ? 'Not enough data' : `${row.communityShare}%`}</b>
+                <div className="journey__compare-track" aria-label={`You: ${row.user ? `${row.user.count} of ${userTotal} scam checks` : 'not in your top patterns'}`}>
+                  {row.user && <span className="journey__compare-fill journey__compare-fill--you" style={{ width: `${row.user.share}%` }} />}
+                </div>
+                <b title={row.user ? `${row.user.count} of ${userTotal} scam-flagged checks` : 'Not in your top patterns'}>
+                  {row.user ? `${row.user.share}% · ${row.user.count}/${userTotal}` : 'Not ranked'}
+                </b>
+                <div className="journey__compare-track" aria-label={`Community: ${row.community ? `${row.community.count} of ${communityTotal} scam checks from ${row.community.distinct_users} users` : 'hidden by privacy threshold'}`}>
+                  {row.community && <span className="journey__compare-fill journey__compare-fill--community" style={{ width: `${row.community.share}%` }} />}
+                </div>
+                <b title={row.community ? `${row.community.count} of ${communityTotal} scam-flagged checks from ${row.community.distinct_users} users` : 'Hidden because fewer than the minimum number of users contributed'}>
+                  {row.community ? `${row.community.share}% · ${row.community.count}/${communityTotal}` : 'Hidden'}
+                </b>
               </div>
             </div>
           ))}
@@ -954,13 +1022,17 @@ function CommunityCategoryChart({ community, onAskGuidance }) {
           {items.map((item, index) => (
             <div className="journey__community-rank-row" key={item.type} role="listitem">
               <span className="journey__community-rank">0{index + 1}</span>
-              <button type="button" className="journey__community-rank-type" onClick={() => onAskGuidance(item.type)}>{item.type}<span aria-hidden="true">↗</span></button>
+              <div className="journey__community-rank-copy">
+                <button type="button" className="journey__community-rank-type" onClick={() => onAskGuidance(item.type)}>{item.type}<span aria-hidden="true">↗</span></button>
+                <small>{item.count} checks · {item.distinct_users} users</small>
+              </div>
               <div className="journey__community-rank-track" aria-label={`${item.share}% of community scam checks`}><span style={{ width: `${(item.share / maxShare) * 100}%` }} /></div>
               <strong>{item.share}%</strong>
             </div>
           ))}
         </div>
       ) : <p className="journey__community-empty">Not enough data to show this period.</p>}
+      {range === 'this_month' && <p className="journey__community-data-note">This month is still in progress; compare these totals with that in mind.</p>}
     </section>
   );
 }
@@ -991,7 +1063,7 @@ function CommunityTrendChart({ community, personal }) {
 
     return {
       ...month,
-      user_share: personalScamTotal > 0 ? (personalCategoryCount / personalScamTotal) * 100 : null,
+      user_share: personalType && personalScamTotal > 0 ? (personalCategoryCount / personalScamTotal) * 100 : null,
       community_share: communityMonth?.count != null && communityTotal?.count > 0
         ? (communityMonth.count / communityTotal.count) * 100
         : null,
@@ -1009,6 +1081,9 @@ function CommunityTrendChart({ community, personal }) {
           </select>
         </label>
       </div>
+      <p className="journey__community-data-note">
+        Each point is this pattern&apos;s share of scam-flagged checks for that month. Community points with fewer than {analytics?.minimum_users ?? 5} distinct users are hidden.
+      </p>
       {hasVisiblePoints ? (
         <Suspense fallback={<div className="journey__community-chart-loading" aria-label="Loading You versus Community chart" />}>
           <CommunityLineChart data={comparisonPoints} category={selectedCategory} />
@@ -1031,7 +1106,11 @@ function CommunitySection({ community, personal, onAskGuidance, onAnalyze }) {
       <div className="journey__section-heading">
         <div><p className="journey__eyebrow">03 / Everyone using Verif-AI</p><h2>What is happening around you?</h2><p>Community patterns help put your checks in context.</p></div>
         <div className="journey__section-header-right">
-          <span className="journey__community-rate">{community?.scam_rate ?? 0}% flagged</span>
+          <span className="journey__community-rate">
+            {community?.total_checks
+              ? `${community.scam_rate}% flagged · ${community.total_checks} checks`
+              : 'No community checks yet'}
+          </span>
           <span className="journey__section-number">03</span>
         </div>
       </div>
@@ -1042,14 +1121,18 @@ function CommunitySection({ community, personal, onAskGuidance, onAnalyze }) {
       </div>
       <CommunityShareComparison personal={personal} community={community} />
       <section className="journey__rising-section" aria-labelledby="rising-scams-title">
-        <div className="journey__community-card-heading"><div><p className="journey__eyebrow">Month-over-month movement</p><h3 id="rising-scams-title">Rising scams</h3></div><span>Top 5</span></div>
+        <div className="journey__community-card-heading"><div><p className="journey__eyebrow">Month-to-date vs same dates last month</p><h3 id="rising-scams-title">Biggest pattern changes</h3></div><span>Top 5</span></div>
         {risingScams.length ? (
           <ol className="journey__rising-list">
             {risingScams.map((item, index) => (
               <li key={item.type}>
                 <span className="journey__community-rank">0{index + 1}</span>
                 <strong>{item.type}</strong>
-                <span className={`journey__rising-change${item.is_new ? ' is-new' : ''}`}>{item.is_new ? 'New' : `${item.change_percent > 0 ? '↑ ' : item.change_percent < 0 ? '↓ ' : ''}${Math.abs(item.change_percent)}%`}</span>
+                <span className={`journey__rising-change${item.is_new ? ' is-new' : item.change_percent < 0 ? ' is-down' : ''}`}>
+                  {item.is_new
+                    ? `New · ${item.current_count} checks`
+                    : `${item.change_percent > 0 ? '↑ ' : item.change_percent < 0 ? '↓ ' : ''}${Math.abs(item.change_percent)}% · ${item.current_count} vs ${item.previous_count} checks`}
+                </span>
                 <CommunitySparkline points={item.monthly_counts} type={item.type} />
                 <button type="button" onClick={() => onAskGuidance(item.type)}>Learn more <span aria-hidden="true">→</span></button>
               </li>
@@ -1062,7 +1145,9 @@ function CommunitySection({ community, personal, onAskGuidance, onAnalyze }) {
         <CommunityCategoryChart community={community} onAskGuidance={onAskGuidance} />
         <CommunityTrendChart community={community} personal={personal} />
       </div>
-      <p className="journey__community-privacy">Community data is anonymized and aggregated. Categories and month buckets with fewer than five distinct users are hidden.</p>
+      <p className="journey__community-privacy">
+        Community data is anonymized and aggregated. Month-to-date movement is compared with the same calendar dates last month; categories and month buckets with fewer than {analytics?.minimum_users ?? 5} distinct users are hidden.
+      </p>
       {!community?.total_checks && <button className="journey__community-analyze" type="button" onClick={onAnalyze}>Analyze a message <span aria-hidden="true">→</span></button>}
     </section>
   );
@@ -1268,10 +1353,14 @@ export default function Analytics() {
                   <div><p className="journey__eyebrow">01 / Your checks</p><h2>What are you running into?</h2><p>These are the scam patterns appearing most often in your authenticated checks.</p></div>
                   <span className="journey__section-number">01</span>
                 </div>
-                <PatternHero item={checkPatterns[0]} totalChecks={personal?.total_checks ?? 0} onAskGuidance={askGuidance} />
+                <PatternHero
+                  item={checkPatterns[0]}
+                  totalChecks={personal?.total_checks ?? 0}
+                  totalScamChecks={personal?.total_scam_checks ?? 0}
+                  onAskGuidance={askGuidance}
+                />
                 <PatternSignalBoard
                   items={checkPatterns}
-                  totalChecks={personal?.total_checks ?? 0}
                   totalScamChecks={personal?.total_scam_checks ?? 0}
                   onAskGuidance={askGuidance}
                   onAnalyze={() => navigate('/detection')}
@@ -1289,7 +1378,7 @@ export default function Analytics() {
                   <div><p className="journey__eyebrow">02 / Your activity</p><h2>Is your situation changing?</h2><p>Volume matters, but the direction of your high-risk results matters more.</p></div>
                   <span className="journey__section-number">02</span>
                 </div>
-                <ActivityStatusRow activity={personal?.activity} personal={personal} />
+                <ActivityStatusRow activity={personal?.activity} />
                 <div className="journey__activity-dashboard">
                   <ActivityChartPanel
                     activity={personal?.activity}

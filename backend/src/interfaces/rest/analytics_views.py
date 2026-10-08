@@ -119,6 +119,7 @@ def _build_activity_data(docs, timezone_name: str = 'UTC', now=None) -> Dict[str
         {
             'month': month,
             'label': datetime.strptime(month, '%Y-%m').strftime('%b %Y'),
+            'is_current_month': month == current_month,
             **values,
         }
         for month, values in active_months
@@ -140,6 +141,7 @@ def _build_activity_data(docs, timezone_name: str = 'UTC', now=None) -> Dict[str
     ]
 
     return {
+        'as_of_date': current_time.date().isoformat(),
         'risk_mix': risk_mix,
         'monthly_risk': monthly_risk,
         'calendar_days': calendar_days,
@@ -147,11 +149,13 @@ def _build_activity_data(docs, timezone_name: str = 'UTC', now=None) -> Dict[str
         'checks_this_month': monthly[current_month]['total'],
         'recent_30_days': {
             **recent,
-            'high_risk_rate': _safe_percent(recent['high_risk_count'], recent['total_checks']),
+            'high_risk_rate': _safe_percent(recent['high_risk_count'], recent['total_checks'])
+            if recent['total_checks'] else None,
         },
         'previous_30_days': {
             **previous,
-            'high_risk_rate': _safe_percent(previous['high_risk_count'], previous['total_checks']),
+            'high_risk_rate': _safe_percent(previous['high_risk_count'], previous['total_checks'])
+            if previous['total_checks'] else None,
         },
         'last_high_risk_at': last_high_risk.isoformat() if last_high_risk else None,
         'days_since_last_high_risk': (current_time.date() - last_high_risk.date()).days if last_high_risk else None,
@@ -264,7 +268,7 @@ def _build_type_insights(docs, limit: int = 4, timezone_name: str = 'UTC'):
             except ValueError:
                 return None
         if value and getattr(value, 'tzinfo', None):
-            return value.replace(tzinfo=None)
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
 
     insights = []
@@ -312,12 +316,11 @@ def _build_type_insights(docs, limit: int = 4, timezone_name: str = 'UTC'):
         else:
             trend_direction = 'stable'
 
-        if item['count'] < 2:
-            sample_note = 'Early signal: there is not enough history for a reliable trend yet.'
-        elif item['count'] < 5:
-            sample_note = 'Limited history: treat this pattern as an early signal.'
-        else:
-            sample_note = None
+        sample_note = (
+            'Early signal: fewer than five checks for this pattern in one or both 30-day comparison windows.'
+            if recent_count < 5 or previous_count < 5
+            else None
+        )
 
         insights.append({
             **item,
@@ -662,6 +665,11 @@ def _build_community_analytics(docs, timezone_name: str = 'UTC', now=None, minim
         current_time = current_time.astimezone(local_timezone)
 
     month_index = current_time.year * 12 + current_time.month - 1
+    current_month_start = current_time.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    previous_month_end = current_month_start - timedelta(days=1)
+    previous_month_start = previous_month_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    previous_period_days = min(current_time.day, previous_month_end.day)
+    previous_period_end = previous_month_start + timedelta(days=previous_period_days)
     months = []
     for offset in range(11, -1, -1):
         year, index = divmod(month_index - offset, 12)
@@ -677,6 +685,10 @@ def _build_community_analytics(docs, timezone_name: str = 'UTC', now=None, minim
     category_users = defaultdict(set)
     category_month_counts = defaultdict(int)
     category_month_users = defaultdict(set)
+    current_period_counts = defaultdict(int)
+    current_period_users = defaultdict(set)
+    previous_period_counts = defaultdict(int)
+    previous_period_users = defaultdict(set)
 
     for doc in docs:
         user_id = str(doc.get('user_id') or '').strip()
@@ -693,6 +705,12 @@ def _build_community_analytics(docs, timezone_name: str = 'UTC', now=None, minim
         created_at = _parse_activity_datetime(doc.get('created_at'), local_timezone)
         if not created_at:
             continue
+        if current_month_start <= created_at <= current_time:
+            current_period_counts[category] += 1
+            current_period_users[category].add(user_id)
+        if previous_month_start <= created_at < previous_period_end:
+            previous_period_counts[category] += 1
+            previous_period_users[category].add(user_id)
         month_key = created_at.strftime('%Y-%m')
         if month_key not in {month['month'] for month in months}:
             continue
@@ -750,6 +768,8 @@ def _build_community_analytics(docs, timezone_name: str = 'UTC', now=None, minim
     category_monthly_series = [
         {
             'type': category,
+            'count': category_counts[category],
+            'share': _safe_percent(category_counts[category], len(scam_docs)),
             'distinct_users': len(category_users[category]),
             'monthly_counts': [
                 {
@@ -767,8 +787,6 @@ def _build_community_analytics(docs, timezone_name: str = 'UTC', now=None, minim
         if len(category_users[category]) >= minimum_users
     ]
     this_month = current_time.strftime('%Y-%m')
-    previous_month_date = datetime(current_time.year, current_time.month, 1, tzinfo=local_timezone) - timedelta(days=1)
-    previous_month = previous_month_date.strftime('%Y-%m')
     current_counts = {
         category: category_month_counts[(category, this_month)]
         for category in category_counts
@@ -776,18 +794,20 @@ def _build_community_analytics(docs, timezone_name: str = 'UTC', now=None, minim
     }
     rising_scams = []
     for category in category_counts:
-        current_users = len(category_month_users[(category, this_month)])
-        previous_users = len(category_month_users[(category, previous_month)])
-        if current_users < minimum_users or previous_users < minimum_users:
+        current_users = len(current_period_users[category])
+        previous_users = len(previous_period_users[category])
+        current_count = current_period_counts[category]
+        previous_count = previous_period_counts[category]
+        if current_users < minimum_users or (previous_count and previous_users < minimum_users):
             continue
-        current_count = category_month_counts[(category, this_month)]
-        previous_count = category_month_counts[(category, previous_month)]
         rising_scams.append({
             'type': category,
             'current_count': current_count,
             'previous_count': previous_count,
             'change_percent': round(((current_count - previous_count) / previous_count) * 100, 1) if previous_count else None,
             'is_new': previous_count == 0,
+            'current_distinct_users': current_users,
+            'previous_distinct_users': previous_users if previous_users >= minimum_users else None,
             'monthly_counts': [
                 {
                     **month,
@@ -802,6 +822,7 @@ def _build_community_analytics(docs, timezone_name: str = 'UTC', now=None, minim
     return {
         'distinct_users': len(distinct_users),
         'minimum_users': minimum_users,
+        'total_scam_checks': len(scam_docs),
         'has_demo_data': any(bool(doc.get('analytics_demo_batch')) for doc in docs),
         'top_types_all_time': ranked_types(all_time_counts),
         'top_types_this_month': ranked_types(current_counts, this_month),

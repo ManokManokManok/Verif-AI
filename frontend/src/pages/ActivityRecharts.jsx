@@ -16,8 +16,8 @@ export default function ActivityRecharts({ mode, data }) {
     ? 'Monthly checks stacked by risk: not scam, suspicious, and high risk'
     : 'Scam checks by day of the week';
   const summary = isMonthly
-    ? data.map((month) => `${month.label}: ${month.not_scam} not scam, ${month.suspicious} suspicious, ${month.high_risk} high risk`)
-    : data.map((day) => `${day.weekday}: ${day.scam_count} ${day.scam_count === 1 ? 'scam check' : 'scam checks'}`);
+    ? data.map((month) => `${month.label}: ${month.not_scam} not scam, ${month.suspicious} suspicious, ${month.high_risk} high risk, ${month.total} total checks`)
+    : data.map((day) => `${day.weekday}: ${day.scam_count} scam-flagged checks out of ${day.total_count} total checks`);
 
   return (
     <div className="journey__activity-recharts" role="img" aria-label={accessibleLabel}>
@@ -26,6 +26,7 @@ export default function ActivityRecharts({ mode, data }) {
           <CartesianGrid stroke="var(--journey-chart-grid)" vertical={false} />
           <XAxis
             dataKey={isMonthly ? 'label' : 'weekday'}
+            tickFormatter={(label, index) => isMonthly && data[index]?.is_current_month ? `${label}*` : label}
             tick={{ fill: 'var(--journey-chart-tick)', fontSize: 11 }}
             axisLine={{ stroke: 'var(--journey-chart-axis)' }}
             tickLine={false}
@@ -40,7 +41,13 @@ export default function ActivityRecharts({ mode, data }) {
           />
           <Tooltip
             contentStyle={{ border: '1px solid var(--journey-chart-tooltip-border)', borderRadius: 8, background: 'var(--journey-chart-tooltip-bg)', color: 'var(--journey-chart-tooltip-text)' }}
-            formatter={(value, name) => [value, name === 'not_scam' ? 'Not scam' : name === 'suspicious' ? 'Suspicious' : isMonthly ? 'High risk' : 'Scam checks']}
+            formatter={(value, name, item) => {
+              const denominator = isMonthly ? item?.payload?.total : item?.payload?.total_count;
+              return [
+                denominator == null ? `${value} checks` : `${value} of ${denominator} checks`,
+                name === 'not_scam' ? 'Not scam' : name === 'suspicious' ? 'Suspicious' : isMonthly ? 'High risk' : 'Scam checks',
+              ];
+            }}
           />
           {isMonthly ? (
             <>
