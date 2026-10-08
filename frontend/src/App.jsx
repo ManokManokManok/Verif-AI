@@ -15,7 +15,7 @@ import { AdminDashboard } from './pages/admin';
 import TermsAndConditions from './pages/TermsAndConditions.jsx';
 import SessionExpiredModal from './components/auth/SessionExpiredModal';
 import MobileHeader from './components/MobileHeader';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Protected Route Component
@@ -56,6 +56,18 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 
 function App() {
   const location = useLocation();
+  const [routeLoading, setRouteLoading] = useState(false);
+  const isFirstRoute = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRoute.current) {
+      isFirstRoute.current = false;
+      return undefined;
+    }
+    setRouteLoading(true);
+    const timer = setTimeout(() => setRouteLoading(false), 700);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(max-width: 600px)').matches
@@ -82,7 +94,8 @@ function App() {
       <AuthProvider>
         {showMobileHeader && <MobileHeader />}
         <SessionExpiredModal />
-        <Routes>
+        <div key={location.pathname} className={`route-fade${!isFirstRoute.current ? ' route-fade--delayed' : ''}`}>
+        <Routes location={location}>
         <Route path="/" element={<Landing />} />
         <Route path="/detection" element={<Detection />} />
         <Route path="/chatbot" element={<AIChatbot />} />
@@ -101,13 +114,14 @@ function App() {
           }
         />
         <Route
-          path="/journey"
+          path="/analytics"
           element={
             <ProtectedRoute>
               <Analytics />
             </ProtectedRoute>
           }
         />
+        <Route path="/journey" element={<Navigate to="/analytics" replace />} />
         <Route 
           path="/admin" 
           element={
@@ -117,6 +131,25 @@ function App() {
           } 
         />
       </Routes>
+        </div>
+        {routeLoading && (
+          <div className="detect__navigation-loading route-loader" role="status" aria-live="polite">
+            <div className="detect__navigation-card">
+              <div className="detect__navigation-mark" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="detect__navigation-copy">
+                <strong>Loading</strong>
+                <span>Just a moment...</span>
+              </div>
+              <div className="detect__navigation-progress" aria-hidden="true">
+                <span />
+              </div>
+            </div>
+          </div>
+        )}
       </AuthProvider>
     </ThemeProvider>
   );

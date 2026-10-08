@@ -17,6 +17,15 @@ def _safe_error_detail(error: Exception) -> str:
     return detail[:500]
 
 
+def _is_retryable_gemini_error(error: Exception) -> bool:
+    """Identify transient capacity and quota failures that may work on another model."""
+    status_code = getattr(error, "status_code", None)
+    if status_code in (429, 500, 502, 503, 504):
+        return True
+    error_name = type(error).__name__.lower()
+    return any(marker in error_name for marker in ("ratelimit", "resourceexhausted", "servererror", "unavailable"))
+
+
 class GeminiProvider:
     """Adapt Google's Gemini API to the existing chat-completion contract."""
 
@@ -90,6 +99,47 @@ class GeminiProvider:
             raise RuntimeError("Gemini returned an empty response")
         return {"choices": [{"message": {"content": text}}]}
 
+    def create_structured_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        response_schema: Dict[str, Any],
+        **options: Any,
+    ) -> str:
+        """Request a response constrained to a fixed JSON schema.
+
+        Returns the raw JSON text (still needs json.loads + validation by the caller).
+        """
+        from google.genai import types  # type: ignore
+
+        system_parts = [item["content"] for item in messages if item.get("role") == "system"]
+        contents = []
+        for item in messages:
+            role = item.get("role")
+            if role == "system":
+                continue
+            parts = item.get("parts") or [{"text": item.get("content", "")}]
+            contents.append({
+                "role": "model" if role == "assistant" else "user",
+                "parts": parts,
+            })
+
+        config = types.GenerateContentConfig(
+            system_instruction="\n\n".join(system_parts) or None,
+            max_output_tokens=options.get("max_tokens"),
+            temperature=options.get("temperature"),
+            response_mime_type="application/json",
+            response_schema=response_schema,
+        )
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=contents,
+            config=config,
+        )
+        text = getattr(response, "text", None)
+        if not text or not text.strip():
+            raise RuntimeError("Gemini returned an empty structured response")
+        return text
+
     @staticmethod
     def _stop_sequences(value: Any) -> Optional[List[str]]:
         if not value:
@@ -103,6 +153,11 @@ class GenAIProvider:
     def __init__(self, gemini_provider: Optional[Any] = None, gemma_loader: Callable[[], Any] = load_gemma_model):
         self.gemma_loader = gemma_loader
         self.gemini = gemini_provider
+        configured_fallbacks = os.getenv("GEMINI_FALLBACK_MODELS", "gemini-3.5-flash-lite,gemini-flash-lite-latest")
+        self.gemini_fallback_models = [
+            model.strip() for model in configured_fallbacks.split(",") if model.strip()
+        ]
+        self.gemini_fallbacks: Dict[str, Any] = {}
         self.gemini_configured = bool(os.getenv("GEMINI_API_KEY"))
 
         if self.gemini is None and self.gemini_configured and self._gemini_enabled():
@@ -154,6 +209,56 @@ class GenAIProvider:
             user_prompt=user_prompt,
             **options,
         )
+
+    def create_structured_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        response_schema: Dict[str, Any],
+        **options: Any,
+    ) -> str:
+        """Schema-constrained JSON completion. No Gemma fallback - callers should
+        catch failures and use a deterministic, non-AI fallback instead."""
+        if self.gemini is None:
+            raise RuntimeError("Gemini is unavailable; structured completion has no local fallback")
+        try:
+            text = self.gemini.create_structured_completion(
+                messages=messages, response_schema=response_schema, **options
+            )
+            logger.warning("[GENAI] Provider used: GEMINI (structured; model=%s)", self.gemini.model_name)
+            return text
+        except Exception as exc:
+            if not self.gemini_fallback_models or not _is_retryable_gemini_error(exc):
+                raise
+
+            last_error = exc
+            for fallback_model in self.gemini_fallback_models:
+                if fallback_model == getattr(self.gemini, "model_name", None):
+                    continue
+                try:
+                    if fallback_model not in self.gemini_fallbacks:
+                        self.gemini_fallbacks[fallback_model] = GeminiProvider(
+                            api_key=os.environ["GEMINI_API_KEY"],
+                            model_name=fallback_model,
+                        )
+                    logger.warning(
+                        "[GEMINI] Structured request failed on %s: %s; trying fallback model %s",
+                        getattr(self.gemini, "model_name", os.getenv("GEMINI_MODEL", "unknown")),
+                        _safe_error_detail(last_error),
+                        fallback_model,
+                    )
+                    text = self.gemini_fallbacks[fallback_model].create_structured_completion(
+                        messages=messages, response_schema=response_schema, **options
+                    )
+                    logger.warning("[GENAI] Provider used: GEMINI (structured; model=%s)", fallback_model)
+                    return text
+                except Exception as fallback_exc:
+                    last_error = fallback_exc
+                    logger.warning(
+                        "[GEMINI] Structured fallback model %s failed: %s",
+                        fallback_model,
+                        _safe_error_detail(fallback_exc),
+                    )
+            raise last_error
 
     @staticmethod
     def _gemini_enabled() -> bool:

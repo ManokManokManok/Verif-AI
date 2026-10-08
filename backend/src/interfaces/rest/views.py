@@ -133,7 +133,7 @@ from ...infrastructure.validators import (
     get_email_only_validator, get_token_only_validator,
     get_password_reset_validator, get_refresh_token_validator,
     get_check_permission_validator, sanitize_for_logging,
-    validate_username
+    validate_username, validate_password
 )
 from ...domain.entities import UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
 
@@ -446,6 +446,19 @@ def signup(request: Request) -> Response:
         
         # Initialize use case
         user_repo = get_user_repository()
+
+        # An unverified account already exists for this email: resend a fresh
+        # verification code instead of creating a duplicate account or erroring.
+        existing_user = user_repo.get_by_email(email)
+        if existing_user and not getattr(existing_user, 'is_verified', False):
+            _send_email_verification_code(existing_user, ip_address=_get_client_ip(request))
+            return Response({
+                'message': 'We sent you a new code since you left without verifying.',
+                'requires_verification': True,
+                'already_registered': True,
+                'email': email,
+            }, status=status.HTTP_200_OK)
+
         password_hasher = BCryptPasswordHasher()
         email_validator = EmailValidator()
         password_validator = PasswordValidator()
@@ -469,27 +482,18 @@ def signup(request: Request) -> Response:
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
         )
 
-        # Auto-send verification email after registration
+        # Auto-send verification code after registration
         try:
-            token_repo = get_token_repository()
-            email_service = get_email_service()
-            token_generator = TokenGenerator()
-
-            verification_usecase = EmailVerificationUseCase(
-                user_repository=user_repo,
-                token_repository=token_repo,
-                email_service=email_service,
-                token_generator=token_generator,
-            )
-            verification_usecase.send_verification_email(email)
-            logger.info(f"Verification email sent to {email}")
+            _send_email_verification_code(user, ip_address=_get_client_ip(request))
+            logger.info(f"Verification code sent to {email}")
         except Exception as verify_err:
             # Log but don't fail signup if email sending fails
-            logger.warning(f"Could not send verification email to {email}: {verify_err}")
+            logger.warning(f"Could not send verification code to {email}: {verify_err}")
 
         return Response({
             'message': 'User registered successfully',
-            'user': user_to_dict(user)
+            'user': user_to_dict(user),
+            'requires_verification': True,
         }, status=status.HTTP_201_CREATED)
         
     except UserAlreadyExistsError as e:
@@ -675,7 +679,8 @@ def update_username(request: Request) -> Response:
     
     Request body:
     {
-        "username": "new_username"
+        "username": "new_username",
+        "current_password": "current_password"
     }
     """
     try:
@@ -686,15 +691,32 @@ def update_username(request: Request) -> Response:
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         new_username = (request.data.get('username') or '').strip()
+        current_password = request.data.get('current_password') or ''
         if not new_username:
             return Response({
                 'error': {'code': 'VALIDATION_ERROR', 'message': 'Username is required'}
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+        if not current_password:
+            return Response({
+                'error': {'code': 'VALIDATION_ERROR', 'message': 'Current password is required'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         user_repo = get_user_repository()
+        user = user_repo.get_by_id(user_id)
+        if not user:
+            return Response({
+                'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'}
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        password_hasher = BCryptPasswordHasher()
+        if not password_hasher.verify_password(current_password, user.password_hash):
+            return Response({
+                'error': {'code': 'INVALID_PASSWORD', 'message': 'Current password is incorrect'}
+            }, status=status.HTTP_403_FORBIDDEN)
+
         use_case = UpdateUsernameUseCase(user_repository=user_repo)
         user = use_case.execute(user_id, new_username)
-        
+
         get_audit_logger().log_event(
             event_type=AuditEventType.USER_UPDATED,
             user_id=user_id,
@@ -719,6 +741,99 @@ def update_username(request: Request) -> Response:
         return Response({
             'error': {'code': 'INTERNAL_ERROR', 'message': 'An unexpected error occurred'}
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@rate_limit('api_write')
+def send_password_change_code(request: Request) -> Response:
+    """Send an email verification code for an authenticated password change."""
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return Response({'error': {'code': 'AUTHENTICATION_REQUIRED', 'message': 'Authentication required'}}, status=401)
+
+        user = get_user_repository().get_by_id(user_id)
+        if not user:
+            return Response({'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'}}, status=404)
+
+        from ...domain.services import MFACodeGenerator
+        from ...infrastructure.email_service import get_email_service
+        from datetime import datetime, timedelta
+        mfa_repo = get_mfa_repository()
+        active_code = mfa_repo.get_active_code(user_id, purpose='password_change')
+        if active_code and active_code.get('created_at'):
+            cooldown_ends = active_code['created_at'] + timedelta(seconds=60)
+            remaining = int((cooldown_ends - datetime.utcnow()).total_seconds())
+            if remaining > 0:
+                return Response({
+                    'error': {
+                        'code': 'CODE_COOLDOWN',
+                        'message': f'Please wait {remaining} seconds before requesting another code.',
+                        'retry_after_seconds': remaining,
+                    }
+                }, status=429)
+
+        code, expires_at = MFACodeGenerator.generate_code_with_expiry(5)
+        if not mfa_repo.create_mfa_code(user_id, code, expires_at, _get_client_ip(request), purpose='password_change'):
+            return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Failed to generate verification code'}}, status=500)
+
+        if not get_email_service().send_password_change_code_email(user.email, code):
+            mfa_repo.invalidate_codes(user_id, purpose='password_change')
+            return Response({'error': {'code': 'EMAIL_ERROR', 'message': 'Failed to send verification code'}}, status=500)
+
+        return Response({'message': 'Verification code sent to your email', 'expires_in_seconds': 300}, status=200)
+    except Exception:
+        logger.exception('Password change code request failed')
+        return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Unable to send verification code'}}, status=500)
+
+
+@api_view(['POST'])
+@rate_limit('api_write')
+def change_password(request: Request) -> Response:
+    """Change an authenticated user's password after email-code verification."""
+    try:
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            return Response({'error': {'code': 'AUTHENTICATION_REQUIRED', 'message': 'Authentication required'}}, status=401)
+
+        code = str(request.data.get('code') or '').strip()
+        current_password = request.data.get('current_password') or ''
+        new_password = request.data.get('new_password') or ''
+        confirm_password = request.data.get('confirm_password') or ''
+        if not code or not current_password or not new_password or not confirm_password:
+            return Response({'error': {'code': 'VALIDATION_ERROR', 'message': 'All password change fields are required'}}, status=400)
+        if new_password != confirm_password:
+            return Response({'error': {'code': 'VALIDATION_ERROR', 'message': 'New passwords do not match'}}, status=400)
+
+        valid_password, password_errors = validate_password(new_password)
+        if not valid_password:
+            return Response({'error': {'code': 'VALIDATION_ERROR', 'message': '. '.join(password_errors)}}, status=400)
+
+        user_repo = get_user_repository()
+        user = user_repo.get_by_id(user_id)
+        if not user:
+            return Response({'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'}}, status=404)
+
+        password_hasher = BCryptPasswordHasher()
+        if not password_hasher.verify_password(current_password, user.password_hash):
+            return Response({'error': {'code': 'INVALID_PASSWORD', 'message': 'Current password is incorrect'}}, status=403)
+
+        valid_code, code_error = get_mfa_repository().verify_mfa_code(user_id, code, purpose='password_change')
+        if not valid_code:
+            return Response({'error': {'code': 'INVALID_CODE', 'message': code_error or 'Invalid or expired verification code'}}, status=401)
+
+        if not user_repo.update_user_password(user_id, password_hasher.hash_password(new_password)):
+            return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Failed to update password'}}, status=500)
+
+        get_audit_logger().log_event(
+            event_type=AuditEventType.PASSWORD_CHANGED,
+            user_id=user_id,
+            ip_address=_get_client_ip(request),
+        )
+        return Response({'message': 'Password changed successfully'}, status=200)
+    except Exception:
+        logger.exception('Password change failed')
+        return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Unable to change password'}}, status=500)
 
 
 @api_view(['POST'])
@@ -1635,17 +1750,6 @@ def detect_scam(request: Request) -> Response:
                 review_reason=preliminary_check.review_reason,
             )
             
-            # Now auto-report if needed (we have ref_id now)
-            if preliminary_check.needs_review:
-                review_check = check_confidence_and_report(
-                    bert_result=bert_result,
-                    analysis_ref_id=analysis.ref_id,
-                    user_id=resolved_user_id,
-                    message_preview=message[:200] if message else None
-                )
-            else:
-                review_check = preliminary_check
-
             # Log the analysis entity before saving
             logger.debug(f"[DEBUG] AnalysisResult entity before save: {{'ref_id': {analysis.ref_id}, 'user_id': {analysis.user_id}, 'scam_class': {analysis.scam_class}, 'scam_type': {analysis.scam_type}, 'confidence_bps': {analysis.confidence_bps}, 'is_scam': {analysis.is_scam}, 'analyzer_type': {analysis.analyzer_type}, 'analyzer_version': {analysis.analyzer_version}, 'message_hash': {analysis.message_hash}, 'created_at': {analysis.created_at}}}")
 
@@ -1673,6 +1777,14 @@ def detect_scam(request: Request) -> Response:
             ref_id = None
             needs_review = False
             review_reason = None
+
+        if needs_review and ref_id:
+            check_confidence_and_report(
+                bert_result=bert_result,
+                analysis_ref_id=ref_id,
+                user_id=resolved_user_id,
+                message_preview=message[:200] if message else None
+            )
         
         # Combine results
         combined_result = {
@@ -1825,6 +1937,176 @@ def get_mfa_repository():
     return MFACodeRepository(client, db_name)
 
 
+def _send_email_verification_code(user, ip_address: str = None) -> bool:
+    """Generate, store, and email a 6-digit code to verify user's email address."""
+    from ...domain.services import MFACodeGenerator
+    from ...infrastructure.email_service import get_email_service as _get_email_svc
+
+    user_id = user.user_id if hasattr(user, 'user_id') else user.id
+    code, expires_at = MFACodeGenerator.generate_code_with_expiry(15)
+
+    mfa_repo = get_mfa_repository()
+    stored = mfa_repo.create_mfa_code(
+        user_id=user_id,
+        code=code,
+        expires_at=expires_at,
+        ip_address=ip_address,
+        purpose='email_verification',
+    )
+    if not stored:
+        logger.error(f"[EMAIL_VERIFY] Failed to store verification code for {user.email}")
+        return False
+
+    email_svc = _get_email_svc()
+    return email_svc.send_verification_code_email(user.email, code)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('email_verification')
+def send_email_verification_code(request: Request) -> Response:
+    """
+    Send a 6-digit email verification code (code-based alternative to the
+    link-based `send_verification_email` flow).
+
+    POST /api/auth/verify-email/send-code/
+    Body: {"email": "user@example.com"}
+    """
+    from ...infrastructure.validators import get_email_only_validator as _get_email_only_validator
+
+    try:
+        validator = _get_email_only_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
+        if not is_valid:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors,
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        email = cleaned_data['email']
+        user_repo = get_user_repository()
+        user = user_repo.get_by_email(email)
+
+        # Generic response to avoid confirming whether an account exists
+        if not user:
+            return Response({
+                'message': 'If an account exists for this email, a verification code has been sent.'
+            }, status=status.HTTP_200_OK)
+
+        if getattr(user, 'is_verified', False):
+            return Response({
+                'error': {
+                    'code': 'ALREADY_VERIFIED',
+                    'message': 'This email is already verified. Please log in.',
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        sent = _send_email_verification_code(user, ip_address=_get_client_ip(request))
+        if not sent:
+            return Response({
+                'error': {
+                    'code': 'EMAIL_ERROR',
+                    'message': 'Failed to send verification code. Please try again.',
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        get_audit_logger().log_event(
+            event_type=AuditEventType.EMAIL_VERIFICATION_SENT,
+            email=email,
+            ip_address=_get_client_ip(request),
+        )
+
+        return Response({
+            'message': 'Verification code sent to your email',
+            'expires_in_seconds': 900,
+        }, status=status.HTTP_200_OK)
+
+    except Exception as exc:
+        logger.error(f"[EMAIL_VERIFY_SEND] Unexpected error: {exc}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred',
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit('mfa_verify')
+def verify_email_code(request: Request) -> Response:
+    """
+    Verify a 6-digit email verification code and mark the account as verified.
+
+    POST /api/auth/verify-email/verify-code/
+    Body: {"email": "user@example.com", "code": "123456"}
+    """
+    from ...infrastructure.validators import get_mfa_verify_validator as _get_mfa_verify_validator
+
+    try:
+        validator = _get_mfa_verify_validator()
+        is_valid, errors, cleaned_data = validator.validate(request.data)
+        if not is_valid:
+            return Response({
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Invalid input',
+                    'details': errors,
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        email = cleaned_data['email']
+        code = cleaned_data['code']
+
+        user_repo = get_user_repository()
+        user = user_repo.get_by_email(email)
+        if not user:
+            return Response({
+                'error': {
+                    'code': 'INVALID_CODE',
+                    'message': 'Invalid or expired code',
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if getattr(user, 'is_verified', False):
+            return Response({'message': 'Email already verified'}, status=status.HTTP_200_OK)
+
+        user_id = user.user_id if hasattr(user, 'user_id') else user.id
+        mfa_repo = get_mfa_repository()
+        ok, error_message = mfa_repo.verify_mfa_code(user_id, code, purpose='email_verification')
+        if not ok:
+            return Response({
+                'error': {
+                    'code': 'INVALID_CODE',
+                    'message': error_message,
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        token_repo = get_token_repository()
+        token_repo.update_user_verification(user_id)
+
+        get_audit_logger().log_event(
+            event_type=AuditEventType.EMAIL_VERIFIED,
+            user_id=user_id,
+            email=email,
+            ip_address=_get_client_ip(request),
+        )
+
+        return Response({'message': 'Email verified successfully'}, status=status.HTTP_200_OK)
+
+    except Exception as exc:
+        logger.error(f"[EMAIL_VERIFY_CODE] Unexpected error: {exc}", exc_info=True)
+        return Response({
+            'error': {
+                'code': 'INTERNAL_ERROR',
+                'message': 'An unexpected error occurred',
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @rate_limit('mfa_send')
@@ -1888,13 +2170,15 @@ def send_mfa_code(request: Request) -> Response:
                 }
             }, status=status.HTTP_401_UNAUTHORIZED)
 
-        # --- reject unverified emails ---
+        # --- reject unverified emails, but resend a fresh verification code ---
         if not getattr(user, 'is_verified', False):
+            _send_email_verification_code(user, ip_address=ip)
             return Response({
                 'error': {
                     'code': 'EMAIL_NOT_VERIFIED',
-                    'message': 'Please verify your email address before logging in. Check your inbox for the verification link.',
-                }
+                    'message': 'We sent you a new code since you left without verifying.',
+                },
+                'email': email,
             }, status=status.HTTP_403_FORBIDDEN)
 
         # --- generate & store MFA code ---

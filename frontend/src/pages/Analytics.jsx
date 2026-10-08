@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Analytics.css';
 import { useAuth } from '../context/AuthContext';
-import { getUserSafetySummary, getGlobalSafetySummary } from '../api/analytics';
+import AppNavLinks from '../components/AppNavLinks';
+import { getUserSafetySummary, getGlobalSafetySummary, getUserAiSummary, getUserAiSummaryCached } from '../api/analytics';
+
+const ANALYTICS_CACHE_TTL_MS = 60 * 1000;
+const ANALYTICS_LOAD_ERROR_MESSAGE =
+  'We are having trouble contacting Verif-AI right now. Please refresh the page to try again.';
+let analyticsCache = null;
+
+const ActivityRecharts = lazy(() => import('./ActivityRecharts.jsx'));
+const CommunityLineChart = lazy(() => import('./ActivityRecharts.jsx').then((module) => ({ default: module.CommunityLineChart })));
 
 function BarChart({ items, emptyText, horizontal = false }) {
   if (!items.length) return <p className="journey__empty">{emptyText}</p>;
@@ -41,6 +50,274 @@ function TrendChart({ points, emptyText }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function ActivityEmptyState({ onAnalyze, message = 'Your activity map will appear after your first check.' }) {
+  return (
+    <div className="journey__activity-empty">
+      <p>{message}</p>
+      <button type="button" onClick={onAnalyze}>Analyze a message <span aria-hidden="true">→</span></button>
+    </div>
+  );
+}
+
+function ActivityStatusRow({ activity }) {
+  const recent = activity?.recent_30_days || {};
+  const previous = activity?.previous_30_days || {};
+  const recentChecks = recent.total_checks ?? 0;
+  const previousChecks = previous.total_checks ?? 0;
+  const recentRate = recent.high_risk_rate;
+  const rateChange = recentRate == null || previous.high_risk_rate == null
+    ? null
+    : recentRate - previous.high_risk_rate;
+  const earlySignal = recentChecks > 0 && (recentChecks < 5 || previousChecks < 5);
+  const verdict = recentChecks === 0
+    ? 'No recent checks'
+    : earlySignal
+      ? 'Early signal'
+      : rateChange <= -5
+        ? 'Improving'
+        : rateChange >= 5
+          ? 'Rising'
+          : 'Steady';
+  const direction = rateChange == null ? 'unchanged' : rateChange < 0 ? 'down' : rateChange > 0 ? 'up' : 'unchanged';
+  const daysSinceHighRisk = activity?.days_since_last_high_risk;
+  const daysLabel = daysSinceHighRisk === 0 ? 'Today' : daysSinceHighRisk === 1 ? '1 day ago' : `${daysSinceHighRisk} days ago`;
+  const asOfDate = activity?.as_of_date
+    ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+      .format(new Date(`${activity.as_of_date}T12:00:00`))
+    : 'today';
+
+  return (
+    <div className="journey__activity-kpis" aria-label="Recent activity status">
+      <article className="journey__activity-kpi journey__activity-kpi--rate">
+        <span className="journey__activity-kpi-label">High-risk rate · last 30 days</span>
+        <strong>{recentChecks === 0 ? 'No checks' : recentRate == null ? 'Not available' : <>{recentRate}<small>%</small></>}</strong>
+        <span className="journey__activity-kpi-copy">
+          {recent.high_risk_count ?? 0} of {recentChecks} checks were high-risk
+        </span>
+        <span className={`journey__activity-delta journey__activity-delta--${direction}`}>
+          {recentChecks === 0
+            ? `No checks in the rolling 30-day window ending ${asOfDate}.`
+            : earlySignal
+              ? `Early signal · ${recentChecks} checks vs ${previousChecks} in the prior 30-day window.`
+              : `${Math.abs(rateChange).toFixed(1)} percentage points ${direction} vs the prior 30 days (${recent.high_risk_count}/${recentChecks} vs ${previous.high_risk_count}/${previousChecks}).`}
+        </span>
+      </article>
+      <article className={`journey__activity-kpi journey__activity-kpi--${verdict.toLowerCase().replace(' ', '-')}`}>
+        <span className="journey__activity-kpi-label">Trend verdict</span>
+        <strong>{verdict}</strong>
+        <span className="journey__activity-kpi-copy">
+          {recentChecks === 0
+            ? 'There is not enough recent activity to calculate a rate or trend.'
+            : earlySignal
+              ? `The comparison uses ${recentChecks} recent checks and ${previousChecks} in the prior window; trends need at least five in each.`
+              : 'Compared with the prior rolling 30-day window. Changes of 5 or more percentage points are marked rising or improving.'}
+        </span>
+      </article>
+      <article className="journey__activity-kpi journey__activity-kpi--last-risk">
+        <span className="journey__activity-kpi-label">Since your last high-risk result</span>
+        {daysSinceHighRisk == null ? (
+          <><strong>No high-risk result yet</strong><span className="journey__activity-kpi-copy">{activity?.checks_this_month ?? 0} checks this month</span></>
+        ) : (
+          <><strong>{daysLabel}</strong><span className="journey__activity-kpi-copy">Since your last high-risk result</span></>
+        )}
+      </article>
+    </div>
+  );
+}
+
+function ActivityRiskMix({ activity, totalChecks, onAnalyze }) {
+  const riskMix = activity?.risk_mix || { not_scam: 0, suspicious: 0, high_risk: 0 };
+  const segments = [
+    { key: 'not_scam', label: 'Not scam', color: 'safe' },
+    { key: 'suspicious', label: 'Suspicious', color: 'review' },
+    { key: 'high_risk', label: 'High risk', color: 'high' },
+  ];
+  const total = segments.reduce((sum, segment) => sum + (riskMix[segment.key] || 0), 0);
+
+  return (
+    <section className="journey__risk-mix" aria-labelledby="activity-risk-mix-title">
+      <div className="journey__risk-mix-heading">
+        <div><p className="journey__eyebrow">Your risk mix</p><h3 id="activity-risk-mix-title">What your checks found</h3></div>
+        <span>{totalChecks} total checks</span>
+      </div>
+      {total === 0 ? <ActivityEmptyState onAnalyze={onAnalyze} message="Your risk mix will appear after your first check." /> : (
+        <>
+          <div className="journey__risk-mix-bar" role="img" aria-label={segments.map((segment) => `${segment.label}: ${riskMix[segment.key] || 0} checks`).join(', ')}>
+            {segments.map((segment) => (
+              <span
+                key={segment.key}
+                className={`journey__risk-mix-segment journey__risk-mix-segment--${segment.color}`}
+                style={{ width: `${((riskMix[segment.key] || 0) / total) * 100}%` }}
+              />
+            ))}
+          </div>
+          <div className="journey__risk-mix-legend">
+            {segments.map((segment) => (
+              <span key={segment.key}>
+                <i className={`journey__risk-mix-swatch journey__risk-mix-swatch--${segment.color}`} aria-hidden="true" />
+                <strong>{riskMix[segment.key] || 0}</strong> {segment.label}
+                <span>({total ? Math.round(((riskMix[segment.key] || 0) / total) * 100) : 0}%)</span>
+              </span>
+            ))}
+          </div>
+          <p className="journey__risk-mix-note">
+            High-risk means a scam-flagged check with a score of 70 or higher. Other scam-flagged checks are shown as suspicious.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ActivityChartPanel({ activity, activeView, setActiveView, selectedDay, setSelectedDay, totalChecks, onAnalyze }) {
+  const monthly = activity?.monthly_risk || [];
+  const calendarDays = activity?.calendar_days || [];
+  const weekdays = activity?.weekday_activity || [];
+  const calendarTotal = calendarDays.reduce((sum, day) => sum + day.count, 0);
+  const weekdayTotal = weekdays.reduce((sum, day) => sum + day.total_count, 0);
+  const recent = activity?.recent_30_days || {};
+  const previous = activity?.previous_30_days || {};
+  const smallMonthlySample = (recent.total_checks ?? 0) < 5 || (previous.total_checks ?? 0) < 5;
+  const maxDayCount = Math.max(...calendarDays.map((day) => day.count), 1);
+  const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const busiestDay = calendarDays.reduce((best, day) => day.count > (best?.count || 0) ? day : best, null);
+  const busiestWeekday = weekdays.reduce((best, day) => day.scam_count > (best?.scam_count || 0) ? day : best, null);
+
+  let insight = 'Checks across each active month are split by risk level.';
+  if (activeView === 'monthly') {
+    insight = smallMonthlySample
+      ? 'Early signal: make a few more checks before reading too much into a 30-day change.'
+      : `High-risk checks ${recent.high_risk_count < previous.high_risk_count ? 'fell' : recent.high_risk_count > previous.high_risk_count ? 'rose' : 'held steady'} from ${previous.high_risk_count} to ${recent.high_risk_count} compared with the previous 30 days.`;
+  } else if (activeView === 'calendar') {
+    insight = calendarTotal < 5
+      ? 'Early signal: the calendar needs more checks before a routine becomes visible.'
+      : busiestDay?.count
+        ? `Your busiest day was ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric' }).format(new Date(`${busiestDay.date}T12:00:00`))} with ${busiestDay.count} checks.`
+        : 'No daily activity has been recorded in this period.';
+  } else {
+    const longWeekday = {
+      Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday',
+      Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday',
+    }[busiestWeekday?.weekday];
+    insight = weekdayTotal < 5
+      ? 'Early signal: a few more checks will make weekday patterns easier to compare.'
+      : busiestWeekday?.scam_count
+        ? `Most scam checks reached you on ${longWeekday}: ${busiestWeekday.scam_count} scam-flagged checks out of ${busiestWeekday.total_count} total checks.`
+        : 'No scam checks have been recorded by weekday yet.';
+  }
+
+  return (
+    <section className="journey__activity-chart-panel" aria-label="Activity over time">
+      <div className="journey__activity-chart-head">
+        <div><p className="journey__eyebrow">Your timeline</p><h3>When checks happened</h3></div>
+        {totalChecks < 3 && <span className="journey__early-signal">Early signal</span>}
+      </div>
+      <div className="journey__activity-tabs" role="tablist" aria-label="Activity chart view">
+        {[
+          { key: 'monthly', label: 'Monthly' },
+          { key: 'calendar', label: 'Calendar' },
+          { key: 'weekday', label: 'Weekday' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            id={`activity-tab-${tab.key}`}
+            aria-selected={activeView === tab.key}
+            aria-controls="activity-chart-view"
+            className={activeView === tab.key ? 'is-active' : ''}
+            onClick={() => setActiveView(tab.key)}
+          >{tab.label}</button>
+        ))}
+      </div>
+      <p className="journey__activity-chart-note">
+        {activeView === 'monthly'
+          ? 'Monthly bars split your checks by result; * marks the current, in-progress month.'
+          : activeView === 'weekday'
+            ? 'Bars count scam-flagged checks; compare with the total checks shown for that weekday.'
+            : 'Calendar color shows check volume; a pink outline marks a day with at least one high-risk result.'}
+      </p>
+      <div id="activity-chart-view" className="journey__activity-chart-view" role="tabpanel" aria-labelledby={`activity-tab-${activeView}`}>
+        {totalChecks === 0 && <ActivityEmptyState onAnalyze={onAnalyze} />}
+        {totalChecks > 0 && activeView === 'monthly' && (monthly.length ? (
+          <Suspense fallback={<div className="journey__activity-chart-loading" aria-label="Loading monthly chart" />}>
+            <ActivityRecharts mode="monthly" data={monthly} />
+          </Suspense>
+        ) : <ActivityEmptyState onAnalyze={onAnalyze} message="Monthly activity will appear as you make checks." />)}
+        {totalChecks > 0 && activeView === 'calendar' && (
+          <div className="journey__calendar-wrap">
+            {calendarTotal < 5 && <span className="journey__calendar-early">Early signal · {calendarTotal} checks in this 12-week view</span>}
+            <div className="journey__calendar-months" aria-hidden="true">
+              {calendarDays.filter((_, index) => index % 7 === 0).map((day, index) => (
+                <span key={day.date} style={{ gridColumn: index + 1 }}>{new Intl.DateTimeFormat(undefined, { month: 'short' }).format(new Date(`${day.date}T12:00:00`))}</span>
+              ))}
+            </div>
+            <div className="journey__calendar-layout">
+              <div className="journey__calendar-weekdays" aria-hidden="true">{weekdayNames.map((day) => <span key={day}>{day}</span>)}</div>
+              <div className="journey__calendar-grid" role="group" aria-label="Daily checks for the last 12 weeks">
+                {calendarDays.map((day) => {
+                  const date = new Date(`${day.date}T12:00:00`);
+                  const intensity = day.count === 0 ? 0 : Math.max(1, Math.ceil((day.count / maxDayCount) * 4));
+                  const weekday = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date);
+                  const checkLabel = day.count === 1 ? 'check' : 'checks';
+                  const label = `${weekday}, ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', year: 'numeric' }).format(date)}: ${day.count} ${checkLabel}${day.high_risk_count ? `, ${day.high_risk_count} high risk` : ''}`;
+                  return (
+                    <button
+                      key={day.date}
+                      type="button"
+                      className={`journey__calendar-cell${day.high_risk_count ? ' has-high-risk' : ''}${selectedDay?.date === day.date ? ' is-selected' : ''}`}
+                      data-level={intensity}
+                      title={label}
+                      aria-label={label}
+                      aria-pressed={selectedDay?.date === day.date}
+                      disabled={day.date > new Date().toLocaleDateString('en-CA')}
+                      onClick={() => setSelectedDay(day)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+            <div className="journey__calendar-legend" aria-label="Calendar legend">
+              <span>Fewer checks</span><i data-level="0" /><i data-level="1" /><i data-level="2" /><i data-level="3" /><i data-level="4" /><span>More checks</span><b><i className="has-high-risk" /> High-risk day</b>
+            </div>
+            {selectedDay && (
+              <div className="journey__calendar-detail" aria-live="polite">
+                <strong>{new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(`${selectedDay.date}T12:00:00`))}</strong>
+                {selectedDay.groups?.length ? (
+                  <ul>{selectedDay.groups.map((group) => <li key={group.type}><span>{group.type}</span><strong>{group.count} {group.count === 1 ? 'check' : 'checks'}</strong></li>)}</ul>
+                ) : <p>No checks recorded on this day.</p>}
+              </div>
+            )}
+          </div>
+        )}
+        {totalChecks > 0 && activeView === 'weekday' && (
+          weekdays.some((day) => day.scam_count > 0)
+            ? <Suspense fallback={<div className="journey__activity-chart-loading" aria-label="Loading weekday chart" />}><ActivityRecharts mode="weekday" data={weekdays} /></Suspense>
+            : <ActivityEmptyState onAnalyze={onAnalyze} message="No scam-check activity has been recorded by weekday." />
+        )}
+      </div>
+      <p className="journey__activity-insight" aria-live="polite"><span aria-hidden="true">↳</span>{insight}</p>
+    </section>
+  );
+}
+
+function PatternSparkline({ points, type }) {
+  const values = points.map((point) => point.count);
+  const maxValue = Math.max(...values, 1);
+  const coordinates = values.map((value, index) => ({
+    x: values.length > 1 ? (index / (values.length - 1)) * 100 : 50,
+    y: 30 - (value / maxValue) * 24,
+  }));
+  const path = coordinates.map((point, index) => `${index ? 'L' : 'M'}${point.x},${point.y}`).join(' ');
+
+  return (
+    <svg className="journey__pattern-sparkline" viewBox="0 0 100 34" role="img" aria-label={`${type} scam checks over the last six months`}>
+      <path d={path} />
+      {coordinates.length > 0 && <circle cx={coordinates[coordinates.length - 1].x} cy={coordinates[coordinates.length - 1].y} r="2.5" />}
+    </svg>
   );
 }
 
@@ -164,11 +441,11 @@ function Reveal({ children, className = '', delay = 0 }) {
   );
 }
 
-function FocusScene({ children, recap, label, direction = 'from-right' }) {
+function FocusScene({ children, recap, label, direction = 'from-right', className = '' }) {
   return (
-    <section className={`journey__focus-scene ${direction}`} aria-label={label}>
+    <section className={`journey__focus-scene ${direction} ${className}`} aria-label={label}>
       <div className="journey__focus-detail">{children}</div>
-      <div className="journey__focus-recap">{recap}</div>
+      {recap && <div className="journey__focus-recap">{recap}</div>}
     </section>
   );
 }
@@ -178,6 +455,164 @@ function formatSubmissionDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Date unavailable';
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+}
+
+function formatUpdatedAt(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const isToday = date.toDateString() === new Date().toDateString();
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
+  return isToday ? `Updated today at ${time}` : `Updated ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
+}
+
+function formatNextGenerationAt(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `Another summary will be available after ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}.`;
+}
+
+function formatSummaryMonthYear(value) {
+  if (!value) return 'this month';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'this month';
+  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date);
+}
+
+function formatSummaryGeneratedDate(value) {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function AIInsightSection({ insight, loading, error, onRequest }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!insight && !loading) {
+    return (
+      <section className="journey__ai-insight journey__ai-insight--prompt" aria-labelledby="ai-insight-title">
+        <div className="journey__ai-insight-icon" aria-hidden="true">✨</div>
+        <div className="journey__ai-insight-body">
+          <h2 id="ai-insight-title">Want this explained simply?</h2>
+          <p>We can turn your safety summary into a short, plain-language explanation.</p>
+          {error && <p className="journey__ai-insight-error">{error}</p>}
+          <button type="button" className="journey__ai-insight-button" onClick={onRequest}>
+            Explain my summary in plain language
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (loading) {
+    return (
+      <section className="journey__ai-insight" aria-live="polite">
+        <div className="journey__ai-insight-icon" aria-hidden="true">✨</div>
+        <div className="journey__ai-insight-body">
+          <p className="journey__ai-insight--loading">Putting your summary into plain words...</p>
+        </div>
+      </section>
+    );
+  }
+
+  const riskTag = insight.risk_tag || 'low';
+  const nextGenerationAt = insight.next_generation_at ? new Date(insight.next_generation_at) : null;
+  const canRequestAnother = !nextGenerationAt || Number.isNaN(nextGenerationAt.getTime()) || nextGenerationAt <= new Date();
+  const sections = [
+    { key: 'current_status', title: 'Where you stand right now', items: insight.current_status },
+    { key: 'your_journey', title: 'Your journey so far', items: insight.your_journey },
+    { key: 'community_trends', title: "What's happening around you", items: insight.community_trends },
+  ];
+
+  return (
+    <section className="journey__ai-insight" aria-labelledby="ai-insight-title">
+      <div className="journey__ai-insight-icon" aria-hidden="true">✨</div>
+      <div className="journey__ai-insight-body">
+        <div className="journey__ai-insight-kicker">
+          <span>Your summary for {formatSummaryMonthYear(insight.generated_at)}</span>
+          <span className={`journey__ai-insight-tag journey__ai-insight-tag--${riskTag}`}>{riskTag} risk</span>
+        </div>
+        <div className="journey__ai-insight-head">
+          <h2 id="ai-insight-title">{insight.headline || 'Your safety at a glance'}</h2>
+          <button
+            type="button"
+            className="journey__ai-insight-toggle"
+            onClick={() => setIsExpanded((expanded) => !expanded)}
+            aria-expanded={isExpanded}
+            aria-controls="ai-insight-details"
+          >
+            {isExpanded ? 'Hide summary' : 'Show summary'}
+          </button>
+          <button
+            type="button"
+            className="journey__ai-insight-button journey__ai-insight-button--secondary"
+            onClick={onRequest}
+            disabled={!canRequestAnother || loading}
+          >
+            {canRequestAnother ? 'Request new summary' : 'Monthly refresh used'}
+          </button>
+        </div>
+
+        <div
+          id="ai-insight-details"
+          className={`journey__ai-insight-details${isExpanded ? ' journey__ai-insight-details--expanded' : ''}`}
+          aria-hidden={!isExpanded}
+        >
+          <div className="journey__ai-insight-details-inner">
+            <p className="journey__ai-insight-generated">Summary generated on {formatSummaryGeneratedDate(insight.generated_at)}.</p>
+            {sections.map((section, sectionIndex) => (
+              (section.items || []).length > 0 && (
+                <article className="journey__ai-insight-section" key={section.key}>
+                  <div className="journey__ai-insight-section-heading">
+                    <span className="journey__ai-insight-section-number">0{sectionIndex + 1}</span>
+                    <p className="journey__ai-insight-section-title">{section.title}</p>
+                  </div>
+                  <div className="journey__ai-insight-copy">
+                    {section.items.map((line, index) => <p key={index}>{line}</p>)}
+                  </div>
+                </article>
+              )
+            ))}
+
+            {(insight.watch_list || []).length > 0 && (
+              <article className="journey__ai-insight-section journey__ai-insight-section--watch">
+                <div className="journey__ai-insight-section-heading">
+                  <span className="journey__ai-insight-section-number">0{sections.length + 1}</span>
+                  <p className="journey__ai-insight-section-title">What to watch out for</p>
+                </div>
+                <ul className="journey__ai-insight-watchlist">
+                  {insight.watch_list.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            )}
+
+            {insight.tip && (
+              <aside className="journey__ai-insight-tip">
+                <span className="journey__ai-insight-tip-mark" aria-hidden="true">→</span>
+                <p><strong>One useful next step</strong>{insight.tip}</p>
+              </aside>
+            )}
+            {insight.generated_at && (
+              <p className="journey__ai-insight-meta">{formatUpdatedAt(insight.generated_at)}</p>
+            )}
+            {!canRequestAnother && (
+              <p className="journey__ai-insight-meta">{formatNextGenerationAt(insight.next_generation_at)}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function dedupeRecentSubmissions(submissions = []) {
@@ -258,7 +693,8 @@ function buildTypeInsights(personal) {
   });
 }
 
-function PatternInsightCarousel({ items, activeIndex, setActiveIndex }) {
+function PatternInsightCarousel({ items, activeIndex, setActiveIndex, onAskGuidance }) {
+  const touchStartX = useRef(null);
   if (!items.length) return null;
 
   const item = items[activeIndex];
@@ -266,24 +702,47 @@ function PatternInsightCarousel({ items, activeIndex, setActiveIndex }) {
   const showNext = () => setActiveIndex((current) => (current + 1) % items.length);
 
   return (
-    <div className="journey__pattern-carousel" aria-live="polite">
+    <div
+      className="journey__pattern-carousel"
+      aria-live="polite"
+      onTouchStart={(event) => { touchStartX.current = event.changedTouches[0]?.clientX ?? null; }}
+      onTouchEnd={(event) => {
+        if (touchStartX.current === null) return;
+        const distance = event.changedTouches[0]?.clientX - touchStartX.current;
+        if (Math.abs(distance) > 45) setActiveIndex((current) => (current + (distance < 0 ? 1 : items.length - 1)) % items.length);
+        touchStartX.current = null;
+      }}
+    >
       <div className="journey__pattern-carousel-nav">
-        <span className="journey__eyebrow">Pattern details</span>
+        <span className="journey__eyebrow">Selected pattern</span>
         <span className="journey__pattern-carousel-count">{activeIndex + 1} / {items.length}</span>
       </div>
       <article className="journey__insight journey__insight--active">
         <div className="journey__insight-header">
           <strong>{item.type}</strong>
-          <span className="journey__insight-score">{item.avgScore !== null ? `${item.avgScore}% risk` : `${item.count} checks`}</span>
+          <span className={`journey__trend-chip journey__trend-chip--${item.trend_direction}`}>
+            {item.trend_direction === 'increasing' ? '↑ Rising' : item.trend_direction === 'decreasing' ? '↓ Easing' : '→ Steady'}
+          </span>
         </div>
-        <p><b>{item.count} checks</b> · {item.share}% of your scam checks · {item.high_risk_rate ?? item.avgScore ?? 0}% high risk.</p>
+        <div className="journey__pattern-stat-tiles">
+          <div><span>Share of scam checks</span><strong>{item.share}%</strong></div>
+          <div><span>Average scam score</span><strong>{item.avgScore === null ? '—' : `${item.avgScore}%`}</strong></div>
+          <div><span>High-risk rate</span><strong>{item.high_risk_rate ?? 0}%</strong></div>
+          <div><span>Type confidence</span><strong>{item.average_type_confidence == null ? '—' : `${item.average_type_confidence}%`}</strong></div>
+        </div>
         <p>{item.description}</p>
         <p className="journey__insight-attack">{item.attackText}</p>
-        <div className="journey__insight-meta">
-          <span>{item.trendText}</span>
-          {item.sample_note && <span>{item.sample_note}</span>}
+        <div className="journey__red-flags">
+          <span className="journey__red-flags-label">Common red flags</span>
+          {item.common_red_flags?.length ? item.common_red_flags.map(({ marker, count }) => (
+            <span className="journey__red-flag" key={marker}>{marker}<small>{count}</small></span>
+          )) : <span className="journey__red-flags-empty">No repeated flags recorded yet.</span>}
         </div>
         <p className="journey__insight-action"><strong>Safest next step:</strong> {item.recommendation}</p>
+        {item.sample_note && <p className="journey__pattern-sample-note">{item.sample_note}</p>}
+        <button className="journey__guidance-button" type="button" onClick={() => onAskGuidance(item.type)}>
+          Ask Guidance about this <span aria-hidden="true">→</span>
+        </button>
       </article>
       <div className="journey__pattern-carousel-controls">
         <button type="button" onClick={showPrevious} aria-label="Show previous pattern">←</button>
@@ -306,22 +765,64 @@ function PatternInsightCarousel({ items, activeIndex, setActiveIndex }) {
   );
 }
 
-function PatternSignalBoard({ items }) {
+function PatternHero({ item, totalChecks, totalScamChecks, onAskGuidance }) {
+  if (!item) return null;
+
+  const trendLabel = item.sample_note
+    ? 'Early signal'
+    : item.trend_direction === 'increasing'
+      ? 'Rising'
+      : item.trend_direction === 'decreasing'
+        ? 'Easing'
+        : 'Steady';
+  return (
+    <article className="journey__check-hero">
+      <div className="journey__check-hero-main">
+        <p className="journey__eyebrow">Your strongest pattern</p>
+        <h3>{item.type}</h3>
+        <p>{item.description}</p>
+        <div className="journey__check-hero-stats">
+          <span><strong>{item.count} of {totalScamChecks}</strong> scam checks</span>
+          <span><strong>{item.share}%</strong> of scam checks</span>
+          <span className={`journey__trend-chip journey__trend-chip--${item.trend_direction}`}>{trendLabel}</span>
+        </div>
+        {totalChecks < 3 && <span className="journey__early-signal">Early signal</span>}
+        <button className="journey__guidance-button" type="button" onClick={() => onAskGuidance(item.type)}>
+          Ask Guidance about this <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <div className="journey__check-hero-chart">
+        <span>Last 6 months</span>
+        <PatternSparkline points={item.monthly_counts || []} type={item.type} />
+        <div className="journey__sparkline-months">
+          {(item.monthly_counts || []).map((point) => <span key={point.month}>{point.label}</span>)}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function PatternSignalBoard({ items, totalScamChecks, onAskGuidance, onAnalyze }) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const activeItem = items[activeIndex];
-  const totalScamChecks = items.reduce((sum, item) => sum + item.count, 0);
 
   useEffect(() => {
     setActiveIndex((current) => Math.min(current, Math.max(items.length - 1, 0)));
   }, [items.length]);
 
-  if (!items.length) return <p className="journey__empty">Your scam patterns will appear here after you check messages.</p>;
+  if (!items.length) {
+    return (
+      <div className="journey__signal-empty">
+        <p>No scam patterns have appeared in your checks yet.</p>
+        <button className="journey__guidance-button" type="button" onClick={onAnalyze}>Analyze a message <span aria-hidden="true">→</span></button>
+      </div>
+    );
+  }
 
   return (
     <div className="journey__signal-board">
       <div className="journey__signal-list" aria-label="Your scam pattern ranking">
         <div className="journey__signal-list-heading">
-          <div><p className="journey__eyebrow">Pattern mix</p><strong>{totalScamChecks} scam checks</strong></div>
+          <div><p className="journey__eyebrow">Pattern mix</p><strong>Top 3 by frequency</strong></div>
           <span>Ranked by frequency</span>
         </div>
         {items.map((item, index) => (
@@ -335,66 +836,100 @@ function PatternSignalBoard({ items }) {
             <span className="journey__signal-rank">0{index + 1}</span>
             <span className="journey__signal-copy">
               <strong>{item.type}</strong>
-              <span>{item.count} {item.count === 1 ? 'check' : 'checks'} · {item.share}%</span>
+              <span>{item.count} of {totalScamChecks} scam checks · {item.share}% · {item.recent_count ?? 0} recent / {item.previous_count ?? 0} prior</span>
             </span>
             <span className="journey__signal-meter"><span style={{ width: `${Math.max((item.count / items[0].count) * 100, 8)}%` }} /></span>
-            <span className="journey__signal-status">{item.trend_direction === 'increasing' ? 'Rising' : item.trend_direction === 'decreasing' ? 'Easing' : 'Steady'}</span>
+            <span className={`journey__signal-status journey__signal-status--${item.trend_direction}`}>
+              {item.sample_note ? 'Early signal' : (
+                <>
+                  <span aria-hidden="true">{item.trend_direction === 'increasing' ? '↑' : item.trend_direction === 'decreasing' ? '↓' : '→'}</span>{' '}
+                  {item.trend_direction === 'increasing' ? 'Rising' : item.trend_direction === 'decreasing' ? 'Easing' : 'Steady'}
+                </>
+              )}
+            </span>
           </button>
         ))}
       </div>
-      <PatternInsightCarousel items={items} activeIndex={activeIndex} setActiveIndex={setActiveIndex} />
-      <div className="journey__signal-callout">
-        <span className="journey__eyebrow">What this tells you</span>
-        <p><strong>{activeItem.type}</strong> is the pattern appearing most often in your scam checks. Focus on its warning signs before moving to the next message.</p>
-      </div>
+      <PatternInsightCarousel items={items} activeIndex={activeIndex} setActiveIndex={setActiveIndex} onAskGuidance={onAskGuidance} />
     </div>
   );
 }
 
-function AdviceCarousel({ community }) {
+function AdviceCarousel({ community, personal, onAskGuidance }) {
   const [slide, setSlide] = useState(0);
-  const leadingType = community?.top_types?.[0]?.type;
-  const guidance = getGuidance(leadingType);
-  const hasTrend = Boolean(community?.trend_insight || community?.seasonal_insight || leadingType);
-  const trendText = community?.trend_insight || (leadingType
-      ? `${leadingType} is the most common scam pattern in recent checks.`
-    : 'New community scam patterns will appear here as more checks are made.');
-  const seasonalText = community?.seasonal_insight;
+  const [isPaused, setIsPaused] = useState(false);
+  const risingPattern = community?.community_analytics?.rising_scams?.[0];
+  const risingType = risingPattern
+    && (risingPattern.is_new || (risingPattern.change_percent ?? 0) > 0)
+    ? risingPattern.type
+    : null;
+  const userType = personal?.top_types?.[0]?.type;
+  const cards = [
+    ...(risingType ? [{
+      title: risingPattern.is_new ? `${risingType} is newly visible` : `${risingType} is rising`,
+      body: risingPattern.is_new
+        ? `${risingPattern.current_count} scam-flagged checks so far this month; none in the same dates last month. ${getGuidance(risingType).advice}`
+        : `${risingPattern.change_percent}% more scam-flagged checks so far this month than in the same dates last month (${risingPattern.current_count} vs ${risingPattern.previous_count}). ${getGuidance(risingType).advice}`,
+      category: risingType,
+      tag: 'Community alert',
+    }] : []),
+    ...(userType && userType !== risingType ? [{
+      title: `Check ${userType} independently`,
+      body: getGuidance(userType).advice,
+      category: userType,
+      tag: 'Your top pattern',
+    }] : []),
+    ...(community?.seasonal_insight ? [{
+      title: 'Seasonal reminder',
+      body: community.seasonal_insight,
+      category: null,
+      tag: 'Seasonal',
+    }] : []),
+    {
+      title: 'Pause before you respond',
+      body: 'Avoid links and contact details inside unexpected messages. Open the official app or website yourself to verify the request.',
+      category: null,
+      tag: 'General safety',
+    },
+  ];
 
   useEffect(() => {
-    if (!hasTrend) return undefined;
-    const timer = window.setInterval(() => setSlide((current) => (current + 1) % 2), 6500);
+    if (isPaused || cards.length < 2) return undefined;
+    const timer = window.setInterval(() => setSlide((current) => (current + 1) % cards.length), 8000);
     return () => window.clearInterval(timer);
-  }, [hasTrend]);
+  }, [cards.length, isPaused]);
 
-  const showNext = () => setSlide((current) => (current + 1) % 2);
-  const showPrevious = () => setSlide((current) => (current + 2 - 1) % 2);
+  useEffect(() => setSlide((current) => Math.min(current, cards.length - 1)), [cards.length]);
+
+  const showNext = () => setSlide((current) => (current + 1) % cards.length);
+  const showPrevious = () => setSlide((current) => (current + cards.length - 1) % cards.length);
+  const activeCard = cards[slide];
 
   return (
-    <div className="journey__advice" aria-live="polite">
+    <div
+      className="journey__advice"
+      aria-live="polite"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
+    >
       <div className="journey__advice-topline">
-        <span className="journey__eyebrow">What to watch for</span>
-        <span className="journey__advice-count">{slide + 1} / 2</span>
+        <span className="journey__eyebrow">Community advice</span>
+        <span className="journey__advice-count">{slide + 1} / {cards.length}</span>
       </div>
       <div className="journey__advice-body">
-        {slide === 0 ? (
-          <>
-            <h3>{leadingType ? `${leadingType} needs extra attention` : 'A pattern worth watching'}</h3>
-            <p>{trendText}</p>
-            {seasonalText && <p className="journey__advice-season">{seasonalText}</p>}
-          </>
-        ) : (
-          <>
-            <h3>What they may try</h3>
-              <p>{guidance.attackVector}</p>
-            <p className="journey__advice-next"><strong>Your safest next step:</strong> {guidance.advice}</p>
-          </>
-        )}
+        <span className="journey__advice-tag">{activeCard.tag}</span>
+        <h3>{activeCard.title}</h3>
+        <p>{activeCard.body}</p>
+        <button type="button" className="journey__advice-guidance" onClick={() => onAskGuidance(activeCard.category)}>
+          Ask Guidance <span aria-hidden="true">→</span>
+        </button>
       </div>
       <div className="journey__advice-controls">
         <button type="button" onClick={showPrevious} aria-label="Show previous advice">←</button>
         <div className="journey__advice-dots" aria-label="Advice slides">
-          {[0, 1].map((index) => <button key={index} className={slide === index ? 'is-active' : ''} type="button" onClick={() => setSlide(index)} aria-label={`Show advice ${index + 1}`} />)}
+          {cards.map((card, index) => <button key={`${card.tag}-${card.title}`} className={slide === index ? 'is-active' : ''} type="button" onClick={() => setSlide(index)} aria-label={`Show advice ${index + 1}: ${card.tag}`} />)}
         </div>
         <button type="button" onClick={showNext} aria-label="Show next advice">→</button>
       </div>
@@ -402,13 +937,276 @@ function AdviceCarousel({ community }) {
   );
 }
 
+function CommunityShareComparison({ personal, community }) {
+  const userTypes = personal?.type_insights || personal?.top_types || [];
+  const analytics = community?.community_analytics;
+  const communityTypes = analytics?.category_monthly_series || analytics?.top_types_all_time || [];
+  const userByType = new Map(userTypes.map((item) => [item.type, item]));
+  const communityByType = new Map(communityTypes.map((item) => [item.type, item]));
+  const categories = [...new Set([...communityTypes, ...userTypes].map((item) => item.type))]
+    .sort((a, b) => (communityByType.get(b)?.share || 0) - (communityByType.get(a)?.share || 0))
+    .slice(0, 5);
+  const rows = categories.map((type) => ({
+    type,
+    user: userByType.get(type) || null,
+    community: communityByType.get(type) || null,
+  }));
+  const leadingComparison = rows
+    .filter((row) => row.community?.share > 0 && row.user?.share > row.community.share)
+    .sort((a, b) => b.user.share / b.community.share - a.user.share / a.community.share)[0];
+  const insight = leadingComparison
+    ? `Your share of ${leadingComparison.type} checks is ${(leadingComparison.user.share / leadingComparison.community.share).toFixed(1)}× the community share.`
+    : rows.some((row) => row.community !== null)
+      ? 'Your pattern mix is broadly in line with the visible community trends.'
+      : 'Not enough community data to compare patterns yet.';
+  const userTotal = personal?.total_scam_checks ?? 0;
+  const communityTotal = analytics?.total_scam_checks ?? 0;
+
+  return (
+    <section className="journey__community-compare-chart" aria-labelledby="community-compare-title">
+      <div className="journey__community-card-heading">
+        <div><p className="journey__eyebrow">You vs community</p><h3 id="community-compare-title">Share of scam checks</h3></div>
+        <span>All-time · top 5</span>
+      </div>
+      <p className="journey__community-data-note">
+        Shares use scam-flagged checks as the denominator. Community categories are only shown when at least {analytics?.minimum_users ?? 5} users have contributed.
+      </p>
+      {rows.length ? (
+        <div className="journey__compare-bars" role="img" aria-label="Your share compared with the community for the top scam categories">
+          <div className="journey__compare-axis" aria-hidden="true"><span>Category</span><div><i>0%</i><i>25%</i><i>50%</i><i>75%</i><i>100%</i></div></div>
+          {rows.map((row) => (
+            <div className="journey__compare-category" key={row.type}>
+              <strong title={row.type}>{row.type}</strong>
+              <div className="journey__compare-pair">
+                <div className="journey__compare-track" aria-label={`You: ${row.user ? `${row.user.count} of ${userTotal} scam checks` : 'not in your top patterns'}`}>
+                  {row.user && <span className="journey__compare-fill journey__compare-fill--you" style={{ width: `${row.user.share}%` }} />}
+                </div>
+                <b title={row.user ? `${row.user.count} of ${userTotal} scam-flagged checks` : 'Not in your top patterns'}>
+                  {row.user ? `${row.user.share}% · ${row.user.count}/${userTotal}` : 'Not ranked'}
+                </b>
+                <div className="journey__compare-track" aria-label={`Community: ${row.community ? `${row.community.count} of ${communityTotal} scam checks from ${row.community.distinct_users} users` : 'hidden by privacy threshold'}`}>
+                  {row.community && <span className="journey__compare-fill journey__compare-fill--community" style={{ width: `${row.community.share}%` }} />}
+                </div>
+                <b title={row.community ? `${row.community.count} of ${communityTotal} scam-flagged checks from ${row.community.distinct_users} users` : 'Hidden because fewer than the minimum number of users contributed'}>
+                  {row.community ? `${row.community.share}% · ${row.community.count}/${communityTotal}` : 'Hidden'}
+                </b>
+              </div>
+            </div>
+          ))}
+          <div className="journey__compare-legend"><span><i className="is-you" /> You</span><span><i className="is-community" /> Community</span></div>
+        </div>
+      ) : <p className="journey__community-empty">Not enough data to compare patterns yet.</p>}
+      <p className="journey__community-insight">{insight}</p>
+    </section>
+  );
+}
+
+function CommunityCategoryChart({ community, onAskGuidance }) {
+  const [range, setRange] = useState('all_time');
+  const items = range === 'this_month'
+    ? community?.community_analytics?.top_types_this_month || []
+    : community?.community_analytics?.top_types_all_time || [];
+  const maxShare = Math.max(...items.map((item) => item.share), 1);
+
+  return (
+    <section className="journey__community-card" aria-labelledby="community-category-title">
+      <div className="journey__community-card-heading">
+        <div><p className="journey__eyebrow">Ranked categories</p><h3 id="community-category-title">Community scam patterns</h3></div>
+        <div className="journey__segmented-control" aria-label="Community category period">
+          <button type="button" className={range === 'this_month' ? 'is-active' : ''} aria-pressed={range === 'this_month'} onClick={() => setRange('this_month')}>This month</button>
+          <button type="button" className={range === 'all_time' ? 'is-active' : ''} aria-pressed={range === 'all_time'} onClick={() => setRange('all_time')}>All time</button>
+        </div>
+      </div>
+      {items.length ? (
+        <div className="journey__community-rankings" role="list" aria-label={`${range === 'all_time' ? 'All time' : 'This month'} community scam category shares`}>
+          {items.map((item, index) => (
+            <div className="journey__community-rank-row" key={item.type} role="listitem">
+              <span className="journey__community-rank">0{index + 1}</span>
+              <div className="journey__community-rank-copy">
+                <button type="button" className="journey__community-rank-type" onClick={() => onAskGuidance(item.type)}>{item.type}<span aria-hidden="true">↗</span></button>
+                <small>{item.count} checks · {item.distinct_users} users</small>
+              </div>
+              <div className="journey__community-rank-track" aria-label={`${item.share}% of community scam checks`}><span style={{ width: `${(item.share / maxShare) * 100}%` }} /></div>
+              <strong>{item.share}%</strong>
+            </div>
+          ))}
+        </div>
+      ) : <p className="journey__community-empty">Not enough data to show this period.</p>}
+      {range === 'this_month' && <p className="journey__community-data-note">This month is still in progress; compare these totals with that in mind.</p>}
+    </section>
+  );
+}
+
+function CommunityTrendChart({ community, personal }) {
+  const [selectedCategoryState, setSelectedCategory] = useState('');
+  const analytics = community?.community_analytics;
+  const personalTypes = personal?.type_insights || [];
+  const communityTypes = analytics?.category_monthly_series || analytics?.top_types_all_time || [];
+  const categories = [...new Set([
+    ...personalTypes.slice(0, 5).map((item) => item.type),
+    ...communityTypes.map((item) => item.type),
+  ])];
+  const selectedCategory = selectedCategoryState || analytics?.top_types_all_time?.[0]?.type || personalTypes[0]?.type || communityTypes[0]?.type || '';
+  const personalType = personalTypes.find((item) => item.type === selectedCategory);
+  const communityType = communityTypes.find((item) => item.type === selectedCategory);
+  const personalCategoryMonths = new Map((personalType?.monthly_counts || []).map((item) => [item.month, item]));
+  const personalActivityMonths = new Map((personal?.activity?.monthly_risk || []).map((item) => [item.month, item]));
+  const communityCategoryMonths = new Map((communityType?.monthly_counts || []).map((item) => [item.month, item]));
+  const communityTotals = new Map((analytics?.monthly_confirmed_scams || []).map((item) => [item.month, item]));
+  const monthPoints = (communityType?.monthly_counts || personalType?.monthly_counts || []).slice(-6);
+  const comparisonPoints = monthPoints.map((month) => {
+    const personalMonth = personalActivityMonths.get(month.month);
+    const personalScamTotal = personalMonth ? personalMonth.suspicious + personalMonth.high_risk : 0;
+    const personalCategoryCount = personalCategoryMonths.get(month.month)?.count ?? 0;
+    const communityMonth = communityCategoryMonths.get(month.month);
+    const communityTotal = communityTotals.get(month.month);
+
+    return {
+      ...month,
+      user_share: personalType && personalScamTotal > 0 ? (personalCategoryCount / personalScamTotal) * 100 : null,
+      community_share: communityMonth?.count != null && communityTotal?.count > 0
+        ? (communityMonth.count / communityTotal.count) * 100
+        : null,
+    };
+  });
+  const hasVisiblePoints = comparisonPoints.some((point) => point.user_share !== null || point.community_share !== null);
+
+  return (
+    <section className="journey__community-card" aria-labelledby="community-trend-title">
+      <div className="journey__community-card-heading">
+        <div><p className="journey__eyebrow">You vs community</p><h3 id="community-trend-title">Pattern prominence over time</h3></div>
+        <label className="journey__community-filter">Category
+          <select value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
+            {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select>
+        </label>
+      </div>
+      <p className="journey__community-data-note">
+        Each point is this pattern&apos;s share of scam-flagged checks for that month. Community points with fewer than {analytics?.minimum_users ?? 5} distinct users are hidden.
+      </p>
+      {hasVisiblePoints ? (
+        <Suspense fallback={<div className="journey__community-chart-loading" aria-label="Loading You versus Community chart" />}>
+          <CommunityLineChart data={comparisonPoints} category={selectedCategory} />
+        </Suspense>
+      ) : <p className="journey__community-empty">Not enough history to compare this pattern yet. Community months with fewer than five distinct users remain hidden.</p>}
+      <div className="journey__community-line-legend" aria-label="Chart series">
+        <span><i className="journey__community-line-legend-you" /> You</span>
+        <span><i className="journey__community-line-legend-community" /> Community</span>
+      </div>
+    </section>
+  );
+}
+
+function CommunitySection({ community, personal, onAskGuidance, onAnalyze }) {
+  const analytics = community?.community_analytics;
+  const risingScams = analytics?.rising_scams || [];
+
+  return (
+    <section className="journey__community">
+      <div className="journey__section-heading">
+        <div><p className="journey__eyebrow">03 / Everyone using Verif-AI</p><h2>What is happening around you?</h2><p>Community patterns help put your checks in context.</p></div>
+        <div className="journey__section-header-right">
+          <span className="journey__community-rate">
+            {community?.total_checks
+              ? `${community.scam_rate}% flagged · ${community.total_checks} checks`
+              : 'No community checks yet'}
+          </span>
+          <span className="journey__section-number">03</span>
+        </div>
+      </div>
+      <div className="journey__community-overview">
+        <p className="journey__community-summary">{community?.summary || 'Community trends are still being collected.'}</p>
+        <span className="journey__community-users">Based on {analytics?.distinct_users ?? 0} users&apos; checks</span>
+        {analytics?.has_demo_data && <span className="journey__community-demo-badge">Presentation demo data included</span>}
+      </div>
+      <CommunityShareComparison personal={personal} community={community} />
+      <section className="journey__rising-section" aria-labelledby="rising-scams-title">
+        <div className="journey__community-card-heading"><div><p className="journey__eyebrow">Month-to-date vs same dates last month</p><h3 id="rising-scams-title">Biggest pattern changes</h3></div><span>Top 5</span></div>
+        {risingScams.length ? (
+          <ol className="journey__rising-list">
+            {risingScams.map((item, index) => (
+              <li key={item.type}>
+                <span className="journey__community-rank">0{index + 1}</span>
+                <strong>{item.type}</strong>
+                <span className={`journey__rising-change${item.is_new ? ' is-new' : item.change_percent < 0 ? ' is-down' : ''}`}>
+                  {item.is_new
+                    ? `New · ${item.current_count} checks`
+                    : `${item.change_percent > 0 ? '↑ ' : item.change_percent < 0 ? '↓ ' : ''}${Math.abs(item.change_percent)}% · ${item.current_count} vs ${item.previous_count} checks`}
+                </span>
+                <CommunitySparkline points={item.monthly_counts} type={item.type} />
+                <button type="button" onClick={() => onAskGuidance(item.type)}>Learn more <span aria-hidden="true">→</span></button>
+              </li>
+            ))}
+          </ol>
+        ) : <p className="journey__community-empty">Not enough data for a month-over-month community signal yet.</p>}
+      </section>
+      <AdviceCarousel community={community} personal={personal} onAskGuidance={onAskGuidance} />
+      <div className="journey__community-grid">
+        <CommunityCategoryChart community={community} onAskGuidance={onAskGuidance} />
+        <CommunityTrendChart community={community} personal={personal} />
+      </div>
+      <p className="journey__community-privacy">
+        Community data is anonymized and aggregated. Month-to-date movement is compared with the same calendar dates last month; categories and month buckets with fewer than {analytics?.minimum_users ?? 5} distinct users are hidden.
+      </p>
+      {!community?.total_checks && <button className="journey__community-analyze" type="button" onClick={onAnalyze}>Analyze a message <span aria-hidden="true">→</span></button>}
+    </section>
+  );
+}
+
+function CommunitySparkline({ points = [], type }) {
+  const validPoints = points.map((point) => point.count == null ? null : point.count);
+  const maxCount = Math.max(...validPoints.filter((value) => value !== null), 1);
+  const path = validPoints.map((value, index) => {
+    if (value === null) return '';
+    const x = validPoints.length > 1 ? (index / (validPoints.length - 1)) * 100 : 50;
+    const y = 28 - (value / maxCount) * 22;
+    return `${index === 0 || validPoints[index - 1] === null ? 'M' : 'L'}${x},${y}`;
+  }).filter(Boolean).join(' ');
+
+  return path
+    ? <svg className="journey__community-sparkline" viewBox="0 0 100 32" role="img" aria-label={`${type} monthly trend`}><path d={path} /></svg>
+    : <span className="journey__rising-no-data">Not enough data</span>;
+}
+
 export default function Analytics() {
   const navigate = useNavigate();
-  const { isLoggedIn, isAdmin } = useAuth();
+  const { user, isLoggedIn, isAdmin, logout } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [personal, setPersonal] = useState(null);
   const [community, setCommunity] = useState(null);
+  const [activityView, setActivityView] = useState('monthly');
+  const [selectedActivityDay, setSelectedActivityDay] = useState(null);
+  const [aiInsight, setAiInsight] = useState(null);
+  const [aiInsightLoading, setAiInsightLoading] = useState(false);
+  const [aiInsightError, setAiInsightError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const checkPatterns = buildTypeInsights(personal).slice(0, 3);
+
+  const askGuidance = (category) => {
+    navigate('/chatbot', { state: { guidanceCategory: category } });
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setShowUserMenu(false);
+    navigate('/');
+  };
+
+  const requestAiInsight = () => {
+    setAiInsightLoading(true);
+    setAiInsightError('');
+    getUserAiSummary()
+      .then((response) => {
+        if (response?.data?.success) {
+          setAiInsight(response.data.data);
+        } else {
+          setAiInsightError('We could not build your summary. Please try again.');
+        }
+      })
+      .catch(() => setAiInsightError('We could not build your summary. Please try again.'))
+      .finally(() => setAiInsightLoading(false));
+  };
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -416,30 +1214,90 @@ export default function Analytics() {
       return;
     }
 
-    Promise.all([getUserSafetySummary(), getGlobalSafetySummary()])
+    // Reuse recent data when revisiting the page instead of hitting the API every time.
+    const owner = user?.username || user?.email || '';
+    if (analyticsCache && analyticsCache.owner !== owner) analyticsCache = null;
+    const cached = analyticsCache;
+    if (cached) {
+      setPersonal(cached.personal);
+      setCommunity(cached.community);
+      if (cached.aiInsight) setAiInsight(cached.aiInsight);
+      setLoading(false);
+      if (Date.now() - cached.at < ANALYTICS_CACHE_TTL_MS) return;
+    }
+
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    Promise.all([getUserSafetySummary(timezone), getGlobalSafetySummary(timezone)])
       .then(([personalResponse, communityResponse]) => {
         if (personalResponse?.data?.success) setPersonal(personalResponse.data.data);
         if (communityResponse?.data?.success) setCommunity(communityResponse.data.data);
+        if (personalResponse?.data?.success && communityResponse?.data?.success) {
+          analyticsCache = {
+            personal: personalResponse.data.data,
+            community: communityResponse.data.data,
+            aiInsight: analyticsCache?.aiInsight || null,
+            owner: user?.username || user?.email || '',
+            at: Date.now(),
+          };
+        }
       })
-      .catch((requestError) => setError(requestError.message || 'We could not load your safety journey.'))
+      .catch(() => setError(ANALYTICS_LOAD_ERROR_MESSAGE))
       .finally(() => setLoading(false));
+
+    // Show a previously generated summary immediately, if one exists, without calling Gemini again.
+    getUserAiSummaryCached()
+      .then((response) => {
+        if (response?.data?.success && response.data.data) {
+          setAiInsight(response.data.data);
+          if (analyticsCache) analyticsCache.aiInsight = response.data.data;
+        }
+      })
+      .catch(() => {});
   }, [isLoggedIn, navigate]);
 
   if (!isLoggedIn) return null;
 
   return (
     <div className="journey page-enter">
-      <header className="nav nav--journey">
-        <div className="brand brand--small">Verif-AI</div>
-        <nav className="nav__links">
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>About us</button>
-          <button className="nav__link nav__btn nav__btn--active" type="button">Your Verif-AI Journey</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/detection')}>Detection</button>
-          <button className="nav__link nav__btn" type="button" onClick={() => navigate('/chatbot')}>AI Chatbot</button>
-        </nav>
+      <header className="nav nav--app">
+        <AppNavLinks active="journey" />
         <div className="journey__actions">
-          <button className="journey__settings" type="button" onClick={() => navigate('/settings')}>Settings</button>
-          {isAdmin && <button className="journey__settings" type="button" onClick={() => navigate('/admin')}>Admin</button>}
+          <div className="nav__user-menu" onClick={(event) => event.stopPropagation()}>
+            <button
+              className="nav__login"
+              type="button"
+              onClick={() => setShowUserMenu((visible) => !visible)}
+            >
+              {user?.username || user?.email || 'Profile'}
+            </button>
+            {showUserMenu && (
+              <div className="nav__dropdown">
+                <button
+                  className="nav__dropdown-item"
+                  type="button"
+                  onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
+                >
+                  Settings
+                </button>
+                {isAdmin && (
+                  <button
+                    className="nav__dropdown-item nav__dropdown-item--admin"
+                    type="button"
+                    onClick={() => { navigate('/admin'); setShowUserMenu(false); }}
+                  >
+                    Admin Dashboard
+                  </button>
+                )}
+                <button
+                  className="nav__dropdown-item nav__dropdown-item--logout"
+                  type="button"
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -469,6 +1327,15 @@ export default function Analytics() {
             </Reveal>
 
             <Reveal className="journey__reveal--wide" delay={80}>
+              <AIInsightSection
+                insight={aiInsight}
+                loading={aiInsightLoading}
+                error={aiInsightError}
+                onRequest={requestAiInsight}
+              />
+            </Reveal>
+
+            <Reveal className="journey__reveal--wide" delay={80}>
               <section className="journey__stat-grid" aria-label="Your detection totals">
                 <div className="journey__stat"><span>Messages checked</span><strong>{personal?.total_checks ?? 0}</strong></div>
                 <div className="journey__stat journey__stat--alert"><span>High-risk results</span><strong>{personal?.high_risk_count ?? 0}</strong></div>
@@ -480,43 +1347,24 @@ export default function Analytics() {
               <FocusScene
                 label="Your most common scam patterns"
                 direction="from-right"
-                recap={(
-                  <div className="journey__compact-line">
-                    <span className="journey__eyebrow">Your pattern</span>
-                    <strong>{personal?.most_common_type || 'No pattern yet'}</strong>
-                    <span className="journey__mini-pill">{personal?.top_types?.[0]?.count || 0} checks</span>
-                  </div>
-                )}
+                className="journey__checks-scene"
               >
                 <div className="journey__section-heading">
                   <div><p className="journey__eyebrow">01 / Your checks</p><h2>What are you running into?</h2><p>These are the scam patterns appearing most often in your authenticated checks.</p></div>
                   <span className="journey__section-number">01</span>
                 </div>
-                {personal?.type_insights?.[0] && (
-                  <div className="journey__pattern-lead">
-                    <div>
-                      <p className="journey__eyebrow">Your strongest pattern</p>
-                      <h3>{personal.type_insights[0].type}</h3>
-                      <p>{personal.type_insights[0].description}</p>
-                    </div>
-                    <div className="journey__pattern-lead-stat"><strong>{personal.type_insights[0].count}</strong><span>checks</span></div>
-                    <div className="journey__pattern-lead-stat"><strong>{personal.type_insights[0].share}%</strong><span>of scam checks</span></div>
-                    <div className="journey__pattern-lead-stat"><strong>{personal.type_insights[0].recent_count || 0}</strong><span>in 30 days</span></div>
-                  </div>
-                )}
-                <PatternSignalBoard items={buildTypeInsights(personal).slice(0, 3)} />
-                <div className="journey__submission-strip">
-                  <div><p className="journey__eyebrow">Recent patterns</p><h3>What your latest checks have been showing</h3></div>
-                    <div className="journey__submission-list">
-                    {summarizeRecentSubmissions(personal?.recent_submissions || []).slice(0, 4).map((submission) => (
-                      <div className="journey__submission" key={`${submission.ref_id || submission.type}-${submission.created_at}`}>
-                        <span className={submission.is_scam ? 'is-risk' : 'is-clear'} aria-hidden="true" />
-                        <div><strong>{submission.type}</strong><span>{submission.count} checks · latest {formatSubmissionDate(submission.created_at)}</span></div>
-                        <b>{submission.highestScore ?? '--'}% max</b>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <PatternHero
+                  item={checkPatterns[0]}
+                  totalChecks={personal?.total_checks ?? 0}
+                  totalScamChecks={personal?.total_scam_checks ?? 0}
+                  onAskGuidance={askGuidance}
+                />
+                <PatternSignalBoard
+                  items={checkPatterns}
+                  totalScamChecks={personal?.total_scam_checks ?? 0}
+                  onAskGuidance={askGuidance}
+                  onAnalyze={() => navigate('/detection')}
+                />
               </FocusScene>
             </Reveal>
 
@@ -524,51 +1372,39 @@ export default function Analytics() {
               <FocusScene
                 label="Your checking activity"
                 direction="from-left"
-                recap={(
-                  <div className="journey__compact-line">
-                    <span className="journey__eyebrow">Your activity</span>
-                    <strong>{personal?.high_risk_rate ?? 0}% high risk</strong>
-                    <span className="journey__mini-pill journey__mini-pill--secondary">{personal?.trend?.length || 0} months tracked</span>
-                  </div>
-                )}
+                className="journey__activity-scene"
               >
                 <div className="journey__section-heading">
                   <div><p className="journey__eyebrow">02 / Your activity</p><h2>Is your situation changing?</h2><p>Volume matters, but the direction of your high-risk results matters more.</p></div>
                   <span className="journey__section-number">02</span>
                 </div>
-                <div className="journey__activity-layout">
-                  <div className="journey__activity-copy">
-                    <span className="journey__metric-large">{personal?.high_risk_rate ?? 0}<small>%</small></span>
-                    <strong>of your checks were high risk</strong>
-                    <p>{personal?.activity_insight || 'Keep checking messages here to reveal how your risk pattern changes over time.'}</p>
-                    <div className="journey__activity-pills"><span>{personal?.total_checks ?? 0} total checks</span><span>{personal?.recent_high_risk_count ?? 0} high risk recently</span></div>
-                  </div>
-                  <TrendChart points={personal?.trend || []} emptyText="Your monthly activity will appear here after you check messages." />
+                <ActivityStatusRow activity={personal?.activity} />
+                <div className="journey__activity-dashboard">
+                  <ActivityChartPanel
+                    activity={personal?.activity}
+                    activeView={activityView}
+                    setActiveView={setActivityView}
+                    selectedDay={selectedActivityDay}
+                    setSelectedDay={setSelectedActivityDay}
+                    totalChecks={personal?.total_checks ?? 0}
+                    onAnalyze={() => navigate('/detection')}
+                  />
+                  <ActivityRiskMix
+                    activity={personal?.activity}
+                    totalChecks={personal?.total_checks ?? 0}
+                    onAnalyze={() => navigate('/detection')}
+                  />
                 </div>
               </FocusScene>
             </Reveal>
 
             <Reveal className="journey__reveal--wide" delay={120}>
-              <section className="journey__community">
-                <div className="journey__section-heading">
-                  <div><p className="journey__eyebrow">03 / Everyone using Verif-AI</p><h2>What is happening around you?</h2><p>Authenticated community checks reveal which patterns are appearing most often right now.</p></div>
-                  <div className="journey__section-header-right">
-                    <span className="journey__community-rate">{community?.scam_rate ?? 0}% flagged</span>
-                    <span className="journey__section-number">03</span>
-                  </div>
-                </div>
-                <p className="journey__community-summary">{community?.summary || 'Community trends are still being collected.'}</p>
-                <div className="journey__community-compare">
-                  <div><span>Your top pattern</span><strong>{personal?.most_common_type || 'Not enough data'}</strong></div>
-                  <div className="journey__compare-arrow" aria-hidden="true">↔</div>
-                  <div><span>Community top pattern</span><strong>{community?.most_common_type || 'Not enough data'}</strong></div>
-                </div>
-                <AdviceCarousel community={community} />
-                <div className="journey__community-grid">
-                  <BarChart items={community?.top_types || []} emptyText="Community trends will appear as more checks are made." />
-                  <TrendChart points={community?.trend || []} emptyText="Community activity will appear here soon." />
-                </div>
-              </section>
+              <CommunitySection
+                community={community}
+                personal={personal}
+                onAskGuidance={askGuidance}
+                onAnalyze={() => navigate('/detection')}
+              />
             </Reveal>
           </>
         )}

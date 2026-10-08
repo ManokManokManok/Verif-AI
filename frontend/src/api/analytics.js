@@ -7,12 +7,20 @@
 
 import apiClient from './client';
 
-export async function getUserSafetySummary() {
-  return apiClient.get('/analytics/my-summary/');
+export async function getUserSafetySummary(timezone = Intl.DateTimeFormat().resolvedOptions().timeZone) {
+  return apiClient.get('/analytics/my-summary/', { params: { timezone } });
 }
 
-export async function getGlobalSafetySummary() {
-  return apiClient.get('/analytics/global-summary/');
+export async function getUserAiSummary() {
+  return apiClient.get('/analytics/my-summary-ai/');
+}
+
+export async function getUserAiSummaryCached() {
+  return apiClient.get('/analytics/my-summary-ai/cached/');
+}
+
+export async function getGlobalSafetySummary(timezone = Intl.DateTimeFormat().resolvedOptions().timeZone) {
+  return apiClient.get('/analytics/global-summary/', { params: { timezone } });
 }
 
 function formatDateTime(value) {

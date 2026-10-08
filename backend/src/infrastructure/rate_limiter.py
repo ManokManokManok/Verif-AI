@@ -23,6 +23,7 @@ import functools
 from typing import Dict, Tuple, Optional, Callable
 from collections import defaultdict
 from threading import Lock
+from django.http import JsonResponse
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status
@@ -297,7 +298,7 @@ def rate_limit(category: str = 'default'):
                     f"Rate limit exceeded: identifier={ip_identifier}, "
                     f"category={category}, retry_after={retry_after}"
                 )
-                return _create_rate_limit_response(retry_after, headers)
+                return _create_rate_limit_response(retry_after, headers, not isinstance(request, Request))
             
             # Also check user-based rate limit if authenticated
             if user_identifier:
@@ -310,7 +311,7 @@ def rate_limit(category: str = 'default'):
                         f"Rate limit exceeded: identifier={user_identifier}, "
                         f"category={category}, retry_after={retry_after}"
                     )
-                    return _create_rate_limit_response(retry_after, headers)
+                    return _create_rate_limit_response(retry_after, headers, not isinstance(request, Request))
             
             # Execute the view
             response = view_func(request, *args, **kwargs)
@@ -331,7 +332,7 @@ def rate_limit(category: str = 'default'):
     return decorator
 
 
-def _create_rate_limit_response(retry_after: int, headers: Dict[str, str]) -> Response:
+def _create_rate_limit_response(retry_after: int, headers: Dict[str, str], as_json: bool = False):
     """
     Create a graceful 429 rate limit response.
     
@@ -342,14 +343,19 @@ def _create_rate_limit_response(retry_after: int, headers: Dict[str, str]) -> Re
     Returns:
         DRF Response with 429 status and helpful message
     """
-    response = Response({
+    payload = {
         'error': {
             'code': 'RATE_LIMIT_EXCEEDED',
             'message': 'Too many requests. Please slow down and try again later.',
             'retry_after': retry_after,
             'retry_after_human': _format_retry_after(retry_after)
         }
-    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+    }
+    # Plain Django views have no DRF renderer, so a DRF Response would fail to render.
+    if as_json:
+        response = JsonResponse(payload, status=status.HTTP_429_TOO_MANY_REQUESTS)
+    else:
+        response = Response(payload, status=status.HTTP_429_TOO_MANY_REQUESTS)
     
     # Add all rate limit headers
     for header, value in (headers or {}).items():
@@ -398,7 +404,7 @@ def check_rate_limit(request: Request, category: str) -> Optional[Response]:
         security_logger.warning(
             f"Rate limit check failed: identifier={ip_identifier}, category={category}"
         )
-        return _create_rate_limit_response(retry_after, headers)
+        return _create_rate_limit_response(retry_after, headers, not isinstance(request, Request))
     
     # Check user
     if user_identifier:
@@ -409,7 +415,7 @@ def check_rate_limit(request: Request, category: str) -> Optional[Response]:
             security_logger.warning(
                 f"Rate limit check failed: identifier={user_identifier}, category={category}"
             )
-            return _create_rate_limit_response(retry_after, headers)
+            return _create_rate_limit_response(retry_after, headers, not isinstance(request, Request))
     
     return None
 

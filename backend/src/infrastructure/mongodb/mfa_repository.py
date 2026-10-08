@@ -69,6 +69,7 @@ class MFACodeRepository:
         code: str,
         expires_at: datetime,
         ip_address: Optional[str] = None,
+        purpose: str = "login",
     ) -> bool:
         """
         Store a new MFA code for *user_id*, replacing any previous one.
@@ -84,7 +85,7 @@ class MFACodeRepository:
         """
         try:
             # Invalidate any previous codes for this user
-            self.mfa_codes.delete_many({"user_id": user_id})
+            self.mfa_codes.delete_many({"user_id": user_id, "purpose": purpose})
 
             self.mfa_codes.insert_one({
                 "user_id": user_id,
@@ -92,6 +93,7 @@ class MFACodeRepository:
                 "created_at": datetime.utcnow(),
                 "expires_at": expires_at,
                 "ip_address": ip_address,
+                "purpose": purpose,
                 "is_used": False,
                 "attempts": 0,
             })
@@ -109,6 +111,7 @@ class MFACodeRepository:
         user_id: str,
         code: str,
         max_attempts: int = 3,
+        purpose: str = "login",
     ) -> Tuple[bool, Optional[str]]:
         """
         Validate a submitted MFA code.
@@ -128,6 +131,7 @@ class MFACodeRepository:
         try:
             record = self.mfa_codes.find_one({
                 "user_id": user_id,
+                "purpose": purpose,
                 "is_used": False,
                 "expires_at": {"$gt": datetime.utcnow()},
             })
@@ -166,18 +170,19 @@ class MFACodeRepository:
     # Queries
     # ------------------------------------------------------------------
 
-    def get_active_code(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_active_code(self, user_id: str, purpose: str = "login") -> Optional[Dict[str, Any]]:
         """Return the currently active (unexpired, unused) code record, or None."""
         return self.mfa_codes.find_one({
             "user_id": user_id,
+            "purpose": purpose,
             "is_used": False,
             "expires_at": {"$gt": datetime.utcnow()},
         })
 
-    def invalidate_codes(self, user_id: str) -> int:
+    def invalidate_codes(self, user_id: str, purpose: str = "login") -> int:
         """Mark all outstanding codes for *user_id* as used. Returns count."""
         result = self.mfa_codes.update_many(
-            {"user_id": user_id, "is_used": False},
+            {"user_id": user_id, "purpose": purpose, "is_used": False},
             {"$set": {"is_used": True}},
         )
         return result.modified_count
