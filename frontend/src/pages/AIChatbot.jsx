@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   sendChatMessage, 
+  sendStaticChatMessage,
   getConversations, 
   getChatHistory, 
   deleteConversation,
@@ -9,8 +12,10 @@ import {
   getAnalysisGuidedHistory
 } from '../api/chatbot';
 import { useAuth } from '../context/AuthContext';
+import AppNavLinks from '../components/AppNavLinks';
 import { useTheme } from '../context/ThemeContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
+import ChatHistoryList from '../components/ChatHistoryList';
 
 function AIChatbot() {
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -18,15 +23,22 @@ function AIChatbot() {
   const location = useLocation();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const [text, setText] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('New Conversation');
   const [conversationType, setConversationType] = useState('general'); // 'general' or 'analysis_guided'
   const [analysisContext, setAnalysisContext] = useState(null);
   const [expandedAnalysisImage, setExpandedAnalysisImage] = useState(null);
-  const [isStartingDetection, setIsStartingDetection] = useState(false);
+  const [isStartingChat, setIsStartingChat] = useState(false);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
@@ -35,12 +47,108 @@ function AIChatbot() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [autoScroll, setAutoScroll] = useState(() => localStorage.getItem('chatbot-autoscroll') !== 'false');
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('chatbot-sound') !== 'false');
+  const [copiedIndex, setCopiedIndex] = useState(null);
+  const [composerHeight, setComposerHeight] = useState(150);
   const messagesEndRef = useRef(null);
+  const composerDockRef = useRef(null);
+  const chatTextareaRef = useRef(null);
+
+  const syncChatTextareaHeight = () => {
+    const el = chatTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  };
+
+  const handleChatTextChange = (e) => {
+    setText(e.target.value);
+    requestAnimationFrame(syncChatTextareaHeight);
+  };
+
+  const handleChatKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessageDirect();
+    }
+  };
+
+  // Collapse the textarea back to a single line once it's cleared (e.g. after sending)
+  // Also resizes for programmatic text (e.g. prefilled from Analytics), which bypasses onChange
+  useEffect(() => {
+    syncChatTextareaHeight();
+  }, [text]);
+
+  // Keep the scroll area's bottom padding in sync with the fixed composer's actual height
+  // so messages never end up hidden behind it, regardless of composer content changes.
+  useEffect(() => {
+    const node = composerDockRef.current;
+    if (!node) return undefined;
+
+    const updateHeight = () => setComposerHeight(node.offsetHeight);
+    updateHeight();
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const scrollToBottom = () => {
     if (autoScroll) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+  };
+
+  const handleCopyMessage = (content, index) => {
+    if (!content) return;
+    navigator.clipboard.writeText(content);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handlePromptSubmit = (promptText) => {
+    if (!promptText || isLoading) return;
+    setText(promptText);
+    
+    // Auto send prompt
+    const fakeEvent = { preventDefault: () => {} };
+    setTimeout(() => {
+      handleSendMessageDirect(promptText);
+    }, 50);
+  };
+
+  const renderFormattedContent = (content, isUser = false) => {
+    if (!content) return null;
+
+    if (isUser) {
+      return <div className="chatbot__plain-content">{content}</div>;
+    }
+
+    return (
+      <div className="chatbot__markdown">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ node, ...props }) => (
+              <a {...props} target="_blank" rel="noreferrer" />
+            ),
+            code: ({ inline, className, children, ...props }) => {
+              const language = className?.replace('language-', '') || '';
+              if (inline) {
+                return <code className="chatbot__inline-code" {...props}>{children}</code>;
+              }
+              return (
+                <div className="chatbot__code-block">
+                  {language && <span className="chatbot__code-language">{language}</span>}
+                  <pre><code className={className} {...props}>{children}</code></pre>
+                </div>
+              );
+            },
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -57,22 +165,36 @@ function AIChatbot() {
   }, [soundEnabled]);
 
   const handleSettingsClick = () => {
-    setShowSettingsModal(true);
+    navigate('/settings');
   };
 
   const closeSettingsModal = () => {
     setShowSettingsModal(false);
   };
 
-  const openDetection = () => {
-    setIsStartingDetection(true);
-    window.setTimeout(() => navigate('/detection'), 800);
-  };
-
   // Handle navigation state for analysis-guided mode
   useEffect(() => {
     if (location.state) {
       const { conversationId, conversationType: navType, analysisContext: navContext, initialMessages } = location.state;
+
+      if (location.state.guidanceCategory) {
+        const category = String(location.state.guidanceCategory).slice(0, 100);
+        setConversationType('general');
+        setCurrentConversationId(null);
+        setCurrentTitle(`${category} guidance`);
+        setAnalysisContext(null);
+        setMessages([]);
+        setText(`I encountered a ${category} scam pattern. What warning signs should I look for, and how can I verify a message safely?`);
+        window.history.replaceState({}, document.title);
+        setTimeout(() => {
+          const el = chatTextareaRef.current;
+          if (el) {
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+          }
+        }, 60);
+        return;
+      }
 
       if (location.state.imageAnalysis) {
         setConversationType('general');
@@ -94,6 +216,10 @@ function AIChatbot() {
         loadAnalysisGuidedConversation(conversationId);
         
         // Clear navigation state to prevent reloading on refresh
+        window.history.replaceState({}, document.title);
+      } else if (conversationId) {
+        console.log('[CHATBOT] Opening conversation:', conversationId);
+        loadConversation(conversationId);
         window.history.replaceState({}, document.title);
       }
     }
@@ -173,10 +299,20 @@ function AIChatbot() {
     setSidebarOpen(false);
   };
 
+  const isFreshChat = messages.length === 0 && !currentConversationId;
+
+  const handleNewChatClick = () => {
+    if (isFreshChat || isStartingChat) return;
+    setIsStartingChat(true);
+    window.setTimeout(() => {
+      startNewConversation();
+      setIsStartingChat(false);
+    }, 500);
+  };
+
   // Delete a conversation
   const handleDeleteConversation = async (conversationId, e) => {
-    e.stopPropagation();
-    if (!window.confirm('Delete this conversation?')) return;
+    e?.stopPropagation();
     
     try {
       await deleteConversation(conversationId, accessToken);
@@ -206,12 +342,11 @@ function AIChatbot() {
     setShowLogoutModal(false);
   };
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    
-    if (!text.trim() || isLoading) return;
+  const handleSendMessageDirect = async (messageText) => {
+    const rawText = messageText || text;
+    if (!rawText.trim() || isLoading) return;
 
-    const userMessage = text.trim();
+    const userMessage = rawText.trim();
     setText('');
 
     const newUserMessage = {
@@ -269,10 +404,68 @@ function AIChatbot() {
     }
   };
 
+  const handleStaticPrompt = async (topic) => {
+    if (isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const response = await sendStaticChatMessage(topic, accessToken, currentConversationId);
+      const timestamp = new Date().toISOString();
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: response.message, timestamp },
+        { role: 'assistant', content: response.response, timestamp },
+      ]);
+
+      if (response.disclaimer) setDisclaimer(response.disclaimer);
+      if (response.is_new_conversation || !currentConversationId) {
+        setCurrentConversationId(response.conversation_id);
+        setCurrentTitle(response.title || response.message.substring(0, 50));
+        if (isLoggedIn) fetchConversations();
+      }
+    } catch (error) {
+      console.error('Static chat topic error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: new Date().toISOString(),
+        isError: true,
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    handleSendMessageDirect();
+  };
+
+  // Format time for message bubbles in user's local timezone
+  const formatMessageTime = (timestamp) => {
+    if (!timestamp) return '';
+    let str = String(timestamp);
+    if (!str.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(str)) {
+      str += 'Z';
+    }
+    const date = new Date(str);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
   // Format date for sidebar
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
+    let str = String(dateString);
+    if (!str.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(str)) {
+      str += 'Z';
+    }
+    const date = new Date(str);
+    if (isNaN(date.getTime())) return '';
     const now = new Date();
     const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
     
@@ -283,8 +476,11 @@ function AIChatbot() {
   };
 
   return (
-    <div className="detect detect--chatbot page-enter" style={{ height: '100vh', overflow: 'hidden' }}>
-      <aside className={`detect__sidebar detect__sidebar--chatbot${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
+    <div className="detect detect--chatbot page-enter">
+      <aside 
+        className={`detect__sidebar detect__sidebar--chatbot${sidebarOpen ? ' detect__sidebar--open' : ''}`} 
+        style={{ width: isMobile ? (sidebarOpen ? 320 : 0) : (sidebarOpen ? 320 : 72) }}
+      >
         <button
           className="detect__sidebtn detect__sidebtn--menu"
           type="button"
@@ -293,132 +489,84 @@ function AIChatbot() {
         >
           {sidebarOpen ? '✕' : '☰'}
         </button>
-        <button 
-          className="detect__sidebtn" 
-          type="button" 
-          aria-label="New Detection"
-          onClick={openDetection}
-          title="New Detection"
-        >
-          ✎
-        </button>
-        
+
         {/* Conversation History - Only shown when sidebar is open and logged in */}
         {sidebarOpen && isLoggedIn && (
-          <div className="chatbot__history-panel">
-            <div className="chatbot__history-title">
-              Chat History
-            </div>
-            
-            {isLoadingConversations ? (
-              <div className="chatbot__history-empty">
-                Loading...
-              </div>
-            ) : conversations.length === 0 ? (
-              <div className="chatbot__history-empty">
-                No conversations yet
-              </div>
-            ) : (
-              conversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  onClick={() => {
-                    // Load analysis-guided conversations differently
-                    if (conv.conversation_type === 'analysis_guided') {
-                      loadAnalysisGuidedConversation(conv.id);
-                    } else {
-                      loadConversation(conv.id);
-                    }
-                  }}
-                  className={`chatbot__history-item${conv.id === currentConversationId ? ' chatbot__history-item--active' : ''}`}
-                >
-                  <div className="chatbot__history-item-header">
-                    <div className="chatbot__history-item-title">
-                      {conv.title || 'Untitled'}
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteConversation(conv.id, e)}
-                      className="chatbot__history-delete"
-                      title="Delete conversation"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                  <div className="chatbot__history-meta">
-                    {conv.message_count || 0} messages · {formatDate(conv.updated_at)}
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="detect__chat-history">
+            <div className="detect__chat-title">Chat History</div>
+            <ChatHistoryList
+              loading={isLoadingConversations}
+              items={conversations
+                .filter((conv) => (conv.message_count || 0) > 0 || conv.id === currentConversationId)
+                .map((conv) => {
+                  const guided = conv.conversation_type === 'analysis_guided';
+                  return {
+                    id: conv.id,
+                    title: (conv.title || 'Untitled').replace(/^Guidance:\s*/i, ''),
+                    badge: guided ? 'Guidance' : null,
+                    date: conv.updated_at,
+                    active: conv.id === currentConversationId,
+                    onSelect: () => (guided ? loadAnalysisGuidedConversation(conv.id) : loadConversation(conv.id)),
+                    onDelete: () => handleDeleteConversation(conv.id),
+                  };
+                })}
+            />
           </div>
         )}
-        
-        {/* Anonymous user message when sidebar is open */}
+                {/* Anonymous user message when sidebar is open */}
         {sidebarOpen && !isLoggedIn && (
-          <div className="chatbot__anonymous-box">
-            <div className="chatbot__anonymous-icon">💬</div>
-            <div className="chatbot__anonymous-text">
-              Login to save your conversations
+          <div className="detect__chat-history">
+            <div className="detect__chat-title">Chat History</div>
+            <div className="chatbot__anonymous-box" style={{ margin: '15px' }}>
+              <div className="chatbot__anonymous-icon">🛡️</div>
+              <div className="chatbot__anonymous-text">
+                You are using guest mode. Log in to save your conversations across devices.
+              </div>
+              <button
+                className="chatbot__anonymous-login"
+                type="button"
+                onClick={() => navigate('/login')}
+              >
+                Login / Sign Up
+              </button>
             </div>
-            <button
-              onClick={() => navigate('/login')}
-              className="chatbot__anonymous-login"
-            >
-              Login
-            </button>
           </div>
         )}
-        
-        <div className="detect__spacer" />
-        <button 
-          className="detect__sidebtn" 
-          type="button" 
-          aria-label="Settings"
-          onClick={handleSettingsClick}
-          title="Settings"
-        >
-          ⚙
-        </button>
+
+        {!sidebarOpen && !isMobile && (
+          <>
+            <button
+              className="detect__sidebtn"
+              type="button"
+              aria-label="New Chat"
+              onClick={handleNewChatClick}
+              title="New Chat"
+            >
+              ✎
+            </button>
+            <div className="detect__spacer" />
+            <button
+              className="detect__sidebtn"
+              type="button"
+              aria-label="Settings"
+              onClick={handleSettingsClick}
+              title="Settings"
+            >
+              ⚙
+            </button>
+          </>
+        )}
       </aside>
 
       <div className="detect__main" style={{ 
-        transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', 
-        marginLeft: sidebarOpen ? 320 : 72,
+        transition: 'margin-left 0.3s ease-in-out',
+        marginLeft: isMobile ? 0 : (sidebarOpen ? 320 : 72),
         display: 'flex',
         flexDirection: 'column',
-        height: '100vh',
+        minHeight: '100vh',
       }}>
-        <header className="nav nav--detect" style={{ flexShrink: 0 }}>
-          <div className="brand brand--small">
-            Verif-AI Assistant
-          </div>
-          <nav className="nav__links">
-            <button
-              className="nav__link nav__btn"
-              type="button"
-              onClick={() => navigate('/')}
-            >
-              About us
-            </button>
-            {isLoggedIn && (
-              <button className="nav__link nav__btn" type="button" onClick={() => navigate('/journey')}>
-                Your Verif-AI Journey
-              </button>
-            )}
-            <button
-              className="nav__link nav__btn"
-              type="button"
-              onClick={() => navigate(isLoggedIn ? '/detection' : '/login')}
-            >
-              Detection
-            </button>
-            <button
-              className="nav__link nav__btn nav__btn--active"
-              type="button"
-            >
-              AI Chatbot
-            </button>
-          </nav>
+        <header className="nav nav--detect nav--app" style={{ flexShrink: 0 }}>
+          <AppNavLinks active="chatbot" />
           {isLoggedIn ? (
             <div className="nav__user-menu" onClick={e => e.stopPropagation()}>
               <button
@@ -471,9 +619,8 @@ function AIChatbot() {
           display: 'flex',
           flexDirection: 'column',
           flex: 1,
-          overflow: 'hidden',
-          marginBottom: '-30px',
-          padding: '20px',
+          overflow: 'visible',
+          padding: '16px 20px 10px',
         }}>
           {disclaimer && (
             <div className="chatbot__disclaimer">
@@ -482,32 +629,67 @@ function AIChatbot() {
           )}
           <div className="chatbot__panel page-enter">
             <div className="chatbot__messages-wrap" style={{ 
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              padding: '16px',
+              flex: 'none',
+              minHeight: 'auto',
+              overflowY: 'visible',
+              padding: `20px 24px ${messages.length === 0 ? 20 : composerHeight + 34 + 24}px`,
               display: 'flex',
               flexDirection: 'column',
             }}>
               {messages.length === 0 && (
                 <div className="chatbot__empty-state">
                   {conversationType === 'analysis_guided' && analysisContext ? (
-                    <>
-                      <h2 className="chatbot__empty-title">Analysis Guidance</h2>
-                      <p className="chatbot__empty-subtitle">Ask me about the analysis results and what to do next!</p>
-                    </>
+                    <div className="chatbot__empty-guided">
+                      <h2 className="chatbot__empty-title">Inspection Guidance Ready</h2>
+                      <p className="chatbot__empty-subtitle">
+                        Ask any questions regarding the detection report below or request immediate next-step instructions.
+                      </p>
+                    </div>
                   ) : (
                     <>
-                      <h2 className="chatbot__empty-title">Welcome to Verif-AI Guidance</h2>
-                      <p className="chatbot__empty-subtitle">Ask me anything about scam prevention!</p>
-                      <div className="chatbot__empty-hints">
-                        <p>Try asking about:</p>
-                        <ul>
-                          <li>• Common phishing tactics</li>
-                          <li>• How to spot fake emails</li>
-                          <li>• What to do if you've been scammed</li>
-                          <li>• Romance scam red flags</li>
-                        </ul>
+                      <div className="chatbot__empty-header">
+                        <h2 className="chatbot__empty-title">How can I protect you today?</h2>
+                        <p className="chatbot__empty-subtitle">
+                          Ask any question or pick a suggested topic below to analyze security risks and spot scams.
+                        </p>
+                      </div>
+
+                      <div className="chatbot__prompts-grid">
+                        {[
+                          {
+                            title: 'Common Phishing Tactics',
+                            desc: 'How do scammers use urgent SMS or email links to steal credentials?',
+                            topic: 'phishing_tactics',
+                          },
+                          {
+                            title: 'Spotting Fake Emails',
+                            desc: 'What key red flags identify spoofed email addresses and fake domain names?',
+                            topic: 'fake_emails',
+                          },
+                          {
+                            title: 'Scam Recovery Steps',
+                            desc: 'What immediate actions should I take if I accidentally clicked a phishing link?',
+                            topic: 'scam_recovery',
+                          },
+                          {
+                            title: 'Romance & Investment Scams',
+                            desc: 'How do fake romance and crypto investment scams operate?',
+                            topic: 'romance_investment_scams',
+                          },
+                        ].map((prompt, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            className="chatbot__prompt-card"
+                            onClick={() => handleStaticPrompt(prompt.topic)}
+                            disabled={isLoading}
+                          >
+                            <div className="chatbot__prompt-body">
+                              <h4 className="chatbot__prompt-title">{prompt.title}</h4>
+                              <p className="chatbot__prompt-desc">{prompt.desc}</p>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     </>
                   )}
@@ -531,111 +713,138 @@ function AIChatbot() {
                        />
                      </button>
                    )}
-                  <div className="chatbot__analysis-header">
-                    <h3 className="chatbot__analysis-title">
-                      {analysisContext.is_scam ? 'High Likelihood' : 'Low Likelihood'}
-                    </h3>
+
+                  <div className="chatbot__analysis-top">
+                    <div className="chatbot__analysis-header">
+                      <span className={`chatbot__risk-pill ${analysisContext.is_scam ? 'chatbot__risk-pill--high' : 'chatbot__risk-pill--low'}`}>
+                        {analysisContext.is_scam ? 'High Risk Scam' : 'Low Risk / Safe'}
+                      </span>
+                      {analysisContext.scam_type && (
+                        <span className="chatbot__analysis-type-tag">
+                          {analysisContext.scam_type}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="chatbot__analysis-confidence-row">
+                      <div className="chatbot__confidence-bar-wrap">
+                        <div className="chatbot__confidence-labels">
+                          <span>Scam Likelihood</span>
+                          <strong>{analysisContext.scam_score?.toFixed(1)}%</strong>
+                        </div>
+                        <div className="chatbot__confidence-track">
+                          <div
+                            className="chatbot__confidence-fill"
+                            style={{ width: `${Math.min(100, Math.max(0, analysisContext.scam_score || 0))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                   {expandedAnalysisImage && (
-                     <div
-                       className="chatbot__image-overlay"
-                       role="dialog"
-                       aria-modal="true"
-                       aria-label="Enlarged analyzed image"
-                       onClick={() => setExpandedAnalysisImage(null)}
-                     >
-                       <button
-                         type="button"
-                         className="chatbot__image-overlay-close"
-                         onClick={() => setExpandedAnalysisImage(null)}
-                         aria-label="Close enlarged image"
-                       >
-                         X
-                       </button>
-                       <img
-                         src={expandedAnalysisImage}
-                         alt="Enlarged analyzed submission"
-                         className="chatbot__image-overlay-content"
-                         onClick={(event) => event.stopPropagation()}
-                       />
-                     </div>
-                   )}
-                  
-                  {analysisContext.is_scam && analysisContext.scam_type && (
-                    <div className="chatbot__analysis-line">
-                      <strong>Type:</strong>{' '}
-                      <span>{analysisContext.scam_type}</span>
+                  {expandedAnalysisImage && (
+                    <div
+                      className="chatbot__image-overlay"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Enlarged analyzed image"
+                      onClick={() => setExpandedAnalysisImage(null)}
+                    >
+                      <button
+                        type="button"
+                        className="chatbot__image-overlay-close"
+                        onClick={() => setExpandedAnalysisImage(null)}
+                        aria-label="Close enlarged image"
+                      >
+                        &times;
+                      </button>
+                      <img
+                        src={expandedAnalysisImage}
+                        alt="Enlarged analyzed submission"
+                        className="chatbot__image-overlay-content"
+                        onClick={(event) => event.stopPropagation()}
+                      />
                     </div>
                   )}
-                  
-                  <div className="chatbot__analysis-line">
-                    <strong>Confidence:</strong> Scam {analysisContext.scam_score?.toFixed(1)}% / Legitimate {analysisContext.legit_score?.toFixed(1)}%
-                  </div>
                   
                   {analysisContext.summary && (
                     <div className="chatbot__analysis-summary">
-                      <strong>Summary:</strong> {analysisContext.summary}
+                      <strong>Analysis Summary:</strong> {analysisContext.summary}
                     </div>
                   )}
                   
-                  <div className="chatbot__analysis-hint">
-                    Ask me anything about these results and what steps to take!
+                  <div className="chatbot__analysis-quick-action">
+                    <button
+                      type="button"
+                      className="chatbot__analysis-prompt-btn"
+                      onClick={() => handlePromptSubmit('What immediate safety steps should I take based on this analysis?')}
+                      disabled={isLoading}
+                    >
+                      What immediate steps should I take next?
+                    </button>
                   </div>
                 </div>
               )}
 
               {messages.map((msg, index) => {
-  const isUser = msg.role === 'user';
+                const isUser = msg.role === 'user';
+                const timeStr = formatMessageTime(msg.timestamp);
 
-  const timeStr = new Date(msg.timestamp).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+                const displayName = isUser
+                  ? (user?.username || user?.email?.split('@')[0] || 'You')
+                  : 'Verif-AI';
 
-  const displayName = isUser
-    ? (user?.username || user?.email?.split('@')[0] || 'You')
-    : 'VerifAI';
+                return (
+                  <div
+                    key={index}
+                    className={`chatbot__message-wrap${isUser ? ' chatbot__message-wrap--user' : ''}`}
+                  >
+                    <div className="chatbot__message-header">
+                      <span className={`chatbot__message-name${isUser ? ' chatbot__message-name--user' : ''}`}>
+                        {displayName}
+                      </span>
+                    </div>
 
-  return (
-    <div
-      key={index}
-      className={`chatbot__message-wrap${isUser ? ' chatbot__message-wrap--user' : ''}`}
-    >
-      
-      <div className={`chatbot__message-name${isUser ? ' chatbot__message-name--user' : ''}`}>
-        {displayName}
-      </div>
+                    {/* Bubble */}
+                    <div
+                      className={`chatbot__message-bubble${isUser ? ' chatbot__message-bubble--user' : ''}${msg.isError ? ' chatbot__message-bubble--error' : ''}`}
+                    >
+                      <div className="chatbot__message-content">
+                        {msg.attachment?.data_url && (
+                          <img
+                            src={msg.attachment.data_url}
+                            alt="Submitted for scam analysis"
+                            className="chatbot__message-image"
+                          />
+                        )}
+                        {renderFormattedContent(msg.content, isUser)}
+                      </div>
 
-      {/* Bubble – only contains the message text */}
-      <div
-        className={`chatbot__message-bubble${isUser ? ' chatbot__message-bubble--user' : ''}${msg.isError ? ' chatbot__message-bubble--error' : ''}`}
-      >
-        <div className="chatbot__message-content">
-          {msg.attachment?.data_url && (
-            <img
-              src={msg.attachment.data_url}
-              alt="Submitted for scam analysis"
-              className="chatbot__message-image"
-            />
-          )}
-          {msg.content}
-        </div>
-      </div>
+                      {!isUser && !msg.isError && (
+                        <div className="chatbot__message-actions">
+                          <button
+                            type="button"
+                            className="chatbot__copy-btn"
+                            onClick={() => handleCopyMessage(msg.content, index)}
+                            title="Copy response to clipboard"
+                          >
+                            {copiedIndex === index ? '✓ Copied' : 'Copy'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
-
-      <div className="chatbot__message-time">
-        {timeStr}
-      </div>
-    </div>
-  );
-})}
+                    <div className="chatbot__message-time">
+                      {timeStr}
+                    </div>
+                  </div>
+                );
+              })}
 
               {isLoading && (
                 <div className="chatbot__message-wrap">
-                  <div className="chatbot__message-name">
-                    VerifAI
+                  <div className="chatbot__message-header">
+                    <span className="chatbot__message-name">Verif-AI</span>
                   </div>
                   <div className="chatbot__message-bubble">
                     <div className="chatbot__typing-indicator">
@@ -651,36 +860,68 @@ function AIChatbot() {
             </div>
           </div>
 
-          <form onSubmit={handleSendMessage} className="detect__inputRow detect__inputRow--chatbot" style={{ flexShrink: 0 }}>
-            <button className="detect__plus" type="button" aria-label="Upload">
-              +
-            </button>
-            <input
-              className="detect__input"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Ask about scam prevention..."
-              disabled={isLoading}
-              maxLength={2000}
-            />
-            <button 
-              className={`detect__cta ${text.trim() ? 'detect__cta--active' : ''}`}
-              type="submit"
-              disabled={isLoading || !text.trim()}
-            >
-              {isLoading ? 'Sending...' : 'Send'}
-            </button>
-          </form>
+          <div
+            ref={composerDockRef}
+            className="chatbot__composer-dock"
+            style={{
+              left: isMobile ? 0 : (sidebarOpen ? 320 : 72),
+              width: isMobile ? '100%' : (sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 72px)'),
+              '--composer-top': `${composerHeight + 34 - 8}px`,
+            }}
+          >
+            <form onSubmit={handleSendMessage} className="detect__inputRow detect__inputRow--chatbot">
+              <textarea
+                ref={chatTextareaRef}
+                className="detect__input detect__input--chatbot"
+                value={text}
+                onChange={handleChatTextChange}
+                onKeyDown={handleChatKeyDown}
+                placeholder={isMobile ? "Ask Verif-AI a question..." : "Ask Verif-AI about scam prevention, link safety, or suspicious messages..."}
+                disabled={isLoading}
+                maxLength={2000}
+                rows={1}
+              />
+              <button 
+                className={`detect__cta detect__cta--chatbot ${text.trim() ? 'detect__cta--active' : ''}`}
+                type="submit"
+                disabled={isLoading || !text.trim()}
+                aria-label="Send message"
+                title="Send message"
+              >
+                {isLoading ? (
+                  <span className="settings-spinner"></span>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                  </svg>
+                )}
+              </button>
+            </form>
+            {text.length > 1800 && (
+              <div className="chatbot__charCount">
+                {text.length} / 2000
+              </div>
+            )}
+          </div>
         </main>
 
-        <footer className="detect__footer" style={{ flexShrink: 0 }}>
-          <div className="detect__copyright">
-            © 2026 VerifAI Technologies Inc. All rights reserved.
-          </div>
-        </footer>
+        {!isMobile && (
+          <footer
+            className="detect__footer detect__footer--chatbot"
+            style={{
+              left: sidebarOpen ? 320 : 72,
+              width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 72px)',
+            }}
+          >
+            <div className="detect__copyright">
+              © 2026 VerifAI Technologies Inc. All rights reserved.
+            </div>
+          </footer>
+        )}
       </div>
 
-      {isStartingDetection && (
+      {isStartingChat && (
         <div className="detect__navigation-loading" role="status" aria-live="polite">
           <div className="detect__navigation-card">
             <div className="detect__navigation-mark" aria-hidden="true">
@@ -689,8 +930,8 @@ function AIChatbot() {
               <span />
             </div>
             <div className="detect__navigation-copy">
-              <strong>Opening Detection</strong>
-              <span>Loading the scam checker...</span>
+              <strong>Starting a new chat</strong>
+              <span>Clearing the current conversation...</span>
             </div>
             <div className="detect__navigation-progress" aria-hidden="true">
               <span />

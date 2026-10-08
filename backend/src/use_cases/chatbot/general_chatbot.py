@@ -52,6 +52,26 @@ Remember: You're here to educate, support, and guide users to the right tools!
 """
 
 
+STATIC_CHAT_PROMPTS = {
+    "phishing_tactics": {
+        "message": "What are the most common phishing tactics used by scammers today?",
+        "response": "Phishing scams usually rely on a few tricks: creating false urgency ('your account will be locked in 24 hours'), impersonating trusted brands like banks, delivery services, or government agencies, and sending fake login pages designed to steal your password. Newer tactics include QR code phishing ('quishing'), fake job or prize offers, and AI-generated messages that sound more polished than the sloppy phishing emails of the past. Before clicking anything, ask yourself: did I expect this message? Does the sender's email or link actually match the organization it claims to be from? When unsure, go directly to the company's official site or app instead of clicking a link.",
+    },
+    "fake_emails": {
+        "message": "How can I spot a fake or spoofed email address?",
+        "response": "Always check the full sender address, not just the display name — scammers can set 'PayPal Support' as a name while the actual email is something random. Look for subtle misspellings in the domain (like 'paypa1.com' or 'micros0ft.com'), and hover over links to see where they really lead before clicking. Other red flags: generic greetings ('Dear Customer'), unexpected attachments, and pressure to act fast. If an email claims to be from a company you use, it's safest to log in through their official app or website directly rather than through the email.",
+    },
+    "scam_recovery": {
+        "message": "What should I do immediately if I entered my details on a suspicious website?",
+        "response": "Act quickly: change the password on the real, official site right away, and update it anywhere else you reused it. If you entered banking or card details, call your bank immediately using the number on your card (not one from the suspicious site) to freeze or replace the account. Turn on multi-factor authentication wherever possible, and keep an eye on your accounts for unfamiliar activity over the next few weeks. Finally, report the incident — this helps flag the scam site and can support any fraud claims you need to file.",
+    },
+    "romance_investment_scams": {
+        "message": "What are the red flags of romance and crypto investment scams?",
+        "response": "Watch for relationships or investments that move unusually fast, especially ones that avoid video calls or in-person meetings with vague excuses. Promises of guaranteed or unusually high returns are a major warning sign — legitimate investments always carry risk. Be cautious if someone asks you to keep the relationship or opportunity secret from friends or family, or if they eventually ask for money, gift cards, or crypto transfers. Once funds are sent, they're very hard to recover, so the best protection is verifying independently before you ever send anything — never based only on what the person tells you.",
+    },
+}
+
+
 class GeneralChatbotUseCase:
     """
     Use case for general chatbot interactions.
@@ -170,6 +190,40 @@ class GeneralChatbotUseCase:
             "title": conversation.title,
             "message_count": len(conversation.messages),
             "is_new_conversation": is_new_conversation
+        }
+
+    def save_static_exchange(
+        self,
+        user_id: str,
+        topic: str,
+        conversation_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Save a predefined topic exchange without calling the LLM."""
+        prompt = STATIC_CHAT_PROMPTS.get(topic)
+        if not prompt:
+            raise ValueError("Unknown static chatbot topic")
+
+        is_new_conversation = False
+        if conversation_id:
+            conversation = self.conversation_repo.get_by_id_for_user(conversation_id, user_id)
+            if not conversation:
+                conversation = self.conversation_repo.create_conversation(user_id)
+                is_new_conversation = True
+        else:
+            conversation = self.conversation_repo.create_conversation(user_id)
+            is_new_conversation = True
+
+        conversation.add_message(MessageRole.USER.value, prompt["message"])
+        conversation.add_message(MessageRole.ASSISTANT.value, prompt["response"])
+        self.conversation_repo.save(conversation)
+
+        return {
+            "message": prompt["message"],
+            "response": prompt["response"],
+            "conversation_id": conversation.id,
+            "title": conversation.title,
+            "message_count": len(conversation.messages),
+            "is_new_conversation": is_new_conversation,
         }
     
     def get_conversation_history(

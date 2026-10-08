@@ -97,29 +97,51 @@
   transform: scale(0.98);
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .logout-modal {
-    background: #2d3748;
-  }
-
-  .logout-modal__title {
-    color: #f7fafc;
-  }
-
-  .logout-modal__message {
-    color: #e2e8f0;
-  }
-
-  .logout-modal__btn--cancel {
-    background: #4a5568;
-    color: #e2e8f0;
-  }
-
-  .logout-modal__btn--cancel:hover {
-    background: #718096;
-  }
+/* Theme overrides */
+[data-theme="dark"] .logout-modal {
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+[data-theme="dark"] .logout-modal__title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .logout-modal__message {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .logout-modal__btn--cancel {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .logout-modal__btn--cancel:hover {
+  background: #475569;
+}
+
+[data-theme="light"] .logout-modal {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .logout-modal__title {
+  color: #0f172a;
+}
+
+[data-theme="light"] .logout-modal__message {
+  color: #475569;
+}
+
+[data-theme="light"] .logout-modal__btn--cancel {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+[data-theme="light"] .logout-modal__btn--cancel:hover {
+  background: #cbd5e1;
+}
+
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {

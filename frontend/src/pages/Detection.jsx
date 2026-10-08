@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
-import { getAnalysisDetail, deleteAnalysisHistoryItem, deleteAllAnalysisHistory } from '../api/analysis';
+import { getAnalysisDetail, deleteAnalysisHistoryItem } from '../api/analysis';
 import { getAnalysisConversation, analyzeImage } from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AppNavLinks from '../components/AppNavLinks';
+import ChatHistoryList from '../components/ChatHistoryList';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 import { ReportModal } from '../components/reports';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
@@ -35,6 +37,7 @@ function getReviewExplanation(reviewReason) {
 
 function Detection() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [text, setText] = useState('');
@@ -45,7 +48,6 @@ function Detection() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const [isDeletingHistoryId, setIsDeletingHistoryId] = useState(null);
-  const [isDeletingAllHistory, setIsDeletingAllHistory] = useState(false);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
   const [analysisStep, setAnalysisStep] = useState(0);
@@ -60,6 +62,29 @@ function Detection() {
   const progressIntervalRef = useRef(null);
   const stepIntervalRef = useRef(null);
   const textareaRef = useRef(null);
+
+  // Handle location state for opening a specific analysis result (e.g. from Settings reports)
+  useEffect(() => {
+    if (location.state) {
+      const { analysisId, analysisRefId, analysisDetail } = location.state;
+      if (analysisDetail) {
+        setDetectionResult(analysisDetail);
+        window.history.replaceState({}, document.title);
+      } else if (analysisId || analysisRefId) {
+        const idToFetch = analysisId || analysisRefId;
+        getAnalysisDetail(idToFetch)
+          .then((detail) => {
+            if (detail) setDetectionResult(detail);
+          })
+          .catch((err) => {
+            console.warn('[DETECTION] Failed to fetch analysis detail from location state:', err);
+          })
+          .finally(() => {
+            window.history.replaceState({}, document.title);
+          });
+      }
+    }
+  }, [location.state]);
   
   // Image OCR states
   const [selectedImage, setSelectedImage] = useState(null);
@@ -175,9 +200,6 @@ function Detection() {
   const handleDeleteHistoryItem = async (analysisId) => {
     if (!isLoggedIn || !analysisId || isDeletingHistoryId === analysisId) return;
 
-    const confirmed = window.confirm('Delete this detection history item?');
-    if (!confirmed) return;
-
     setIsDeletingHistoryId(analysisId);
     try {
       await deleteAnalysisHistoryItem(analysisId);
@@ -189,24 +211,6 @@ function Detection() {
       alert('Failed to delete history item. Please try again.');
     } finally {
       setIsDeletingHistoryId(null);
-    }
-  };
-
-  const handleDeleteAllHistory = async () => {
-    if (!isLoggedIn || isDeletingAllHistory) return;
-
-    const confirmed = window.confirm('Delete all detection history? This will remove it from your view.');
-    if (!confirmed) return;
-
-    setIsDeletingAllHistory(true);
-    try {
-      await deleteAllAnalysisHistory();
-      setDetectionResult(null);
-      await refreshHistory();
-    } catch (err) {
-      alert('Failed to delete detection history. Please try again.');
-    } finally {
-      setIsDeletingAllHistory(false);
     }
   };
 
@@ -319,6 +323,8 @@ function Detection() {
   };
 
   const startNewAnalysis = () => {
+    const isFresh = !detectionResult && !text.trim() && !selectedImage && !imagePreview;
+    if (isFresh || isStartingNewAnalysis) return;
     setIsStartingNewAnalysis(true);
     window.setTimeout(() => {
       handleNewAnalysis();
@@ -532,7 +538,7 @@ function Detection() {
   };
 
   return (
-    <div className="detect page-enter">
+    <div className="detect page-enter" style={{ gridTemplateColumns: sidebarOpen ? '320px 1fr' : '72px 1fr' }}>
       <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
         <button
           className="detect__sidebtn detect__sidebtn--menu"
@@ -547,48 +553,19 @@ function Detection() {
             <div className="detect__chat-title">Chat History</div>
             {isLoggedIn ? (
               <>
-                {chatHistory.length > 0 && (
-                  <div className="detect__chat-actions">
-                    <button
-                      className="detect__chat-clear"
-                      type="button"
-                      onClick={handleDeleteAllHistory}
-                      disabled={isDeletingAllHistory}
-                    >
-                      {isDeletingAllHistory ? 'Deleting...' : 'Clear All'}
-                    </button>
-                  </div>
-                )}
-                <div className="detect__chat-list">
-                  {chatHistory.map((chat) => (
-                    <div
-                      className="detect__chat-item"
-                      key={chat.id}
-                      onClick={() => handleChatClick(chat)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <div className="detect__chat-item-header">
-                        <div className="detect__chat-item-title">{chat.title}</div>
-                        {chat.id && (
-                          <button
-                            className="detect__chat-delete"
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleDeleteHistoryItem(chat.id);
-                            }}
-                            disabled={isDeletingHistoryId === chat.id}
-                          >
-                            {isDeletingHistoryId === chat.id ? '...' : 'Delete'}
-                          </button>
-                        )}
-                      </div>
-                      <div className="detect__chat-item-preview">{chat.description}</div>
-                      <div className="detect__chat-item-time">{chat.timestamp}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
+                <ChatHistoryList
+                  items={chatHistory.map((chat) => ({
+                    id: chat.id,
+                    title: chat.title,
+                    subtitle: chat.description,
+                    date: chat.timestamp,
+                    active: !!detectionResult?.id && detectionResult.id === chat.id,
+                    deleting: isDeletingHistoryId === chat.id,
+                    onSelect: () => handleChatClick(chat),
+                    onDelete: chat.id ? () => handleDeleteHistoryItem(chat.id) : null,
+                  }))}
+                  emptyText="No analyses yet"
+                />              </>
             ) : (
               <div className="chatbot__anonymous-box" style={{ margin: '15px' }}>
                 <div className="chatbot__anonymous-icon">🛡️</div>
@@ -625,38 +602,9 @@ function Detection() {
         )}
       </aside>
 
-      <div className="detect__main" style={{ transition: 'margin-left 0.3s cubic-bezier(.4,2,.6,1)', marginLeft: sidebarOpen ? 320 : 72 }}>
-        <header className="nav nav--detect">
-          <div className="brand brand--small">Verif-AI Detection</div>
-          <nav className="nav__links">
-            <button className="nav__link nav__btn" type="button" onClick={() => navigate('/')}>
-              About us
-            </button>
-            {isLoggedIn && (
-              <button className="nav__link nav__btn" type="button" onClick={() => navigate('/journey')}>
-                Your Verif-AI Journey
-              </button>
-            )}
-            <button className="nav__link nav__btn nav__btn--active" type="button">
-              Detection
-            </button>
-            <button
-              className="nav__link nav__btn"
-              type="button"
-              onClick={() => navigate('/chatbot')}
-            >
-              AI Chatbot
-            </button>
-            {isAdmin && (
-              <button
-                className="nav__link nav__btn"
-                type="button"
-                onClick={() => navigate('/admin')}
-              >
-                Admin
-              </button>
-            )}
-          </nav>
+      <div className="detect__main">
+        <header className="nav nav--detect nav--app">
+          <AppNavLinks active="detection" />
           {isLoggedIn ? (
             <div className="nav__user-menu" onClick={e => e.stopPropagation()}>
               <button
@@ -991,15 +939,16 @@ function Detection() {
                 <div className="detect__resultCard detect__resultCard--graph detect__resultCard--animate">
                   <h3 className="detect__cardTitle">Scam Likelihood</h3>
                   <div className="detect__graph">
-                    <div className="detect__graphBar">
-                      <div
-                        className="detect__graphFill detect__graphFill--scam"
-                        style={{ width: `${graphScamWidth}%` }}
-                      />
-                      <div
-                        className="detect__graphFill detect__graphFill--legit"
-                        style={{ width: `${graphLegitWidth}%` }}
-                      />
+                    <div
+                      className="detect__donut"
+                      style={{ '--scam-percentage': `${graphScamWidth}%` }}
+                      role="img"
+                      aria-label={`Scam likelihood ${graphScamWidth.toFixed(1)} percent, legitimate likelihood ${graphLegitWidth.toFixed(1)} percent`}
+                    >
+                      <div className="detect__donutCenter">
+                        <strong>{graphScamWidth.toFixed(1)}%</strong>
+                        <span>scam</span>
+                      </div>
                     </div>
                     <div className="detect__graphLabels">
                       <div className="detect__graphLabel detect__graphLabel--scam">

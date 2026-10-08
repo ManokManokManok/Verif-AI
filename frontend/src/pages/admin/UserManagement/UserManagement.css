@@ -81,9 +81,9 @@
 }
 
 .admin-btn.user-mgmt__action-btn {
-  background: rgba(31, 41, 55, 0.45);
-  border: 1px solid var(--admin-border, #374151);
-  color: var(--admin-text-muted, #9ca3af) ;
+  background: var(--admin-bg-secondary);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text-muted);
   width: 32px !important;
   height: 32px !important;
   min-width: 32px !important;

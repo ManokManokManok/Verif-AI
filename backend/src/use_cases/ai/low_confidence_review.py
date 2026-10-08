@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 # Confidence thresholds for triggering review
-# NOTE: Set to 99 for testing (will trigger admin review) - REVERT TO 70 AFTER TESTING!
 LOW_CONFIDENCE_THRESHOLD = 70.0  # Below this triggers review
 HIGH_UNCERTAINTY_THRESHOLD = 40.0  # Margin between scam/legit scores below this is "very uncertain"
 
@@ -122,20 +121,30 @@ Analysis Details:
 - Legit Score: {legit_score:.1f}%
 - Ref ID: {analysis_ref_id}
 
-Message Preview: {message_preview[:200] if message_preview else 'N/A'}...
+Message Preview: {message_preview[:200] if user_id and message_preview else 'N/A'}...
 
 This report was automatically generated because the AI model's confidence was below the threshold for reliable detection. Please review this analysis manually."""
 
-        report = submit_usecase.submit_report(
-            report_type=ReportType.LOW_CONFIDENCE,
+        result = submit_usecase.execute(
+            user_id=user_id or '',
+            user_email=None,
+            report_type=ReportType.OTHER,
+            title='Automated low-confidence review',
             description=description,
             analysis_id=analysis_ref_id,
-            user_id=user_id,
-            user_email=None
+            analysis_ref_id=analysis_ref_id,
+            allow_anonymous=True,
         )
-        
-        logger.info(f"[LOW_CONFIDENCE] Auto-submitted report: {report.id}")
-        return report.id
+
+        if not result.success or not result.report:
+            logger.error(
+                "[LOW_CONFIDENCE] Failed to create review report: %s",
+                result.error_message or "Report creation returned no report",
+            )
+            return None
+
+        logger.info("[LOW_CONFIDENCE] Auto-submitted report: %s", result.report.report_id)
+        return result.report.report_id
         
     except Exception as e:
         logger.error(f"[LOW_CONFIDENCE] Failed to submit report: {e}")
