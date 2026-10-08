@@ -6,6 +6,8 @@ import AppNavLinks from '../components/AppNavLinks';
 import { getUserSafetySummary, getGlobalSafetySummary, getUserAiSummary, getUserAiSummaryCached } from '../api/analytics';
 
 const ANALYTICS_CACHE_TTL_MS = 60 * 1000;
+const ANALYTICS_LOAD_ERROR_MESSAGE =
+  'We are having trouble contacting Verif-AI right now. Please refresh the page to try again.';
 let analyticsCache = null;
 
 const ActivityRecharts = lazy(() => import('./ActivityRecharts.jsx'));
@@ -1154,7 +1156,7 @@ export default function Analytics() {
           };
         }
       })
-      .catch((requestError) => setError(requestError.message || 'We could not load your analytics.'))
+      .catch(() => setError(ANALYTICS_LOAD_ERROR_MESSAGE))
       .finally(() => setLoading(false));
 
     // Show a previously generated summary immediately, if one exists, without calling Gemini again.
