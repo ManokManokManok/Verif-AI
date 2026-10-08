@@ -8277,6 +8277,78 @@ button {
   color: #1d4ed8;
 }
 
+[data-theme="light"] .nav.nav--app,
+[data-theme="light"] .page--landing .nav.nav--app {
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom-color: rgba(15, 23, 42, 0.12);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+[data-theme="light"] .nav--app .brand,
+[data-theme="light"] .page--landing .nav--app .brand {
+  color: #0f172a;
+}
+
+[data-theme="light"] .nav--app .nav__btn,
+[data-theme="light"] .page--landing .nav--app .nav__btn {
+  color: #475569;
+}
+
+[data-theme="light"] .nav--app .nav__btn:hover,
+[data-theme="light"] .page--landing .nav--app .nav__btn:hover {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+[data-theme="light"] .nav--app .nav__btn--active,
+[data-theme="light"] .page--landing .nav--app .nav__btn--active {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+[data-theme="light"] .nav--app .nav__btn--active::after {
+  background: #2563eb;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.25);
+}
+
+[data-theme="light"] .nav__login,
+[data-theme="light"] .page--landing .nav__login {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme="light"] .nav__login:hover,
+[data-theme="light"] .page--landing .nav__login:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+[data-theme="light"] .nav__dropdown {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+[data-theme="light"] .nav__dropdown-item {
+  color: #334155;
+}
+
+[data-theme="light"] .nav__dropdown-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme="light"] .nav__dropdown-item--danger {
+  color: #b91c1c;
+}
+
+[data-theme="light"] .nav__dropdown-item--danger:hover {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 /* Chat history list */
 .chat-history__search { padding: 0 12px 8px; }
 .chat-history__search input { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid #374151; background: #111827; color: #e5e7eb; font-size: 13px; outline: none; }

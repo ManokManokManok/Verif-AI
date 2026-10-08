@@ -365,7 +365,8 @@ class SubmitUserReportUseCase:
         title: str,
         description: str,
         analysis_id: Optional[str] = None,
-        analysis_ref_id: Optional[str] = None
+        analysis_ref_id: Optional[str] = None,
+        allow_anonymous: bool = False,
     ) -> ReportResult:
         """
         Execute the use case to submit a new report.
@@ -378,13 +379,14 @@ class SubmitUserReportUseCase:
             description: Detailed description
             analysis_id: Optional related analysis ID
             analysis_ref_id: Optional public analysis reference ID
+            allow_anonymous: Allow system-generated reports without a user account
             
         Returns:
             ReportResult containing the created report or error
         """
         try:
             # Validate required fields
-            if not user_id:
+            if not user_id and not allow_anonymous:
                 raise InvalidReportDataError("User ID is required")
             
             if not title or len(title.strip()) < 3:
@@ -396,7 +398,7 @@ class SubmitUserReportUseCase:
             # Create report entity
             report = UserReport(
                 report_id=str(uuid.uuid4()),
-                user_id=user_id,
+                user_id=user_id or "",
                 user_email=user_email,
                 report_type=report_type,
                 title=title.strip(),

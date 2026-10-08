@@ -531,6 +531,24 @@ class TestSubmitUserReportUseCase:
         assert result.success is False
         assert "User ID is required" in result.error_message
 
+    def test_execute_allows_anonymous_system_report(self, mock_admin_repository):
+        """System-generated reports can be stored without a user account."""
+        use_case = SubmitUserReportUseCase(mock_admin_repository)
+
+        result = use_case.execute(
+            user_id="",
+            user_email=None,
+            report_type=ReportType.OTHER,
+            title="Automated low-confidence review",
+            description="The analysis confidence requires a human review.",
+            analysis_ref_id="analysis-123",
+            allow_anonymous=True,
+        )
+
+        assert result.success is True
+        assert result.report.user_id == ""
+        assert result.report.analysis_ref_id == "analysis-123"
+
 
 class TestUpdateReportStatusUseCase:
     """Tests for UpdateReportStatusUseCase."""

@@ -1750,17 +1750,6 @@ def detect_scam(request: Request) -> Response:
                 review_reason=preliminary_check.review_reason,
             )
             
-            # Now auto-report if needed (we have ref_id now)
-            if preliminary_check.needs_review:
-                review_check = check_confidence_and_report(
-                    bert_result=bert_result,
-                    analysis_ref_id=analysis.ref_id,
-                    user_id=resolved_user_id,
-                    message_preview=message[:200] if message else None
-                )
-            else:
-                review_check = preliminary_check
-
             # Log the analysis entity before saving
             logger.debug(f"[DEBUG] AnalysisResult entity before save: {{'ref_id': {analysis.ref_id}, 'user_id': {analysis.user_id}, 'scam_class': {analysis.scam_class}, 'scam_type': {analysis.scam_type}, 'confidence_bps': {analysis.confidence_bps}, 'is_scam': {analysis.is_scam}, 'analyzer_type': {analysis.analyzer_type}, 'analyzer_version': {analysis.analyzer_version}, 'message_hash': {analysis.message_hash}, 'created_at': {analysis.created_at}}}")
 
@@ -1788,6 +1777,14 @@ def detect_scam(request: Request) -> Response:
             ref_id = None
             needs_review = False
             review_reason = None
+
+        if needs_review and ref_id:
+            check_confidence_and_report(
+                bert_result=bert_result,
+                analysis_ref_id=ref_id,
+                user_id=resolved_user_id,
+                message_preview=message[:200] if message else None
+            )
         
         # Combine results
         combined_result = {

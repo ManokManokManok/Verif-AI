@@ -23,23 +23,23 @@ export default function ActivityRecharts({ mode, data }) {
     <div className="journey__activity-recharts" role="img" aria-label={accessibleLabel}>
       <ResponsiveContainer width="100%" height={isMonthly ? 280 : 260}>
         <BarChart data={data} margin={{ top: 8, right: 12, bottom: 10, left: 0 }} barCategoryGap={isMonthly ? '32%' : undefined}>
-          <CartesianGrid stroke="rgba(148, 163, 184, .14)" vertical={false} />
+          <CartesianGrid stroke="var(--journey-chart-grid)" vertical={false} />
           <XAxis
             dataKey={isMonthly ? 'label' : 'weekday'}
-            tick={{ fill: '#94a3b8', fontSize: 11 }}
-            axisLine={{ stroke: 'rgba(148, 163, 184, .24)' }}
+            tick={{ fill: 'var(--journey-chart-tick)', fontSize: 11 }}
+            axisLine={{ stroke: 'var(--journey-chart-axis)' }}
             tickLine={false}
-            label={{ value: isMonthly ? 'Month' : 'Day of week', position: 'insideBottom', offset: -4, fill: '#94a3b8', fontSize: 11 }}
+            label={{ value: isMonthly ? 'Month' : 'Day of week', position: 'insideBottom', offset: -4, fill: 'var(--journey-chart-tick)', fontSize: 11 }}
           />
           <YAxis
             allowDecimals={false}
-            tick={{ fill: '#94a3b8', fontSize: 11 }}
+            tick={{ fill: 'var(--journey-chart-tick)', fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            label={{ value: isMonthly ? 'Checks' : 'Scam checks', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 11 }}
+            label={{ value: isMonthly ? 'Checks' : 'Scam checks', angle: -90, position: 'insideLeft', fill: 'var(--journey-chart-tick)', fontSize: 11 }}
           />
           <Tooltip
-            contentStyle={{ border: '1px solid rgba(103, 232, 249, .3)', borderRadius: 8, background: '#101b2b', color: '#e6edf5' }}
+            contentStyle={{ border: '1px solid var(--journey-chart-tooltip-border)', borderRadius: 8, background: 'var(--journey-chart-tooltip-bg)', color: 'var(--journey-chart-tooltip-text)' }}
             formatter={(value, name) => [value, name === 'not_scam' ? 'Not scam' : name === 'suspicious' ? 'Suspicious' : isMonthly ? 'High risk' : 'Scam checks']}
           />
           {isMonthly ? (
@@ -48,7 +48,7 @@ export default function ActivityRecharts({ mode, data }) {
               <Bar dataKey="suspicious" name="Suspicious" stackId="risk" fill="#fbbf24" />
               <Bar dataKey="high_risk" name="High risk" stackId="risk" fill="#fb7185" radius={[4, 4, 0, 0]} />
             </>
-          ) : <Bar dataKey="scam_count" name="Scam checks" fill="#fbbf24" radius={[4, 4, 0, 0]} />}
+          ) : <Bar dataKey="scam_count" name="Scam checks" fill="var(--journey-chart-weekday-bar)" radius={[4, 4, 0, 0]} />}
         </BarChart>
       </ResponsiveContainer>
       <span className="journey__sr-only">{summary.join('. ')}</span>
@@ -63,15 +63,15 @@ export function CommunityLineChart({ data, category }) {
     <div className="journey__community-trend-chart" role="img" aria-label={`Monthly share comparison for ${category}: you and community`}>
       <ResponsiveContainer width="100%" height={250}>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 10, left: 0 }}>
-          <CartesianGrid stroke="rgba(148, 163, 184, .14)" vertical={false} />
-          <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={{ stroke: 'rgba(148, 163, 184, .24)' }} tickLine={false} label={{ value: 'Month', position: 'insideBottom', offset: -4, fill: '#94a3b8', fontSize: 10 }} />
-          <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} label={{ value: 'Share of scam checks', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 10 }} />
+          <CartesianGrid stroke="var(--journey-chart-grid)" vertical={false} />
+          <XAxis dataKey="label" tick={{ fill: 'var(--journey-chart-tick)', fontSize: 10 }} axisLine={{ stroke: 'var(--journey-chart-axis)' }} tickLine={false} label={{ value: 'Month', position: 'insideBottom', offset: -4, fill: 'var(--journey-chart-tick)', fontSize: 10 }} />
+          <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fill: 'var(--journey-chart-tick)', fontSize: 10 }} axisLine={false} tickLine={false} label={{ value: 'Share of scam checks', angle: -90, position: 'insideLeft', fill: 'var(--journey-chart-tick)', fontSize: 10 }} />
           <Tooltip
-            contentStyle={{ border: '1px solid rgba(103, 232, 249, .3)', borderRadius: 8, background: '#101b2b', color: '#e6edf5' }}
+            contentStyle={{ border: '1px solid var(--journey-chart-tooltip-border)', borderRadius: 8, background: 'var(--journey-chart-tooltip-bg)', color: 'var(--journey-chart-tooltip-text)' }}
             formatter={(value, name) => [value == null ? 'Not enough data' : `${value.toFixed(1)}%`, name]}
           />
-          <Line type="monotone" dataKey="user_share" name="You" stroke="#67e8f9" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls={false} />
-          <Line type="monotone" dataKey="community_share" name="Community" stroke="#fbbf24" strokeWidth={2.5} strokeDasharray="5 4" dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls={false} />
+          <Line type="monotone" dataKey="user_share" name="You" stroke="var(--journey-chart-user-line)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls={false} />
+          <Line type="monotone" dataKey="community_share" name="Community" stroke="var(--journey-chart-community-line)" strokeWidth={2.5} strokeDasharray="5 4" dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls={false} />
         </LineChart>
       </ResponsiveContainer>
       <span className="journey__sr-only">{summary}</span>
