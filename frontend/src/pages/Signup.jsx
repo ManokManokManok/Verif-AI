@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { signupRequest } from '../api/client.js';
 import { useTheme } from '../context/ThemeContext';
 import { getPasswordRequirements, validateUsername } from '../utils/validation.js';
@@ -153,6 +153,8 @@ function LockIcon() {
 
 function Signup() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const authTransition = location.state?.authTransition;
   const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -236,7 +238,7 @@ function Signup() {
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--signup auth--mobile page-enter">
+    <div className={`auth auth--signup auth--mobile page-enter ${authTransition === 'login-to-signup' ? 'auth--switch-from-login' : ''}`}>
       {/* Theme Toggle Button */}
       <button 
         className="auth__theme-toggle" 
@@ -281,7 +283,7 @@ function Signup() {
           If you already have an account register
           <br />
           You can{' '}
-          <Link to="/login" className="auth__link">
+          <Link to="/login" state={{ authTransition: 'signup-to-login' }} className="auth__link">
             Login here !
           </Link>
         </p>
@@ -451,4 +453,3 @@ function Signup() {
 }
 
 export default Signup;
-

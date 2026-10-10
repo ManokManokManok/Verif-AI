@@ -409,12 +409,54 @@ npm run preview
 
 ### Environment Variables
 
-Create `.env` file in root:
+Create a `.env` file in `frontend/` for local development:
 
 ```env
 VITE_API_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000/ws
+VITE_API_BASE_URL=http://localhost:8000/api
 ```
+
+`VITE_API_URL` is the backend origin used by the chatbot API. `VITE_API_BASE_URL`
+is the API base path used by the shared, admin, and reports API clients. Both
+values must point to the same backend; keep the `/api` suffix only on
+`VITE_API_BASE_URL`.
+
+### Deploying the frontend to Vercel
+
+The frontend is a static Vite single-page application. To deploy it from this
+repository, import the Git repository into Vercel and set the project root to
+`frontend`. Vercel should detect Vite automatically; use these build settings
+if it asks:
+
+- Framework preset: `Vite`
+- Build command: `npm run build`
+- Output directory: `dist`
+- Install command: `npm install`
+
+The [Vercel configuration](vercel.json) rewrites application routes to
+`index.html`, so direct visits and refreshes on routes such as `/login` continue
+to work.
+
+Before deploying, add these Vercel project environment variables for Production
+(and Preview if you want preview deployments to call a backend):
+
+```env
+VITE_API_URL=https://<your-backend-host>
+VITE_API_BASE_URL=https://<your-backend-host>/api
+```
+
+Replace `<your-backend-host>` with the public HTTPS origin of the deployed
+Django API. These `VITE_` variables are compiled into browser code and are
+public; never put API keys, database credentials, or other secrets in them.
+After changing a Vercel environment variable, create a new deployment so the
+frontend is rebuilt with the new value.
+
+The Django backend must separately allow the Vercel site origin in its CORS
+configuration. Deploying the frontend alone makes the site publicly reachable,
+but API-driven features will not work until the backend is publicly reachable
+and the two URLs above are set to it. Do not use `localhost` for a deployed
+backend URL: from a visitor's browser, `localhost` refers to that visitor's own
+device.
 
 ### Development Server
 

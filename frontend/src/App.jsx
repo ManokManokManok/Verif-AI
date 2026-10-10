@@ -54,6 +54,16 @@ function ProtectedRoute({ children, requireAdmin = false }) {
   return children;
 }
 
+function GuestRoute({ children }) {
+  const { isLoggedIn } = useAuth();
+
+  if (isLoggedIn) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
 function App() {
   const location = useLocation();
   const [routeLoading, setRouteLoading] = useState(false);
@@ -99,9 +109,9 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/detection" element={<Detection />} />
         <Route path="/chatbot" element={<AIChatbot />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+        <Route path="/signup" element={<GuestRoute><Signup /></GuestRoute>} />
+        <Route path="/verify-email" element={<GuestRoute><VerifyEmail /></GuestRoute>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
@@ -156,4 +166,3 @@ function App() {
 }
 
 export default App;
-
