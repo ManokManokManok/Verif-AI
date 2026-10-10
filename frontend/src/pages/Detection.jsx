@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail, deleteAnalysisHistoryItem } from '../api/analysis';
-import { getAnalysisConversation, analyzeImage } from '../api/chatbot';
+import {
+  getAnalysisConversation,
+  analyzeImage,
+  hasGuestFeatureBeenUsed,
+  GUEST_USE_LIMIT_CODE,
+} from '../api/chatbot';
 import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -50,6 +55,7 @@ function Detection() {
   const [isDeletingHistoryId, setIsDeletingHistoryId] = useState(null);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
+  const [guestImageUsed, setGuestImageUsed] = useState(() => hasGuestFeatureBeenUsed('image_analysis'));
   const [analysisStep, setAnalysisStep] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [graphScamWidth, setGraphScamWidth] = useState(0);
@@ -262,6 +268,10 @@ function Detection() {
 
   const handleDetect = async () => {
     if ((!text.trim() && !selectedImage) || (selectedImage && !hasAppliedCrop) || isDetecting || isAnalyzingImage) return;
+    if (selectedImage && !isLoggedIn && hasGuestFeatureBeenUsed('image_analysis')) {
+      setGuestImageUsed(true);
+      return;
+    }
 
     // Client-side validation
     const validation = selectedImage ? { valid: true } : validateMessage(text);
@@ -280,6 +290,7 @@ function Detection() {
       const result = selectedImage
         ? await analyzeImage(selectedImage, accessToken)
         : await detectScamRequest(text);
+      if (selectedImage && !isLoggedIn) setGuestImageUsed(true);
       console.log('[DETECTION RESULT]', result);
       setDetectionResult(result);
       
@@ -288,8 +299,9 @@ function Detection() {
     } catch (error) {
       console.error('[DETECTION ERROR]', error);
 
-      // Handle rate limiting gracefully
-      if (error.isRateLimited) {
+      if (error.code === GUEST_USE_LIMIT_CODE) {
+        setGuestImageUsed(true);
+      } else if (error.isRateLimited) {
         setRateLimitError(`Too many requests. Please wait ${error.retryAfter} and try again.`);
       } else if (error.isValidationError) {
         setValidationError(error.message);
@@ -676,6 +688,20 @@ function Detection() {
                   {rateLimitError}
                 </div>
               )}
+              {guestImageUsed && !isLoggedIn && (
+                <div className="chatbot__anonymous-box" role="status">
+                  <div className="chatbot__anonymous-text">
+                    Your free guest image analysis has been used. Log in to analyze another image. Text-based scam detection is still available.
+                  </div>
+                  <button
+                    className="chatbot__anonymous-login"
+                    type="button"
+                    onClick={() => navigate('/login')}
+                  >
+                    Login / Sign Up
+                  </button>
+                </div>
+              )}
 
               <input
                 ref={fileInputRef}
@@ -771,7 +797,7 @@ function Detection() {
                         type="button"
                         className="detect__cropBtn detect__cropBtn--primary"
                         onClick={handleDetect}
-                        disabled={!hasAppliedCrop || isAnalyzingImage}
+                        disabled={!hasAppliedCrop || isAnalyzingImage || (guestImageUsed && !isLoggedIn)}
                       >
                         {isAnalyzingImage ? 'Submitting...' : 'Submit Image'}
                       </button>

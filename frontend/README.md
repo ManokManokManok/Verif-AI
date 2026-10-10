@@ -458,6 +458,13 @@ and the two URLs above are set to it. Do not use `localhost` for a deployed
 backend URL: from a visitor's browser, `localhost` refers to that visitor's own
 device.
 
+For the temporary laptop-hosted demo, the backend grants anonymous visitors
+one text-chat request and one image-analysis request per browser session;
+ordinary text classifier checks remain available without logging in. These
+limits are best-effort demo controls, not security-grade quotas: browser session
+storage can be cleared or changed, and the backend's in-memory allowance resets
+when Django restarts. Keep the tunnel and backend running only while needed.
+
 ### Development Server
 
 - **URL**: http://localhost:5173
