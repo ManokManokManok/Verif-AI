@@ -183,6 +183,14 @@ async function apiRequest(path, options = {}) {
       timeoutErr.name = 'TimeoutError';
       throw timeoutErr;
     }
+    if (err instanceof TypeError) {
+      const connectionError = new Error(
+        'Having trouble connecting to Verif-AI. Please try again in a moment.'
+      );
+      connectionError.name = 'NetworkError';
+      connectionError.cause = err;
+      throw connectionError;
+    }
     throw err;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
