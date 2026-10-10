@@ -466,6 +466,20 @@ export async function requestPasswordResetRequest(email) {
 }
 
 /**
+ * Reset a password using a code sent to the account email.
+ */
+export async function resetPasswordWithCodeRequest({ email, code, new_password }) {
+  return apiRequest('/auth/reset-password/', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      code: code.trim(),
+      new_password,
+    }),
+  });
+}
+
+/**
  * Reset password using token from reset link.
  */
 export async function resetPasswordRequest({ token, new_password }) {

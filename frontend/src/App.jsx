@@ -8,6 +8,7 @@ import Detection from './pages/Detection.jsx';
 import AIChatbot from './pages/AIChatbot.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPasswordCode from './pages/ResetPasswordCode.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Settings from './pages/Settings.jsx';
 import Analytics from './pages/Analytics.jsx';
@@ -96,7 +97,14 @@ function App() {
     };
   }, []);
 
-  const hideMobileHeaderOnRoutes = new Set(['/login', '/signup', '/verify-email']);
+  const hideMobileHeaderOnRoutes = new Set([
+    '/login',
+    '/signup',
+    '/verify-email',
+    '/forgot-password',
+    '/reset-password-code',
+    '/reset-password',
+  ]);
   const showMobileHeader = isMobile && !hideMobileHeaderOnRoutes.has(location.pathname);
 
   return (
@@ -113,6 +121,7 @@ function App() {
         <Route path="/signup" element={<GuestRoute><Signup /></GuestRoute>} />
         <Route path="/verify-email" element={<GuestRoute><VerifyEmail /></GuestRoute>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password-code" element={<ResetPasswordCode />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
         <Route
