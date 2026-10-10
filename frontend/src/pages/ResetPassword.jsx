@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import {
   getPasswordResetTokenStatusRequest,
-  resendPasswordResetLinkRequest,
   resetPasswordRequest,
 } from '../api/client';
 import { getPasswordRequirements, validatePassword } from '../utils/validation';
@@ -19,8 +18,6 @@ function ResetPassword() {
   const [success, setSuccess] = useState(false);
   const [tokenStatus, setTokenStatus] = useState('checking');
   const [statusMessage, setStatusMessage] = useState('');
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendMessage, setResendMessage] = useState('');
 
   const passwordRequirements = getPasswordRequirements(password);
   const showPasswordReqs = password.length > 0;
@@ -94,24 +91,6 @@ function ResetPassword() {
     }
   };
 
-  const handleResend = async () => {
-    setResendLoading(true);
-    setResendMessage('');
-
-    try {
-      await resendPasswordResetLinkRequest(token);
-      setResendMessage('If this request is valid, a new password reset email has been sent.');
-    } catch (err) {
-      if (err?.isRateLimited) {
-        setResendMessage(err.message || 'Too many requests. Please try again later.');
-      } else {
-        setResendMessage('Unable to resend now. Please try again shortly.');
-      }
-    } finally {
-      setResendLoading(false);
-    }
-  };
-
   if (!token) {
     return (
       <div className="auth auth--single page-enter">
@@ -119,10 +98,10 @@ function ResetPassword() {
           <div className="auth__single-card auth__single-card--center">
             <h1 className="auth__title auth__title--compact">Invalid Link</h1>
             <p className="auth__error auth__error--single">
-              No reset token provided. Please request a new reset link.
+              No reset token provided. Request a password reset code instead.
             </p>
             <Link to="/forgot-password" className="auth__link auth__link--inline">
-              Request New Link
+              Request a Reset Code
             </Link>
           </div>
         </div>
@@ -153,7 +132,7 @@ function ResetPassword() {
               {statusMessage || 'Invalid password reset link.'}
             </p>
             <Link to="/forgot-password" className="auth__link auth__link--inline">
-              Request New Link
+              Request a Reset Code
             </Link>
           </div>
         </div>
@@ -168,19 +147,11 @@ function ResetPassword() {
           <div className="auth__single-card auth__single-card--center">
             <h1 className="auth__title auth__title--compact">Reset Password</h1>
             <p className="auth__error auth__error--single">
-              {statusMessage || 'This password reset link has expired.'}
+              {statusMessage || 'This password reset link has expired. Request a reset code instead.'}
             </p>
-            <button
-              type="button"
-              className="auth__primary"
-              onClick={handleResend}
-              disabled={resendLoading}
-            >
-              <strong>{resendLoading ? 'Sending…' : 'Resend Reset Link'}</strong>
-            </button>
-            {resendMessage && (
-              <p className="auth__subtitle auth__subtitle--tight">{resendMessage}</p>
-            )}
+            <Link to="/forgot-password" className="auth__link auth__link--inline">
+              Request a Reset Code
+            </Link>
           </div>
         </div>
       </div>
