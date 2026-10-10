@@ -9,7 +9,9 @@ import {
   getChatHistory, 
   deleteConversation,
   sendAnalysisGuidedMessage,
-  getAnalysisGuidedHistory
+  getAnalysisGuidedHistory,
+  hasGuestFeatureBeenUsed,
+  GUEST_USE_LIMIT_CODE,
 } from '../api/chatbot';
 import { useAuth } from '../context/AuthContext';
 import AppNavLinks from '../components/AppNavLinks';
@@ -25,6 +27,7 @@ function AIChatbot() {
   const { theme, toggleTheme } = useTheme();
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const [text, setText] = useState('');
+  const [guestTextUsed, setGuestTextUsed] = useState(() => hasGuestFeatureBeenUsed('text_chat'));
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -345,6 +348,10 @@ function AIChatbot() {
   const handleSendMessageDirect = async (messageText) => {
     const rawText = messageText || text;
     if (!rawText.trim() || isLoading) return;
+    if (!isLoggedIn && hasGuestFeatureBeenUsed('text_chat')) {
+      setGuestTextUsed(true);
+      return;
+    }
 
     const userMessage = rawText.trim();
     setText('');
@@ -367,6 +374,7 @@ function AIChatbot() {
       } else {
         // General conversation (supports both logged-in and guest users)
         response = await sendChatMessage(userMessage, accessToken, currentConversationId);
+        if (!isLoggedIn) setGuestTextUsed(true);
         
         if (response.disclaimer) {
           setDisclaimer(response.disclaimer);
@@ -392,9 +400,12 @@ function AIChatbot() {
 
     } catch (error) {
       console.error('Chat error:', error);
+      if (error.code === GUEST_USE_LIMIT_CODE) setGuestTextUsed(true);
       const errorMessage = {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: error.code === GUEST_USE_LIMIT_CODE
+          ? 'Your free guest chat message has been used. Log in to continue chatting.'
+          : 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date().toISOString(),
         isError: true,
       };
@@ -406,10 +417,15 @@ function AIChatbot() {
 
   const handleStaticPrompt = async (topic) => {
     if (isLoading) return;
+    if (!isLoggedIn && hasGuestFeatureBeenUsed('text_chat')) {
+      setGuestTextUsed(true);
+      return;
+    }
 
     setIsLoading(true);
     try {
       const response = await sendStaticChatMessage(topic, accessToken, currentConversationId);
+      if (!isLoggedIn) setGuestTextUsed(true);
       const timestamp = new Date().toISOString();
       setMessages(prev => [
         ...prev,
@@ -425,9 +441,12 @@ function AIChatbot() {
       }
     } catch (error) {
       console.error('Static chat topic error:', error);
+      if (error.code === GUEST_USE_LIMIT_CODE) setGuestTextUsed(true);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: error.code === GUEST_USE_LIMIT_CODE
+          ? 'Your free guest chat message has been used. Log in to continue chatting.'
+          : 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date().toISOString(),
         isError: true,
       }]);
@@ -869,6 +888,20 @@ function AIChatbot() {
               '--composer-top': `${composerHeight + 34 - 8}px`,
             }}
           >
+            {guestTextUsed && !isLoggedIn && (
+              <div className="chatbot__anonymous-box" role="status">
+                <div className="chatbot__anonymous-text">
+                  Your free guest chat message has been used. Log in to continue chatting.
+                </div>
+                <button
+                  className="chatbot__anonymous-login"
+                  type="button"
+                  onClick={() => navigate('/login')}
+                >
+                  Login / Sign Up
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSendMessage} className="detect__inputRow detect__inputRow--chatbot">
               <textarea
                 ref={chatTextareaRef}
@@ -877,14 +910,14 @@ function AIChatbot() {
                 onChange={handleChatTextChange}
                 onKeyDown={handleChatKeyDown}
                 placeholder={isMobile ? "Ask Verif-AI a question..." : "Ask Verif-AI about scam prevention, link safety, or suspicious messages..."}
-                disabled={isLoading}
+                disabled={isLoading || (guestTextUsed && !isLoggedIn)}
                 maxLength={2000}
                 rows={1}
               />
               <button 
                 className={`detect__cta detect__cta--chatbot ${text.trim() ? 'detect__cta--active' : ''}`}
                 type="submit"
-                disabled={isLoading || !text.trim()}
+                disabled={isLoading || !text.trim() || (guestTextUsed && !isLoggedIn)}
                 aria-label="Send message"
                 title="Send message"
               >
@@ -1060,5 +1093,4 @@ function AIChatbot() {
 }
 
 export default AIChatbot;
-
 
