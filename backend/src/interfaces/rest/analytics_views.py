@@ -7,13 +7,14 @@ Provides access to visit statistics, page analytics, and traffic patterns.
 
 import json
 import logging
+from html import escape
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Optional, Dict, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from django.http import JsonResponse, HttpRequest
+from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
@@ -514,13 +515,18 @@ def require_admin(view_func):
     return wrapper
 
 
-def _compute_user_safety_summary(user_id: str, timezone_name: str = 'UTC') -> Dict[str, Any]:
+def _compute_user_safety_summary(
+    user_id: str,
+    timezone_name: str = 'UTC',
+    docs=None,
+) -> Dict[str, Any]:
     """Build the personal safety summary dict for a user (shared by both endpoints)."""
-    collection = _get_analysis_collection()
-    docs = list(collection.find({
-        'user_id': user_id,
-        'user_deleted': {'$ne': True},
-    }).sort('created_at', -1))
+    if docs is None:
+        collection = _get_analysis_collection()
+        docs = list(collection.find({
+            'user_id': user_id,
+            'user_deleted': {'$ne': True},
+        }).sort('created_at', -1))
 
     if not docs:
         return {
@@ -601,6 +607,260 @@ def get_user_safety_summary(request: HttpRequest) -> JsonResponse:
 
     timezone_name = request.GET.get('timezone', 'UTC')
     return JsonResponse({'success': True, 'data': _compute_user_safety_summary(user_id, timezone_name)})
+
+
+def _export_value(value) -> str:
+    if value is None or value == '':
+        return '—'
+    return escape(str(value), quote=True)
+
+
+def _export_date(value) -> str:
+    if not value:
+        return 'Date unavailable'
+    if isinstance(value, datetime):
+        rendered = value.isoformat()
+        return f'{rendered} UTC' if value.tzinfo is None else rendered
+    return str(value)
+
+
+def _export_table(headers, rows, empty_message: str) -> str:
+    header_html = ''.join(f'<th scope="col">{_export_value(header)}</th>' for header in headers)
+    if not rows:
+        return (
+            f'<table><thead><tr>{header_html}</tr></thead>'
+            f'<tbody><tr><td colspan="{len(headers)}">{_export_value(empty_message)}</td></tr></tbody></table>'
+        )
+
+    body_html = ''.join(
+        '<tr>' + ''.join(f'<td>{_export_value(cell)}</td>' for cell in row) + '</tr>'
+        for row in rows
+    )
+    return f'<table><thead><tr>{header_html}</tr></thead><tbody>{body_html}</tbody></table>'
+
+
+def _build_user_export_html(personal: Dict[str, Any], docs, timezone_name: str, generated_at: datetime) -> str:
+    activity = personal.get('activity') or {}
+    risk_mix = activity.get('risk_mix') or {}
+    recent = activity.get('recent_30_days') or {}
+    previous = activity.get('previous_30_days') or {}
+    generated_label = _export_date(generated_at)
+    days_since_high_risk = activity.get('days_since_last_high_risk')
+    if days_since_high_risk is None:
+        last_high_risk_label = 'No high-risk result yet'
+    elif days_since_high_risk == 0:
+        last_high_risk_label = 'Today'
+    elif days_since_high_risk == 1:
+        last_high_risk_label = '1 day ago'
+    else:
+        last_high_risk_label = f'{days_since_high_risk} days ago'
+
+    patterns = []
+    for item in personal.get('type_insights') or []:
+        red_flags = ', '.join(
+            f"{flag.get('marker', '')} ({flag.get('count', 0)})"
+            for flag in item.get('common_red_flags') or []
+        )
+        patterns.append([
+            item.get('type'),
+            item.get('count'),
+            f"{item.get('share', 0)}%",
+            item.get('high_risk_count'),
+            item.get('recent_count'),
+            item.get('previous_count'),
+            red_flags or '—',
+        ])
+
+    monthly_rows = [
+        [
+            item.get('label') or item.get('month'),
+            item.get('total'),
+            item.get('not_scam'),
+            item.get('suspicious'),
+            item.get('high_risk'),
+        ]
+        for item in activity.get('monthly_risk') or []
+    ]
+    weekday_rows = [
+        [item.get('weekday'), item.get('total_count'), item.get('scam_count')]
+        for item in activity.get('weekday_activity') or []
+    ]
+    active_days = [
+        [item.get('date'), item.get('count'), item.get('high_risk_count')]
+        for item in activity.get('calendar_days') or []
+        if item.get('count')
+    ]
+
+    recent_rate = (
+        f"{recent['high_risk_rate']}%"
+        if recent.get('high_risk_rate') is not None
+        else 'Not available'
+    )
+    previous_rate = (
+        f"{previous['high_risk_rate']}%"
+        if previous.get('high_risk_rate') is not None
+        else 'Not available'
+    )
+    result_cards = []
+    for result in docs:
+        scam_score = result.get('scam_score')
+        legit_score = result.get('legit_score')
+        flagged = bool(result.get('is_scam'))
+        verdict = (
+            'High risk'
+            if flagged and isinstance(scam_score, (int, float)) and scam_score >= 70
+            else 'Suspicious' if flagged else 'Not scam'
+        )
+        scam_score_label = f'{scam_score}%' if scam_score is not None else None
+        legit_score_label = f'{legit_score}%' if legit_score is not None else None
+        markers = result.get('key_markers')
+        marker_html = ''
+        if isinstance(markers, list) and markers:
+            marker_html = '<p><strong>Warning signs:</strong> ' + ', '.join(
+                _export_value(marker) for marker in markers
+            ) + '</p>'
+
+        result_cards.append(
+            '<article class="result">'
+            f'<div class="result-heading"><h3>{_export_value(result.get("scam_type") or "Detection result")}</h3>'
+            f'<span class="badge">{_export_value(verdict)}</span></div>'
+            f'<p class="muted">{_export_value(_export_date(result.get("created_at")))}</p>'
+            '<dl>'
+            f'<div><dt>Risk score</dt><dd>{_export_value(scam_score_label)}</dd></div>'
+            f'<div><dt>Legitimate score</dt><dd>{_export_value(legit_score_label)}</dd></div>'
+            f'<div><dt>Analysis</dt><dd>{_export_value(result.get("summary"))}</dd></div>'
+            '</dl>'
+            f'<p><strong>Details:</strong> {_export_value(result.get("details"))}</p>'
+            f'{marker_html}'
+            f'<h4>Checked content</h4><pre>{_export_value(result.get("message") or "Message text was not retained for this result.")}</pre>'
+            '</article>'
+        )
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your Verif-AI Data</title>
+  <style>
+    :root {{ color-scheme: light; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: #172033; background: #f3f6fb; }}
+    body {{ max-width: 1080px; margin: 0 auto; padding: 36px 20px 64px; }}
+    h1, h2, h3, h4, p {{ margin-top: 0; }}
+    h1 {{ margin-bottom: 8px; font-size: clamp(2rem, 5vw, 3rem); }}
+    h2 {{ margin: 36px 0 14px; font-size: 1.45rem; }}
+    .intro, .panel, .result {{ border: 1px solid #dce4f0; border-radius: 16px; background: #fff; box-shadow: 0 8px 28px #1720330a; }}
+    .intro, .panel {{ padding: 24px; }}
+    .intro p:last-child {{ margin-bottom: 0; }}
+    .muted, .note {{ color: #58677f; }}
+    .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 20px; }}
+    .stat {{ padding: 16px; border: 1px solid #e4eaf3; border-radius: 12px; background: #f8faff; }}
+    .stat span, .stat strong {{ display: block; }}
+    .stat span {{ color: #58677f; font-size: .9rem; }}
+    .stat strong {{ margin-top: 4px; font-size: 1.35rem; }}
+    .panel {{ margin-top: 16px; overflow-x: auto; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ padding: 11px 12px; border-bottom: 1px solid #e8edf5; text-align: left; vertical-align: top; }}
+    th {{ color: #58677f; font-size: .82rem; }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .results {{ display: grid; gap: 14px; }}
+    .result {{ padding: 20px; overflow-wrap: anywhere; }}
+    .result-heading {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; }}
+    .result-heading h3 {{ margin: 0; }}
+    .badge {{ padding: 5px 10px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: .82rem; font-weight: 700; }}
+    dl {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; }}
+    dt {{ color: #58677f; font-size: .85rem; }}
+    dd {{ margin: 2px 0 0; font-weight: 600; }}
+    pre {{ white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; border-radius: 10px; background: #f5f7fb; font: inherit; }}
+    @media print {{ :root {{ background: #fff; }} body {{ max-width: none; padding: 0; }} .intro, .panel, .result {{ box-shadow: none; break-inside: avoid; }} }}
+    @media (max-width: 520px) {{ body {{ padding: 18px 12px 40px; }} .intro, .panel {{ padding: 17px; }} .result-heading {{ align-items: flex-start; flex-direction: column; }} }}
+  </style>
+</head>
+<body>
+  <header class="intro">
+    <h1>Your Verif-AI data</h1>
+    <p class="muted">Generated {_export_value(generated_label)} · Timezone: {_export_value(timezone_name)}</p>
+    <p>This offline report contains your personal safety analytics and saved detection results. It does not include chat conversations or community-wide analytics.</p>
+    <p class="note">Only results still present in your account history are included. Deleted results and image attachments are not included.</p>
+  </header>
+
+  <h2>Your safety overview</h2>
+  <section class="panel">
+    <p><strong>{_export_value(personal.get('risk_level') or 'No data yet')}</strong> — {_export_value(personal.get('summary'))}</p>
+    <p class="note">These analytics are based only on your saved authenticated checks. No community-wide data is included.</p>
+    <div class="stats">
+      <div class="stat"><span>Messages checked</span><strong>{_export_value(personal.get('total_checks', 0))}</strong></div>
+      <div class="stat"><span>Scam-flagged</span><strong>{_export_value(personal.get('total_scam_checks', 0))}</strong></div>
+      <div class="stat"><span>High risk</span><strong>{_export_value(personal.get('high_risk_count', 0))} ({_export_value(personal.get('high_risk_rate', 0))}%)</strong></div>
+      <div class="stat"><span>Most common pattern</span><strong>{_export_value(personal.get('most_common_type') or 'Not enough data')}</strong></div>
+    </div>
+    <p class="note">Activity insight: {_export_value(personal.get('activity_insight'))}</p>
+  </section>
+
+  <h2>Recent activity</h2>
+  <section class="panel">
+    <p><strong>Last 30 days:</strong> {_export_value(recent.get('total_checks', 0))} checks, {_export_value(recent.get('high_risk_count', 0))} high risk ({_export_value(recent_rate)}).</p>
+    <p><strong>Previous 30 days:</strong> {_export_value(previous.get('total_checks', 0))} checks, {_export_value(previous.get('high_risk_count', 0))} high risk ({_export_value(previous_rate)}).</p>
+    <p><strong>This month:</strong> {_export_value(activity.get('checks_this_month', 0))} checks · <strong>Since last high-risk result:</strong> {_export_value(last_high_risk_label)}</p>
+    <p><strong>Risk mix:</strong> Not scam {_export_value(risk_mix.get('not_scam', 0))} · Suspicious {_export_value(risk_mix.get('suspicious', 0))} · High risk {_export_value(risk_mix.get('high_risk', 0))}</p>
+  </section>
+
+  <h2>Your most common scam patterns</h2>
+  <section class="panel">
+    {_export_table(['Pattern', 'Checks', 'Share', 'High risk', 'Recent 30 days', 'Previous 30 days', 'Common warning signs'], patterns, 'No scam patterns in your saved checks.')}
+  </section>
+
+  <h2>Monthly activity</h2>
+  <section class="panel">
+    {_export_table(['Month', 'Total checks', 'Not scam', 'Suspicious', 'High risk'], monthly_rows, 'No monthly activity to show.')}
+  </section>
+
+  <h2>Activity by weekday</h2>
+  <section class="panel">
+    {_export_table(['Weekday', 'Total checks', 'Scam-flagged checks'], weekday_rows, 'No weekday activity to show.')}
+  </section>
+
+  <h2>Active days · last 12 weeks</h2>
+  <section class="panel">
+    {_export_table(['Date', 'Checks', 'High-risk checks'], active_days, 'No checks in the last 12 weeks.')}
+  </section>
+
+  <h2>Saved detection results ({len(docs)})</h2>
+  <section class="results">
+    {''.join(result_cards) if result_cards else '<p class="panel">No saved detection results were found.</p>'}
+  </section>
+</body>
+</html>"""
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@rate_limit('data_export')
+def export_user_data(request: HttpRequest) -> HttpResponse:
+    """Download the authenticated user's saved detection results and personal analytics."""
+    user_id = _extract_user_id_from_request(request)
+    if not user_id:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    timezone_name = request.GET.get('timezone', 'UTC')
+    try:
+        docs = list(_get_analysis_collection().find({
+            'user_id': user_id,
+            'user_deleted': {'$ne': True},
+        }).sort('created_at', -1))
+        personal = _compute_user_safety_summary(user_id, timezone_name, docs=docs)
+        generated_at = datetime.now(timezone.utc)
+        content = _build_user_export_html(personal, docs, timezone_name, generated_at)
+        response = HttpResponse(content, content_type='text/html; charset=utf-8')
+        response['Content-Disposition'] = (
+            f'attachment; filename="verif-ai-data-{generated_at.date().isoformat()}.html"'
+        )
+        response['Cache-Control'] = 'no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Access-Control-Expose-Headers'] = 'X-RateLimit-Reset'
+        return response
+    except Exception:
+        logger.exception('[USER_DATA_EXPORT] Failed to generate personal data export')
+        return JsonResponse({'error': 'Failed to generate your data export'}, status=500)
 
 
 def _get_ai_summary_repository():

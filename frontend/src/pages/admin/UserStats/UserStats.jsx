@@ -16,7 +16,7 @@ import {
   ConfirmModal,
 } from '../../../components/admin';
 import { useUserStats, useUserReports } from '../../../hooks/useAdminData';
-import { getReportDetails } from '../../../api/admin';
+import { getReportDetails, updateReportStatus } from '../../../api/admin';
 import ReportDetailsModal from './components/ReportDetailsModal';
 import { getPercentage } from './utils';
 import './UserStats.css';
@@ -30,6 +30,7 @@ export default function UserStats({ onNotify }) {
   const [viewReportModal, setViewReportModal] = useState(false);
   const [selectedReportDetails, setSelectedReportDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [savingReportChanges, setSavingReportChanges] = useState(false);
 
   const { 
     data: stats, 
@@ -51,7 +52,7 @@ export default function UserStats({ onNotify }) {
     if (!selectedReport) return;
     
     try {
-      await updateStatus(selectedReport.id, status, `Status updated to ${status} by admin`);
+      await updateStatus(selectedReport.id, status);
       onNotify?.('success', `Report marked as ${status}`);
       setIsModalOpen(false);
       setSelectedReport(null);
@@ -84,6 +85,24 @@ export default function UserStats({ onNotify }) {
       setViewReportModal(false);
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  const handleSaveReportChanges = async (report, status, resolutionNotes) => {
+    const reportId = report.report_id || report.id;
+    setSavingReportChanges(true);
+    try {
+      const response = await updateReportStatus(reportId, { status, resolutionNotes });
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Failed to save report changes');
+      }
+      setSelectedReportDetails(response.data);
+      await refreshReports();
+      onNotify?.('success', 'Report status and response saved');
+    } catch (err) {
+      onNotify?.('error', `Failed to save report changes: ${err.message}`);
+    } finally {
+      setSavingReportChanges(false);
     }
   };
 
@@ -156,7 +175,11 @@ export default function UserStats({ onNotify }) {
           )}
           {row.status !== 'pending' && (
             <span className="user-stats__resolved-text">
-              {row.status === 'resolved' ? '✓ Resolved' : '✗ Dismissed'}
+              {row.status === 'resolved'
+                ? '✓ Resolved'
+                : row.status === 'dismissed'
+                  ? '✗ Dismissed'
+                  : 'In Progress'}
             </span>
           )}
         </div>
@@ -294,7 +317,7 @@ export default function UserStats({ onNotify }) {
         <div className="admin-card__header">
           <h3 className="admin-card__title">User Reports</h3>
           <div className="user-stats__report-filters">
-            {['pending', 'resolved', 'dismissed', 'all'].map((status) => (
+            {['pending', 'in_progress', 'resolved', 'dismissed', 'all'].map((status) => (
               <button
                 key={status}
                 className={`admin-btn admin-btn--sm ${
@@ -354,6 +377,7 @@ export default function UserStats({ onNotify }) {
         isOpen={viewReportModal}
         report={selectedReportDetails}
         loading={loadingDetails}
+        savingChanges={savingReportChanges}
         onClose={() => {
           setViewReportModal(false);
           setSelectedReportDetails(null);
@@ -368,6 +392,7 @@ export default function UserStats({ onNotify }) {
           setSelectedReportDetails(null);
           openModal(report, 'dismiss');
         }}
+        onSaveChanges={handleSaveReportChanges}
       />
     </div>
   );

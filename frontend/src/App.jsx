@@ -8,6 +8,7 @@ import Detection from './pages/Detection.jsx';
 import AIChatbot from './pages/AIChatbot.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPasswordCode from './pages/ResetPasswordCode.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Settings from './pages/Settings.jsx';
 import Analytics from './pages/Analytics.jsx';
@@ -54,6 +55,16 @@ function ProtectedRoute({ children, requireAdmin = false }) {
   return children;
 }
 
+function GuestRoute({ children }) {
+  const { isLoggedIn } = useAuth();
+
+  if (isLoggedIn) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
 function App() {
   const location = useLocation();
   const [routeLoading, setRouteLoading] = useState(false);
@@ -86,7 +97,14 @@ function App() {
     };
   }, []);
 
-  const hideMobileHeaderOnRoutes = new Set(['/login', '/signup', '/verify-email']);
+  const hideMobileHeaderOnRoutes = new Set([
+    '/login',
+    '/signup',
+    '/verify-email',
+    '/forgot-password',
+    '/reset-password-code',
+    '/reset-password',
+  ]);
   const showMobileHeader = isMobile && !hideMobileHeaderOnRoutes.has(location.pathname);
 
   return (
@@ -99,11 +117,12 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/detection" element={<Detection />} />
         <Route path="/chatbot" element={<AIChatbot />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+        <Route path="/signup" element={<GuestRoute><Signup /></GuestRoute>} />
+        <Route path="/verify-email" element={<GuestRoute><VerifyEmail /></GuestRoute>} />
+        <Route path="/forgot-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
+        <Route path="/reset-password-code" element={<GuestRoute><ResetPasswordCode /></GuestRoute>} />
+        <Route path="/reset-password" element={<GuestRoute><ResetPassword /></GuestRoute>} />
         <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
         <Route
           path="/settings"
@@ -156,4 +175,3 @@ function App() {
 }
 
 export default App;
-

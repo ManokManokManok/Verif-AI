@@ -4,6 +4,24 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+export const GUEST_USE_LIMIT_CODE = 'GUEST_USE_LIMIT_REACHED';
+
+export function hasGuestFeatureBeenUsed(feature) {
+  return localStorage.getItem(`verifai_guest_${feature}_used`) === 'true';
+}
+
+function markGuestFeatureUsed(feature) {
+  localStorage.setItem(`verifai_guest_${feature}_used`, 'true');
+}
+
+function guestUseLimitError(feature) {
+  const message = feature === 'image_analysis'
+    ? 'Your free guest image analysis has been used. Log in to analyze another image.'
+    : 'Your free guest chat message has been used. Log in to continue chatting.';
+  const error = new Error(message);
+  error.code = GUEST_USE_LIMIT_CODE;
+  return error;
+}
 
 /**
  * Send a message to the chatbot
@@ -13,6 +31,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
  * @returns {Promise<object>} Response with bot's reply
  */
 export async function sendChatMessage(message, accessToken = null, conversationId = null) {
+  if (!accessToken && hasGuestFeatureBeenUsed('text_chat')) {
+    throw guestUseLimitError('text_chat');
+  }
+
   const headers = {
     'Content-Type': 'application/json',
   };
@@ -41,13 +63,21 @@ export async function sendChatMessage(message, accessToken = null, conversationI
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || 'Failed to send message');
+    const error = new Error(errorData.error?.message || 'Failed to send message');
+    error.code = errorData.error?.code;
+    throw error;
   }
 
-  return await response.json();
+  const data = await response.json();
+  if (!accessToken) markGuestFeatureUsed('text_chat');
+  return data;
 }
 
 export async function sendStaticChatMessage(topic, accessToken = null, conversationId = null) {
+  if (!accessToken && hasGuestFeatureBeenUsed('text_chat')) {
+    throw guestUseLimitError('text_chat');
+  }
+
   const headers = {
     'Content-Type': 'application/json',
   };
@@ -69,13 +99,21 @@ export async function sendStaticChatMessage(topic, accessToken = null, conversat
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || 'Failed to send static chatbot message');
+    const error = new Error(errorData.error?.message || 'Failed to send static chatbot message');
+    error.code = errorData.error?.code;
+    throw error;
   }
 
-  return await response.json();
+  const data = await response.json();
+  if (!accessToken) markGuestFeatureUsed('text_chat');
+  return data;
 }
 
 export async function analyzeImage(imageFileOrBlob, accessToken = null) {
+  if (!accessToken && hasGuestFeatureBeenUsed('image_analysis')) {
+    throw guestUseLimitError('image_analysis');
+  }
+
   const formData = new FormData();
   formData.append('image', imageFileOrBlob, 'image.png');
   const headers = {};
@@ -89,8 +127,11 @@ export async function analyzeImage(imageFileOrBlob, accessToken = null) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to analyze image');
+    const error = new Error(data.error?.message || 'Failed to analyze image');
+    error.code = data.error?.code;
+    throw error;
   }
+  if (!accessToken) markGuestFeatureUsed('image_analysis');
   return data;
 }
 

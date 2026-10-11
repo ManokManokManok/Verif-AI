@@ -698,6 +698,89 @@ class TestAnalyticsMiddleware:
 
 class TestAnalyticsAPI:
     """Tests for Analytics API endpoints."""
+
+    @pytest.fixture
+    def reset_data_export_limiter(self):
+        from src.infrastructure.rate_limiter import get_rate_limiter
+
+        limiter = get_rate_limiter()
+        limiter.reset('ip:127.0.0.1', 'data_export')
+        limiter.reset('user:user123', 'data_export')
+        yield
+        limiter.reset('ip:127.0.0.1', 'data_export')
+        limiter.reset('user:user123', 'data_export')
+
+    def test_user_data_export_requires_authentication(self, api_factory, reset_data_export_limiter):
+        from src.interfaces.rest.analytics_views import export_user_data
+
+        with patch('src.interfaces.rest.analytics_views._extract_user_id_from_request', return_value=None):
+            response = export_user_data(api_factory.get('/api/analytics/my-export/'))
+
+        assert response.status_code == 401
+
+    def test_user_data_export_contains_only_personal_saved_results(self, api_factory, reset_data_export_limiter):
+        from src.interfaces.rest.analytics_views import export_user_data
+
+        saved_results = [
+            {
+                'created_at': datetime(2025, 2, 1),
+                'is_scam': True,
+                'scam_score': 82,
+                'legit_score': 18,
+                'scam_type': 'Impersonation',
+                'message': '<script>alert("private")</script>',
+                'summary': 'An urgent request.',
+                'key_markers': ['urgent request'],
+            }
+        ]
+        collection = Mock()
+        collection.find.return_value.sort.return_value = saved_results
+
+        with (
+            patch('src.interfaces.rest.analytics_views._extract_user_id_from_request', return_value='user123'),
+            patch('src.interfaces.rest.analytics_views._get_analysis_collection', return_value=collection),
+        ):
+            response = export_user_data(api_factory.get('/api/analytics/my-export/?timezone=UTC'))
+
+        content = response.content.decode('utf-8')
+        assert response.status_code == 200
+        assert response['Content-Type'].startswith('text/html')
+        assert response['Content-Disposition'].endswith('.html"')
+        assert response['Cache-Control'] == 'no-store'
+        assert 'Your safety overview' in content
+        assert 'Saved detection results (1)' in content
+        assert '&lt;script&gt;alert(&quot;private&quot;)&lt;/script&gt;' in content
+        assert '<script>alert("private")</script>' not in content
+        assert 'community-wide analytics' in content
+        assert 'user_id' not in content
+        collection.find.assert_called_once_with({
+            'user_id': 'user123',
+            'user_deleted': {'$ne': True},
+        })
+
+    def test_user_data_export_is_limited_to_one_every_three_hours(self, api_factory, reset_data_export_limiter):
+        from src.infrastructure.rate_limiter import get_rate_limiter
+        from src.interfaces.rest.analytics_views import export_user_data
+
+        limiter = get_rate_limiter()
+        limiter.reset()
+        collection = Mock()
+        collection.find.return_value.sort.return_value = []
+        request = api_factory.get('/api/analytics/my-export/?timezone=UTC')
+
+        try:
+            with (
+                patch('src.interfaces.rest.analytics_views._extract_user_id_from_request', return_value='user123'),
+                patch('src.interfaces.rest.analytics_views._get_analysis_collection', return_value=collection),
+            ):
+                first_response = export_user_data(request)
+                second_response = export_user_data(request)
+        finally:
+            limiter.reset()
+
+        assert first_response.status_code == 200
+        assert first_response['X-RateLimit-Limit'] == '1'
+        assert second_response.status_code == 429
     
     def test_visit_statistics_requires_auth(self, api_factory):
         """Test that visit statistics endpoint requires authentication."""

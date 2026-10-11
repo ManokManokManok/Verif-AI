@@ -25,6 +25,7 @@ from ...domain.scam_types import scam_types
 from ...infrastructure.ai.genai_provider import get_genai_provider
 from ...infrastructure.rate_limiter import rate_limit
 from ...infrastructure.validators import sanitize_for_logging
+from .guest_limits import claim_guest_use
 
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,16 @@ def analyze_image(request: Request) -> Response:
         if image_file.size > 10 * 1024 * 1024:
             return Response({'error': {'code': 'FILE_TOO_LARGE', 'message': 'Image must be less than 10MB'}}, status=400)
 
+        user_id, is_authenticated = _extract_user_id_from_jwt(request)
+        if not is_authenticated and not claim_guest_use(_get_session_id(request), 'image_analysis'):
+            return Response({
+                'error': {
+                    'code': 'GUEST_USE_LIMIT_REACHED',
+                    'message': 'Your free guest image analysis has been used. Log in to analyze another image.',
+                    'login_required': True,
+                }
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
         image_bytes = image_file.read()
         response = get_genai_provider().create_image_completion(
             image_bytes=image_bytes,
@@ -147,7 +158,6 @@ def analyze_image(request: Request) -> Response:
         attachment = _image_attachment(image_bytes, image_file.content_type)
         report['image_attachment'] = attachment
         user_message = 'Image submitted for scam and fraud analysis.'
-        user_id, is_authenticated = _extract_user_id_from_jwt(request)
 
         scam_class = next(
             (class_id for class_id, name in scam_types.items() if name == report['scam_type']),
@@ -385,6 +395,15 @@ def send_message(request: Request) -> Response:
                     'details': {'message': 'Maximum 2000 characters allowed'}
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not is_authenticated and not claim_guest_use(_get_session_id(request), 'text_chat'):
+            return Response({
+                'error': {
+                    'code': 'GUEST_USE_LIMIT_REACHED',
+                    'message': 'Your free guest chat message has been used. Log in to continue chatting.',
+                    'login_required': True,
+                }
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
         
         # Log sanitized message
         user_label = user_id if user_id else "anonymous"
@@ -464,6 +483,14 @@ def send_static_message(request: Request) -> Response:
 
     if not user_id:
         session_id = _get_session_id(request)
+        if not claim_guest_use(session_id, 'text_chat'):
+            return Response({
+                'error': {
+                    'code': 'GUEST_USE_LIMIT_REACHED',
+                    'message': 'Your free guest chat message has been used. Log in to continue chatting.',
+                    'login_required': True,
+                }
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
         prompt = STATIC_CHAT_PROMPTS[topic]
         history = _anonymous_conversations.setdefault(session_id, [])
         history.extend([
@@ -1143,5 +1170,4 @@ def get_analysis_guided_history(request: Request, conversation_id: str) -> Respo
                 'message': 'An unexpected error occurred'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 

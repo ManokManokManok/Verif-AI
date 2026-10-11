@@ -82,6 +82,11 @@ class RateLimiter:
                 'window': int(os.getenv('RATE_LIMIT_API_WRITE_WINDOW', '60')),
                 'block': int(os.getenv('RATE_LIMIT_API_WRITE_BLOCK', '120')),
             },
+            'data_export': {
+                'requests': int(os.getenv('RATE_LIMIT_DATA_EXPORT_REQUESTS', '1')),
+                'window': int(os.getenv('RATE_LIMIT_DATA_EXPORT_WINDOW', '10800')),
+                'block': int(os.getenv('RATE_LIMIT_DATA_EXPORT_BLOCK', '10800')),
+            },
             'token_refresh': {
                 'requests': int(os.getenv('RATE_LIMIT_TOKEN_REFRESH_REQUESTS', '10')),
                 'window': int(os.getenv('RATE_LIMIT_TOKEN_REFRESH_WINDOW', '60')),
@@ -316,13 +321,11 @@ def rate_limit(category: str = 'default'):
             # Execute the view
             response = view_func(request, *args, **kwargs)
             
-            # Add rate limit headers to successful responses
+            # Reuse the quota headers from the initial check; checking again would
+            # count a successful request twice against the sliding window.
             if hasattr(response, '__setitem__'):
-                _, _, success_headers = rate_limiter.is_rate_limited(
-                    ip_identifier, category
-                )
-                if success_headers:
-                    for header, value in success_headers.items():
+                if headers:
+                    for header, value in headers.items():
                         if header.startswith('X-RateLimit'):
                             response[header] = value
             
@@ -418,4 +421,3 @@ def check_rate_limit(request: Request, category: str) -> Optional[Response]:
             return _create_rate_limit_response(retry_after, headers, not isinstance(request, Request))
     
     return None
-

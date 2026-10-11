@@ -1,10 +1,17 @@
 from typing import Protocol, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import logging
+import os
+import secrets
 from ..domain.entities import User, AuthResult, UserAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
 from ..domain.services import PasswordHasher, EmailValidator, PasswordValidator, TokenGenerator, EmailService
 from ..infrastructure.jwt_service import JWTService
 from ..infrastructure.mongodb.repositories import MongoDBUserRepository
 from ..infrastructure.token_blacklist_service import TokenBlacklistService
+
+logger = logging.getLogger(__name__)
 
 
 class UserRepository(Protocol):
@@ -103,6 +110,60 @@ class PasswordResetUseCase:
         self.token_generator = token_generator
         self.password_hasher = password_hasher
         self.password_validator = password_validator
+
+    def request_password_reset_code(self, email: str) -> dict:
+        """Issue a one-time code without disclosing whether the account exists."""
+        secret = os.getenv("PASSWORD_RESET_CODE_SECRET") or os.getenv("JWT_SECRET_KEY")
+        if not secret:
+            raise RuntimeError("PASSWORD_RESET_CODE_SECRET or JWT_SECRET_KEY must be configured")
+
+        email_key = hmac.new(
+            secret.encode(), email.strip().lower().encode(), hashlib.sha256
+        ).hexdigest()
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        code_digest = hmac.new(
+            secret.encode(), f"{email_key}:{code}".encode(), hashlib.sha256
+        ).hexdigest()
+        try:
+            user = self.user_repository.get_by_email(email)
+        except UserNotFoundError:
+            user = None
+
+        result = self.token_repository.issue_password_reset_code(
+            email_key, getattr(user, "id", None), code_digest, datetime.now(timezone.utc)
+        )
+        if result["status"] == "sent" and user:
+            if not self.email_service.send_password_reset_code_email(email, code):
+                self.token_repository.invalidate_password_reset_code(email_key)
+                logger.error("Password reset code email delivery failed")
+                result["status"] = "email_failed"
+        return result
+
+    def reset_password_with_code(self, email: str, code: str, new_password: str) -> str:
+        """Validate the password before atomically consuming the emailed code."""
+        is_valid, errors = self.password_validator.validate(new_password)
+        if not is_valid:
+            raise ValueError("Password validation failed: " + "; ".join(errors))
+
+        secret = os.getenv("PASSWORD_RESET_CODE_SECRET") or os.getenv("JWT_SECRET_KEY")
+        if not secret:
+            raise RuntimeError("PASSWORD_RESET_CODE_SECRET or JWT_SECRET_KEY must be configured")
+        password_hash = self.password_hasher.hash_password(new_password)
+        email_key = hmac.new(
+            secret.encode(), email.strip().lower().encode(), hashlib.sha256
+        ).hexdigest()
+        code_digest = hmac.new(
+            secret.encode(), f"{email_key}:{code}".encode(), hashlib.sha256
+        ).hexdigest()
+        result = self.token_repository.record_password_reset_code_attempt(
+            email_key, code_digest, datetime.now(timezone.utc)
+        )
+        if result["status"] != "valid" or not result.get("user_id"):
+            raise InvalidTokenError("The code is invalid, expired, or has reached its attempt limit")
+
+        if not self.token_repository.update_user_password(result["user_id"], password_hash):
+            raise RuntimeError("Password could not be updated")
+        return result["user_id"]
     
     def request_password_reset(self, email: str) -> bool:
         """

@@ -28,6 +28,7 @@ class ReportType(str, Enum):
     FALSE_NEGATIVE = "false_negative"
     BUG = "bug"
     FEEDBACK = "feedback"
+    SUPPORT = "support"
     OTHER = "other"
 
 
