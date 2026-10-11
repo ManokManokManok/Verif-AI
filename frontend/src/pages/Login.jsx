@@ -195,6 +195,7 @@ function AlertIcon() {
 function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+  const authTransition = location.state?.authTransition;
   const { refreshUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
@@ -342,7 +343,7 @@ function Login() {
   const hasMultipleErrors = errorList.length > 1;
 
   return (
-    <div className="auth auth--login auth--mobile page-enter">
+    <div className={`auth auth--login auth--mobile page-enter ${authTransition === 'signup-to-login' ? 'auth--switch-from-signup' : ''}`}>
       <div className="auth__mobileHeader" aria-label="Login mobile header">
         <button
           type="button"
@@ -413,7 +414,7 @@ function Login() {
               If you don&apos;t have an account register
               <br />
               You can{' '}
-              <Link to="/signup" className="auth__link">
+              <Link to="/signup" state={{ authTransition: 'login-to-signup' }} className="auth__link">
                 Register here !
               </Link>
             </p>
@@ -641,4 +642,3 @@ function Login() {
 }
 
 export default Login;
-

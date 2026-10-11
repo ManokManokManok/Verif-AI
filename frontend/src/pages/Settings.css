@@ -602,6 +602,20 @@ button.settings-feature-item:not(:disabled):hover {
   opacity: 0.72;
 }
 
+.settings-feature-item--always-on:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.settings-feature-item--always-on .settings-feature-item__action {
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: var(--theme-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .settings-feature-item > span:first-child {
   min-width: 0;
   display: flex;
@@ -1758,6 +1772,12 @@ button.settings-feature-item:not(:disabled):hover {
   background: #f8fafc;
 }
 
+[data-theme="light"] .settings-feature-item--always-on .settings-feature-item__action {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #64748b !important;
+}
+
 [data-theme="light"] .settings-feature-item:hover:not(:disabled) {
   background: #f8fafc;
   border-color: #4f46e5;
@@ -1897,8 +1917,64 @@ button.settings-feature-item:not(:disabled):hover {
   border-top-color: rgba(15, 23, 42, 0.08);
 }
 
+.settings-modal--support {
+  max-width: 560px;
+}
+
+.settings-modal--support .settings-modal__intro {
+  max-width: 460px;
+  line-height: 1.55;
+}
+
+.settings-support-form {
+  gap: 16px;
+}
+
+.settings-support-form__message {
+  min-height: 140px;
+  resize: vertical;
+}
+
+.settings-support-alternative {
+  color: var(--theme-text-muted);
+  font-size: 0.82rem;
+}
+
+.settings-support-alternative a {
+  color: var(--theme-accent);
+  overflow-wrap: anywhere;
+}
+
+.settings-support-success {
+  align-items: center;
+  text-align: center;
+  color: var(--theme-text-muted);
+  line-height: 1.6;
+}
+
+.settings-support-success p {
+  margin: 0;
+}
+
+.settings-support-success__icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.14);
+  color: #22c55e;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
 @media (max-width: 640px) {
   .settings-theme-options {
     grid-template-columns: 1fr;
+  }
+
+  .settings-modal--support .settings-modal__header,
+  .settings-support-form {
+    padding: 18px;
   }
 }

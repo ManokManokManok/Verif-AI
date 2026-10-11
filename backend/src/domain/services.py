@@ -152,6 +152,9 @@ class EmailService(Protocol):
     def send_password_reset_email(self, email: str, token: str) -> bool:
         ...
 
+    def send_password_reset_code_email(self, email: str, code: str) -> bool:
+        ...
+
 
 class MockEmailService:
     """
@@ -188,6 +191,11 @@ class MockEmailService:
         print(f"MOCK: Sending password reset email to {email}")
         print(f"MOCK: Reset token: {token}")
         print(f"MOCK: Reset link: http://localhost:8000/api/auth/reset-password?token={token}")
+        return True
+
+    def send_password_reset_code_email(self, email: str, code: str) -> bool:
+        print(f"MOCK: Password reset code email to {email}")
+        print(f"MOCK: Reset code: {code}")
         return True
 
 

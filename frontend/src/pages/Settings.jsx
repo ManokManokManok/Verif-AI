@@ -9,9 +9,18 @@ import {
   sendPasswordChangeCodeRequest,
   updateUsernameRequest,
 } from '../api/client';
-import { getMyReports, getReportTypeLabel, getReportStatusLabel } from '../api/reports';
+import {
+  getMyReports,
+  getReportTypeLabel,
+  getReportStatusLabel,
+  REPORT_TYPES,
+  submitReport,
+} from '../api/reports';
 import { getAnalysisDetail } from '../api/analysis';
+import { downloadUserDataExport } from '../api/analytics';
 import { getPasswordRequirements, validatePassword, validateUsername, CONSTRAINTS } from '../utils/validation';
+
+const SUPPORT_EMAIL = 'verifaisupportacc@gmail.com';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -57,10 +66,44 @@ export default function Settings() {
   const [reportFilter, setReportFilter] = useState('all');
   const [selectedReport, setSelectedReport] = useState(null);
   const [navigatingAnalysisId, setNavigatingAnalysisId] = useState(null);
+  const [dataExportLoading, setDataExportLoading] = useState(false);
+  const [dataExportError, setDataExportError] = useState('');
+  const [showSupportDialog, setShowSupportDialog] = useState(false);
+  const [supportCategory, setSupportCategory] = useState('account');
+  const [supportSubject, setSupportSubject] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportError, setSupportError] = useState('');
+  const [supportSuccess, setSupportSuccess] = useState(false);
+  const dataExportCooldownKey = `verif-ai-data-export-reset:${user?.user_id || user?.id || user?.email || 'current-user'}`;
+  const [dataExportResetAt, setDataExportResetAt] = useState(
+    () => Number(window.localStorage.getItem(dataExportCooldownKey)) || 0,
+  );
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const dataExportCooldownRemaining = Math.max(0, dataExportResetAt - currentTime);
 
   useEffect(() => {
     if (!isLoggedIn) navigate('/login', { replace: true });
   }, [isLoggedIn, navigate]);
+
+  useEffect(() => {
+    const storedResetAt = Number(window.localStorage.getItem(dataExportCooldownKey)) || 0;
+    setDataExportResetAt(storedResetAt);
+    if (storedResetAt <= Date.now()) {
+      window.localStorage.removeItem(dataExportCooldownKey);
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setCurrentTime(now);
+      if (now >= storedResetAt) {
+        window.localStorage.removeItem(dataExportCooldownKey);
+        setDataExportResetAt(0);
+      }
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [dataExportCooldownKey]);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -216,6 +259,78 @@ export default function Settings() {
       setDeleteError(err.message || 'Failed to delete account.');
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleDownloadUserData = async () => {
+    setDataExportError('');
+    setDataExportLoading(true);
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const { blob: exportFile, headers } = await downloadUserDataExport(timezone);
+      const resetSeconds = Number(headers.get('X-RateLimit-Reset'));
+      const resetAt = Number.isFinite(resetSeconds) && resetSeconds > 0
+        ? resetSeconds * 1000
+        : Date.now() + (3 * 60 * 60 * 1000);
+      window.localStorage.setItem(dataExportCooldownKey, String(resetAt));
+      setDataExportResetAt(resetAt);
+      setCurrentTime(Date.now());
+      const downloadUrl = URL.createObjectURL(exportFile);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `verif-ai-data-${new Date().toISOString().slice(0, 10)}.html`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    } catch (err) {
+      const retryAfterSeconds = Number(err.payload?.error?.retry_after);
+      if (err.status === 429 && retryAfterSeconds > 0) {
+        const resetAt = Date.now() + (retryAfterSeconds * 1000);
+        window.localStorage.setItem(dataExportCooldownKey, String(resetAt));
+        setDataExportResetAt(resetAt);
+        setCurrentTime(Date.now());
+        return;
+      }
+      setDataExportError(err.message || 'Failed to download your data. Please try again.');
+    } finally {
+      setDataExportLoading(false);
+    }
+  };
+
+  const handleSupportSubmit = async (event) => {
+    event.preventDefault();
+    setSupportError('');
+    setSupportLoading(true);
+    try {
+      await submitReport({
+        report_type: REPORT_TYPES.SUPPORT,
+        title: supportSubject.trim(),
+        description: `Category: ${
+          {
+            account: 'Account and security',
+            analysis: 'Detection or analysis',
+            technical: 'Technical issue',
+            other: 'Other',
+          }[supportCategory]
+        }\n\n${supportMessage.trim()}`,
+      });
+      setSupportSuccess(true);
+      setSupportSubject('');
+      setSupportMessage('');
+      try {
+        const response = await getMyReports({ limit: 50 });
+        if (response.success && response.data) {
+          setReports(response.data.reports || []);
+          setReportsError('');
+        }
+      } catch (err) {
+        setReportsError(`Your report was submitted, but the list could not refresh: ${err.message}`);
+      }
+    } catch (err) {
+      setSupportError(err.message || 'Could not send your message. Please try again.');
+    } finally {
+      setSupportLoading(false);
     }
   };
 
@@ -513,12 +628,12 @@ export default function Settings() {
                       </span>
                       <span className="settings-feature-item__arrow" aria-hidden="true">&rarr;</span>
                     </button>
-                    <button className="settings-feature-item" type="button" disabled>
+                    <button className="settings-feature-item settings-feature-item--always-on" type="button" disabled>
                       <span>
                         <strong>Two-factor authentication</strong>
-                        <small>Add another layer of protection to your account.</small>
+                        <small>Always on for account security</small>
                       </span>
-                      <span className="settings-feature-item__action">Coming soon</span>
+                      <span className="settings-feature-item__action">Automatically On</span>
                     </button>
                   </div>
                 </section>
@@ -536,20 +651,34 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className="settings-feature-list">
-                    <button className="settings-feature-item" type="button" disabled>
+                    <button
+                      className="settings-feature-item"
+                      type="button"
+                      onClick={handleDownloadUserData}
+                      disabled={dataExportLoading || dataExportCooldownRemaining > 0}
+                      aria-busy={dataExportLoading}
+                    >
                       <span>
                         <strong>Download your data</strong>
-                        <small>Request a copy of your VerfAi account data.</small>
+                        <small>
+                          {dataExportCooldownRemaining > 0
+                            ? `Download limit reached, will reset after ${Math.ceil(dataExportCooldownRemaining / (60 * 60 * 1000))} ${Math.ceil(dataExportCooldownRemaining / (60 * 60 * 1000)) === 1 ? 'hour' : 'hours'}.`
+                            : 'Download your personal analytics and saved detection results, including checked message text, as an offline HTML file. Chats, uploaded images, and community analytics are not included.'}
+                        </small>
                       </span>
-                      <span className="settings-feature-item__action">Coming soon</span>
-                    </button>
-                    <button className="settings-feature-item" type="button" disabled>
-                      <span>
-                        <strong>Analysis history</strong>
-                        <small>Manage how long your submitted analyses are retained.</small>
+                      <span className="settings-feature-item__action">
+                        {dataExportLoading
+                          ? 'Preparing…'
+                          : dataExportCooldownRemaining > 0
+                            ? 'Limit reached'
+                            : 'Download HTML'}
                       </span>
-                      <span className="settings-feature-item__action">Coming soon</span>
                     </button>
+                    {dataExportError && (
+                      <div className="settings-message settings-message--error" role="alert">
+                        <span>{dataExportError}</span>
+                      </div>
+                    )}
                   </div>
                   </section>
 
@@ -570,12 +699,20 @@ export default function Settings() {
                       </span>
                       <span className="settings-feature-item__arrow" aria-hidden="true">&rarr;</span>
                     </button>
-                    <button className="settings-feature-item" type="button" disabled>
+                    <button
+                      className="settings-feature-item"
+                      type="button"
+                      onClick={() => {
+                        setSupportError('');
+                        setSupportSuccess(false);
+                        setShowSupportDialog(true);
+                      }}
+                    >
                       <span>
                         <strong>Help and contact support</strong>
-                        <small>Get assistance with your account or an analysis.</small>
+                        <small>Send a message to our support team or contact us by email.</small>
                       </span>
-                      <span className="settings-tag settings-tag--coming">Coming soon</span>
+                      <span className="settings-feature-item__action">Contact</span>
                     </button>
                   </div>
                   </section>
@@ -1150,6 +1287,7 @@ export default function Settings() {
                     <span className="settings-modal__meta-value">{selectedReport.analysis_ref_id}</span>
                   </div>
                 )}
+
               </div>
 
               <div className="settings-modal__section">
@@ -1158,6 +1296,14 @@ export default function Settings() {
                   {selectedReport.description || 'No detailed description provided.'}
                 </div>
               </div>
+              {selectedReport.report_type === REPORT_TYPES.SUPPORT && selectedReport.resolution_notes && (
+                <div className="settings-modal__section">
+                  <h4 className="settings-modal__section-label">Admin response</h4>
+                  <div className="settings-modal__desc-box">
+                    {selectedReport.resolution_notes}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="settings-modal__footer">
@@ -1193,6 +1339,135 @@ export default function Settings() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showSupportDialog && (
+        <div
+          className="settings-modal-overlay"
+          onClick={() => !supportLoading && setShowSupportDialog(false)}
+        >
+          <section
+            className="settings-modal settings-modal--support page-enter"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="support-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="settings-modal__header">
+              <div>
+                <h3 className="settings-modal__title" id="support-dialog-title">
+                  {supportSuccess ? 'Message received' : 'Contact Support'}
+                </h3>
+                <p className="settings-modal__intro">
+                  {supportSuccess
+                    ? 'Your message is now available in Submitted Reports, where you can follow its status and any response.'
+                    : 'Tell us what you need help with. Your account email will be included with the support report.'}
+                </p>
+              </div>
+              <button
+                className="settings-modal__close"
+                type="button"
+                onClick={() => setShowSupportDialog(false)}
+                aria-label="Close support dialog"
+                disabled={supportLoading}
+              >
+                &times;
+              </button>
+            </div>
+
+            {supportSuccess ? (
+              <div className="settings-modal__body settings-support-success" role="status">
+                <span className="settings-support-success__icon" aria-hidden="true">✓</span>
+                <p>Thanks for reaching out. Your support report is available in Submitted Reports, where you can follow its status and read any admin response.</p>
+              </div>
+            ) : (
+              <form className="settings-modal__body settings-support-form" onSubmit={handleSupportSubmit}>
+                <p className="settings-modal__intro">
+                  Signed in as <strong>{user.email}</strong>
+                </p>
+                <label className="settings-field">
+                  <span className="settings-field__label">What do you need help with?</span>
+                  <select
+                    className="settings-input"
+                    value={supportCategory}
+                    onChange={(event) => setSupportCategory(event.target.value)}
+                  >
+                    <option value="account">Account and security</option>
+                    <option value="analysis">Detection or analysis</option>
+                    <option value="technical">Technical issue</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label className="settings-field">
+                  <span className="settings-field__label">Subject</span>
+                  <input
+                    className="settings-input"
+                    type="text"
+                    value={supportSubject}
+                    onChange={(event) => setSupportSubject(event.target.value)}
+                    minLength={3}
+                    maxLength={120}
+                    required
+                    placeholder="Briefly describe the issue"
+                  />
+                </label>
+                <label className="settings-field">
+                  <span className="settings-field__label">Message</span>
+                  <textarea
+                    className="settings-input settings-support-form__message"
+                    value={supportMessage}
+                    onChange={(event) => setSupportMessage(event.target.value)}
+                    minLength={10}
+                    maxLength={5000}
+                    required
+                    placeholder="Include details that will help us understand and resolve the issue."
+                  />
+                  <small className="settings-field__hint">
+                    Please do not include your password, verification codes, or other authentication secrets.
+                  </small>
+                </label>
+                {supportError && (
+                  <div className="settings-message settings-message--error" role="alert">
+                    {supportError}
+                  </div>
+                )}
+                <div className="settings-support-alternative">
+                  Prefer email? Contact us at{' '}
+                  <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+                </div>
+                <div className="settings-modal__actions">
+                  <button
+                    className="settings-btn settings-btn--secondary"
+                    type="button"
+                    onClick={() => setShowSupportDialog(false)}
+                    disabled={supportLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="settings-btn settings-btn--primary"
+                    type="submit"
+                    disabled={supportLoading || supportSubject.trim().length < 3 || supportMessage.trim().length < 10}
+                  >
+                    {supportLoading ? 'Sending…' : 'Send message'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {supportSuccess && (
+              <div className="settings-modal__footer">
+                <button
+                  className="settings-btn settings-btn--primary"
+                  type="button"
+                  onClick={() => setShowSupportDialog(false)}
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>

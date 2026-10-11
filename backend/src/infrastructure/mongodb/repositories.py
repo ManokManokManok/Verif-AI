@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
 from ...domain.entities import User, Role, Permission, UserAlreadyExistsError, UserNotFoundError
@@ -30,6 +30,123 @@ class MongoDBTokenRepository:
         self.users_collection: Collection = self.db.users
         self.verification_tokens_collection: Collection = self.db.verification_tokens
         self.password_reset_tokens_collection: Collection = self.db.password_reset_tokens
+        self.password_reset_codes_collection: Collection = self.db.password_reset_codes
+        self.password_reset_codes_collection.create_index(
+            "email_key", unique=True, name="password_reset_email_key"
+        )
+        self.password_reset_codes_collection.create_index(
+            "purge_after", expireAfterSeconds=0, name="password_reset_purge_after"
+        )
+
+    def issue_password_reset_code(
+        self, email_key: str, user_id: Optional[str], code_digest: str, now: datetime
+    ) -> Dict[str, Any]:
+        """Persist a replacement code while atomically enforcing send cooldowns."""
+        from pymongo.errors import DuplicateKeyError
+
+        now = _to_utc_naive(now)
+        for _ in range(5):
+            document = self.password_reset_codes_collection.find_one({"email_key": email_key})
+            sends = [
+                sent_at for sent_at in (document or {}).get("sends", [])
+                if _to_utc_naive(sent_at) > now - timedelta(hours=1)
+            ]
+            latest_send = max((_to_utc_naive(value) for value in sends), default=None)
+            if latest_send and latest_send > now - timedelta(seconds=60):
+                return {
+                    "status": "cooldown",
+                    "retry_after_seconds": max(1, int((latest_send - now).total_seconds() + 60)),
+                    "send_limit_reached": False,
+                }
+            if len(sends) >= 3:
+                oldest_send = min(_to_utc_naive(value) for value in sends)
+                return {
+                    "status": "send_limit",
+                    "retry_after_seconds": max(1, int((oldest_send - now).total_seconds() + 3600)),
+                    "send_limit_reached": True,
+                }
+
+            updated_sends = sends + [now]
+            replacement = {
+                "email_key": email_key,
+                "user_id": user_id,
+                "code_digest": code_digest,
+                "created_at": now,
+                "expires_at": now + timedelta(minutes=10),
+                "attempts": 0,
+                "sends": updated_sends,
+                "updated_at": now,
+                "purge_after": now + timedelta(hours=1),
+                "revision": (document or {}).get("revision", 0) + 1,
+            }
+            if not document:
+                try:
+                    self.password_reset_codes_collection.insert_one(replacement)
+                    return {"status": "sent", "retry_after_seconds": 60, "send_limit_reached": False}
+                except DuplicateKeyError:
+                    continue
+
+            result = self.password_reset_codes_collection.update_one(
+                {"_id": document["_id"], "revision": document.get("revision", 0)},
+                {"$set": replacement},
+            )
+            if result.modified_count:
+                return {"status": "sent", "retry_after_seconds": 60, "send_limit_reached": False}
+
+        raise RuntimeError("Could not safely update password reset code state")
+
+    def record_password_reset_code_attempt(
+        self, email_key: str, code_digest: str, now: datetime, max_attempts: int = 5
+    ) -> Dict[str, Any]:
+        """Check and consume a reset code, or count a failed attempt atomically."""
+        now = _to_utc_naive(now)
+        for _ in range(max_attempts + 1):
+            query = {
+                "email_key": email_key,
+                "code_digest": code_digest,
+                "expires_at": {"$gt": now},
+                "attempts": {"$lt": max_attempts},
+                "consumed_at": {"$exists": False},
+            }
+            document = self.password_reset_codes_collection.find_one_and_update(
+                query,
+                {"$set": {"consumed_at": now, "purge_after": now + timedelta(hours=1)}},
+                return_document=True,
+            )
+            if document:
+                return {"status": "valid", "user_id": document.get("user_id")}
+
+            active = self.password_reset_codes_collection.find_one({
+                "email_key": email_key,
+                "expires_at": {"$gt": now},
+                "consumed_at": {"$exists": False},
+            })
+            if not active:
+                return {"status": "invalid"}
+            if active.get("attempts", 0) >= max_attempts:
+                return {"status": "locked"}
+
+            result = self.password_reset_codes_collection.update_one(
+                {
+                    "_id": active["_id"],
+                    "attempts": active.get("attempts", 0),
+                    "consumed_at": {"$exists": False},
+                    "expires_at": {"$gt": now},
+                },
+                {"$inc": {"attempts": 1}},
+            )
+            if result.modified_count:
+                return {
+                    "status": "locked" if active.get("attempts", 0) + 1 >= max_attempts else "wrong"
+                }
+        return {"status": "invalid"}
+
+    def invalidate_password_reset_code(self, email_key: str) -> None:
+        """Invalidate a code when delivery fails."""
+        self.password_reset_codes_collection.update_one(
+            {"email_key": email_key, "consumed_at": {"$exists": False}},
+            {"$set": {"expires_at": _now_utc_naive()}},
+        )
     
     def create_verification_token(self, user_id: str, token: str, expires_at: datetime) -> bool:
         """

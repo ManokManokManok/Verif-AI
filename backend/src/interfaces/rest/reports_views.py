@@ -7,7 +7,6 @@ These endpoints require authentication but NOT admin role.
 
 import os
 import json
-from datetime import datetime
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
@@ -99,7 +98,7 @@ def submit_report(request):
     
     Request body:
     {
-        "report_type": "hallucination" | "false_positive" | "false_negative" | "bug" | "feedback" | "other",
+        "report_type": "hallucination" | "false_positive" | "false_negative" | "bug" | "feedback" | "support" | "other",
         "title": "Report title (3+ chars)",
         "description": "Detailed description (10+ chars)",
         "analysis_id": "optional analysis ID",
@@ -265,6 +264,11 @@ def get_report_types(request):
             'value': ReportType.FEEDBACK.value,
             'label': 'Feedback',
             'description': 'General feedback or suggestions for improvement',
+        },
+        {
+            'value': ReportType.SUPPORT.value,
+            'label': 'Support Request',
+            'description': 'A message requesting help from customer support',
         },
         {
             'value': ReportType.OTHER.value,

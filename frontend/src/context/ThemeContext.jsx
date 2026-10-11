@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 
 const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('app-theme') || 'dark';
+    return localStorage.getItem('app-theme') === 'light' ? 'light' : 'dark';
   });
 
   useEffect(() => {
@@ -13,8 +14,29 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('app-theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  const toggleTheme = (event) => {
+    const updateTheme = () => {
+      setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    };
+
+    const button = event?.currentTarget;
+    if (
+      typeof document.startViewTransition !== 'function'
+      || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      updateTheme();
+      return;
+    }
+
+    if (button) {
+      const { left, top, width, height } = button.getBoundingClientRect();
+      document.documentElement.style.setProperty('--theme-transition-x', `${left + width / 2}px`);
+      document.documentElement.style.setProperty('--theme-transition-y', `${top + height / 2}px`);
+    }
+
+    document.startViewTransition(() => {
+      flushSync(updateTheme);
+    });
   };
 
   return (

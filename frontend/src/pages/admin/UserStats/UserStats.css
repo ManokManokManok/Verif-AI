@@ -290,6 +290,21 @@ code {
   font-size: 0.9rem;
   color: var(--admin-text);
   line-height: 1.6;
+}
+
+.report-details__editor {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  color: var(--admin-text);
+  background: var(--admin-bg-secondary, #1f2937);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.report-details__editor--response {
+  min-height: 110px;
+  resize: vertical;
   white-space: pre-wrap;
   word-wrap: break-word;
   background: var(--admin-bg-hover);

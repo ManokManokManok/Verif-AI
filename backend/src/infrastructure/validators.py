@@ -719,6 +719,23 @@ def get_password_reset_validator() -> RequestValidator:
     )
 
 
+def get_password_reset_code_request_validator() -> RequestValidator:
+    """Get validator for requesting a password reset code."""
+    return get_email_only_validator()
+
+
+def get_password_reset_code_validator() -> RequestValidator:
+    """Get validator for resetting a password with an emailed code."""
+    return RequestValidator().add_field(
+        'email', FieldType.EMAIL, required=True, lowercase=True
+    ).add_field(
+        'code', FieldType.STRING, required=True,
+        min_length=6, max_length=6, pattern=r'^\d{6}$'
+    ).add_field(
+        'new_password', FieldType.PASSWORD, required=True
+    )
+
+
 def get_refresh_token_validator() -> RequestValidator:
     """Get validator for token refresh endpoint."""
     return RequestValidator().add_field(

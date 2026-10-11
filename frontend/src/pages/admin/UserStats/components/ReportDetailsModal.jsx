@@ -5,7 +5,7 @@
  * Allows admins to view full report details and take actions (resolve/dismiss).
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { StatusBadge } from '../../../../components/admin';
 
@@ -15,10 +15,28 @@ const REPORT_TYPE_LABELS = {
   false_negative: 'False Negative',
   bug: 'Bug Report',
   feedback: 'Feedback',
+  support: 'Support Request',
   other: 'Other',
 };
 
-export default function ReportDetailsModal({ isOpen, report, loading, onClose, onResolve, onDismiss }) {
+export default function ReportDetailsModal({
+  isOpen,
+  report,
+  loading,
+  savingChanges = false,
+  onClose,
+  onResolve,
+  onDismiss,
+  onSaveChanges,
+}) {
+  const [editedStatus, setEditedStatus] = useState('pending');
+  const [response, setResponse] = useState('');
+
+  useEffect(() => {
+    setEditedStatus(report?.status || 'pending');
+    setResponse(report?.resolution_notes || '');
+  }, [report]);
+
   if (!isOpen) return null;
 
   const formatDate = (dateString) => {
@@ -138,7 +156,7 @@ export default function ReportDetailsModal({ isOpen, report, loading, onClose, o
                 </div>
               )}
             </div>
-            {report.resolution_notes && (
+            {report.report_type !== 'support' && report.resolution_notes && (
               <div className="report-details__field report-details__field--full" style={{ marginTop: '0.75rem' }}>
                 <label>Resolution Notes</label>
                 <p className="report-details__description">{report.resolution_notes}</p>
@@ -146,6 +164,43 @@ export default function ReportDetailsModal({ isOpen, report, loading, onClose, o
             )}
           </div>
         )}
+        {report.report_type === 'support' && report.resolution_notes && (
+          <div className="report-details__section">
+            <h4 className="report-details__section-title">Saved Admin Response</h4>
+            <p className="report-details__description">{report.resolution_notes}</p>
+          </div>
+        )}
+
+        <div className="report-details__section">
+          <h4 className="report-details__section-title">Update report</h4>
+          <div className="report-details__field report-details__field--full">
+            <label htmlFor="report-status">Status</label>
+            <select
+              id="report-status"
+              className="report-details__editor"
+              value={editedStatus}
+              onChange={(event) => setEditedStatus(event.target.value)}
+            >
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+              <option value="dismissed">Dismissed</option>
+            </select>
+          </div>
+          {report.report_type === 'support' && (
+            <div className="report-details__field report-details__field--full" style={{ marginTop: '0.75rem' }}>
+              <label htmlFor="report-admin-response">Response visible to the reporter</label>
+              <textarea
+                id="report-admin-response"
+                className="report-details__editor report-details__editor--response"
+                value={response}
+                onChange={(event) => setResponse(event.target.value)}
+                maxLength={5000}
+                placeholder="Add an update or response for the user"
+              />
+            </div>
+          )}
+        </div>
 
         {/* Timestamps */}
         <div className="report-details__section report-details__section--no-border">
@@ -168,6 +223,17 @@ export default function ReportDetailsModal({ isOpen, report, loading, onClose, o
             onClick={onClose}
           >
             Close
+          </button>
+          <button
+            className="admin-modal__btn admin-modal__btn--info"
+            onClick={() => onSaveChanges?.(
+              report,
+              editedStatus,
+              report.report_type === 'support' ? response : undefined,
+            )}
+            disabled={savingChanges}
+          >
+            {savingChanges ? 'Saving...' : 'Save status and response'}
           </button>
           {isPending && (
             <>
@@ -195,7 +261,9 @@ ReportDetailsModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   report: PropTypes.object,
   loading: PropTypes.bool,
+  savingChanges: PropTypes.bool,
   onClose: PropTypes.func.isRequired,
   onResolve: PropTypes.func,
   onDismiss: PropTypes.func,
+  onSaveChanges: PropTypes.func,
 };

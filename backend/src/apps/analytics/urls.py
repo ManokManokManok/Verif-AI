@@ -19,6 +19,7 @@ from ...interfaces.rest.analytics_views import (
     get_global_safety_summary,
     get_user_ai_summary,
     get_user_ai_summary_cached,
+    export_user_data,
 )
 
 app_name = 'analytics'
@@ -50,6 +51,9 @@ urlpatterns = [
 
     # Personal safety overview
     path('my-summary/', get_user_safety_summary, name='my_safety_summary'),
+
+    # Download the authenticated user's detection history and personal analytics
+    path('my-export/', export_user_data, name='my_data_export'),
 
     # AI-generated plain-language explanation of the personal safety overview
     path('my-summary-ai/', get_user_ai_summary, name='my_safety_summary_ai'),
