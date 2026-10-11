@@ -12,7 +12,8 @@ from ...infrastructure.validators import (
     RequestValidator, FieldType, ValidationError,
     get_login_validator, get_signup_validator, get_detect_scam_validator,
     get_email_only_validator, get_token_only_validator, 
-    get_password_reset_validator, get_refresh_token_validator,
+    get_password_reset_validator, get_password_reset_code_validator,
+    get_password_reset_code_request_validator, get_refresh_token_validator,
     sanitize_for_logging
 )
 
@@ -1127,7 +1128,7 @@ def verify_email(request: Request) -> Response:
 @rate_limit('password_reset')
 def request_password_reset(request: Request) -> Response:
     """
-    Request password reset email.
+    Request a one-time password reset code.
     
     Request body:
     {
@@ -1135,12 +1136,11 @@ def request_password_reset(request: Request) -> Response:
     }
     
     Security:
-    - Rate limited (3 requests per hour)
+    - Rate limited (3 requests per hour, one send per minute)
     - Generic response to prevent user enumeration
     """
     try:
-        # Validate input
-        validator = get_email_only_validator()
+        validator = get_password_reset_code_request_validator()
         is_valid, errors, cleaned_data = validator.validate(request.data)
         
         if not is_valid:
@@ -1171,8 +1171,7 @@ def request_password_reset(request: Request) -> Response:
             password_validator=password_validator
         )
         
-        # Execute use case
-        reset_usecase.request_password_reset(email)
+        result = reset_usecase.request_password_reset_code(email)
         
         # Audit: password reset requested
         get_audit_logger().log_event(
@@ -1182,16 +1181,10 @@ def request_password_reset(request: Request) -> Response:
         )
 
         return Response({
-            'message': 'Password reset email sent successfully'
+            'message': 'If an account exists for this email, a password reset code has been sent.',
+            'retry_after_seconds': result.get('retry_after_seconds', 60),
+            'send_limit_reached': result.get('send_limit_reached', False),
         }, status=status.HTTP_200_OK)
-        
-    except UserNotFoundError as e:
-        return Response({
-            'error': {
-                'code': 'USER_NOT_FOUND',
-                'message': str(e)
-            }
-        }, status=status.HTTP_404_NOT_FOUND)
     
     except Exception as e:
         return Response({
@@ -1220,6 +1213,46 @@ def reset_password(request: Request) -> Response:
     - Token and password validation
     """
     try:
+        if 'code' in request.data or 'email' in request.data:
+            validator = get_password_reset_code_validator()
+            is_valid, errors, cleaned_data = validator.validate(request.data)
+            if not is_valid:
+                return Response({
+                    'error': {
+                        'code': 'VALIDATION_ERROR',
+                        'message': 'Invalid input',
+                        'details': errors
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            user_repo = get_user_repository()
+            token_repo = get_token_repository()
+            reset_usecase = PasswordResetUseCase(
+                user_repository=user_repo,
+                token_repository=token_repo,
+                email_service=get_email_service(),
+                token_generator=TokenGenerator(),
+                password_hasher=BCryptPasswordHasher(),
+                password_validator=PasswordValidator()
+            )
+            user_id = reset_usecase.reset_password_with_code(
+                cleaned_data['email'],
+                cleaned_data['code'],
+                cleaned_data['new_password']
+            )
+            user = user_repo.get_by_id(user_id)
+            get_audit_logger().log_event(
+                event_type=AuditEventType.PASSWORD_RESET_COMPLETED,
+                user_id=user_id,
+                email=getattr(user, 'email', None),
+                ip_address=_get_client_ip(request),
+                metadata={'method': 'email_code'}
+            )
+            return Response(
+                {'message': 'Password reset successfully'},
+                status=status.HTTP_200_OK
+            )
+
         # Validate input
         validator = get_password_reset_validator()
         is_valid, errors, cleaned_data = validator.validate(request.data)

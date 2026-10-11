@@ -21,6 +21,7 @@ export const REPORT_TYPES = {
   FALSE_NEGATIVE: 'false_negative',
   BUG: 'bug',
   FEEDBACK: 'feedback',
+  SUPPORT: 'support',
   OTHER: 'other',
 };
 
@@ -113,6 +114,7 @@ export function getReportTypeLabel(reportType) {
     [REPORT_TYPES.FALSE_NEGATIVE]: 'False Negative',
     [REPORT_TYPES.BUG]: 'Bug Report',
     [REPORT_TYPES.FEEDBACK]: 'Feedback',
+    [REPORT_TYPES.SUPPORT]: 'Support Request',
     [REPORT_TYPES.OTHER]: 'Other',
   };
   return labels[reportType] || reportType;

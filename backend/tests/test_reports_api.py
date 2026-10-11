@@ -172,7 +172,7 @@ class TestGetReportTypes:
         assert response.status_code == 200
         data = json.loads(response.content)
         assert data['success'] is True
-        assert len(data['data']) == 6  # All 6 report types
+        assert len(data['data']) == 7  # All 7 report types
         
         # Check each type has required fields
         for report_type in data['data']:
@@ -193,6 +193,7 @@ class TestGetReportTypes:
         assert 'false_negative' in type_values
         assert 'bug' in type_values
         assert 'feedback' in type_values
+        assert 'support' in type_values
         assert 'other' in type_values
 
 
@@ -338,7 +339,7 @@ class TestReportValidation:
         response = get_report_types(request)
         data = json.loads(response.content)
         
-        expected_types = ['hallucination', 'false_positive', 'false_negative', 'bug', 'feedback', 'other']
+        expected_types = ['hallucination', 'false_positive', 'false_negative', 'bug', 'feedback', 'support', 'other']
         type_values = [t['value'] for t in data['data']]
         
         for expected in expected_types:

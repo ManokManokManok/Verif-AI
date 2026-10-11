@@ -49,6 +49,53 @@ def test_factory_selects_nodemailer_provider(monkeypatch):
     assert isinstance(service, _NodeMailerStub)
 
 
+def test_smtp_uses_configured_gmail_for_sender_and_login(monkeypatch):
+    monkeypatch.setenv('EMAIL_HOST', 'smtp.gmail.com')
+    monkeypatch.setenv('EMAIL_PORT', '587')
+    monkeypatch.setenv('EMAIL_USE_TLS', 'True')
+    monkeypatch.setenv('EMAIL_HOST_USER', 'verifaisupportacc@gmail.com')
+    monkeypatch.setenv('EMAIL_HOST_PASSWORD', 'test-app-password')
+    monkeypatch.delenv('EMAIL_FROM_ADDRESS', raising=False)
+
+    service = email_module.SMTPEmailService()
+
+    assert service.host == 'smtp.gmail.com'
+    assert service.port == 587
+    assert service.use_tls is True
+    assert service.username == 'verifaisupportacc@gmail.com'
+    assert service.from_address == 'verifaisupportacc@gmail.com'
+
+
+def test_transactional_email_templates_include_clear_instructions_and_security_help(monkeypatch):
+    monkeypatch.setenv('VERIFAI_SUPPORT_EMAIL', 'support@example.com')
+    templates = [
+        (email_module._password_reset_code_html('123456'), '10 minutes'),
+        (email_module._mfa_code_html('123456'), '5 minutes'),
+        (email_module._password_change_code_html('123456'), '5 minutes'),
+        (email_module._email_verification_code_html('123456'), '15 minutes'),
+    ]
+
+    for html, expiry in templates:
+        assert 'How to use your code' in html
+        assert 'use the newest email' in html
+        assert f'Expires in {expiry}' in html
+        assert 'do not share or forward the code' in html
+        assert 'mailto:support@example.com' in html
+        assert '123456' in html
+
+
+def test_transactional_email_templates_escape_codes_and_links():
+    html = email_module._mfa_code_html('<img src=x onerror=alert(1)>')
+    verification_html = email_module._verification_html(
+        'https://example.com/verify?token="><script>alert(1)</script>'
+    )
+
+    assert '<img src=x onerror=alert(1)>' not in html
+    assert '&lt;img src=x onerror=alert(1)&gt;' in html
+    assert '<script>alert(1)</script>' not in verification_html
+    assert '&lt;script&gt;alert(1)&lt;/script&gt;' in verification_html
+
+
 def test_nodemailer_send_calls_node_bridge(monkeypatch, tmp_path):
     script = tmp_path / 'nodemailer_sender.js'
     script.write_text('console.log("ok")', encoding='utf-8')
@@ -119,4 +166,3 @@ def test_nodemailer_empty_host_falls_back_to_email_host(monkeypatch, tmp_path):
 
     assert sent is True
     assert 'smtp.gmail.com' in captured['input']
-

@@ -53,6 +53,7 @@ class AdminRepository:
         self.reports_collection.create_index("status")
         self.reports_collection.create_index("created_at")
         self.reports_collection.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+
         
         # Activity logs indexes
         self.activity_logs_collection.create_index("log_id", unique=True)
@@ -909,7 +910,7 @@ class AdminRepository:
             return []
     
     # ==================== User Reports ====================
-    
+
     def create_report(self, report: UserReport) -> UserReport:
         """
         Create a new user report.

@@ -551,7 +551,7 @@ function Detection() {
 
   return (
     <div className="detect page-enter" style={{ gridTemplateColumns: sidebarOpen ? '320px 1fr' : '72px 1fr' }}>
-      <aside className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
+      <aside id="detection-history-sidebar" className={`detect__sidebar${sidebarOpen ? ' detect__sidebar--open' : ''}`} style={{ width: sidebarOpen ? 320 : 72 }}>
         <button
           className="detect__sidebtn detect__sidebtn--menu"
           type="button"
@@ -615,6 +615,16 @@ function Detection() {
       </aside>
 
       <div className="detect__main">
+        <button
+          className="detect__mobile-history-toggle"
+          type="button"
+          aria-label={sidebarOpen ? 'Close analysis history' : 'Open analysis history'}
+          aria-expanded={sidebarOpen}
+          aria-controls="detection-history-sidebar"
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          {sidebarOpen ? '✕ Close' : '☰ History'}
+        </button>
         <header className="nav nav--detect nav--app">
           <AppNavLinks active="detection" />
           {isLoggedIn ? (

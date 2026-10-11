@@ -10,7 +10,7 @@ Supports multiple email backends:
 Configuration (via .env):
     EMAIL_BACKEND=sendgrid|nodemailer|smtp|mock   (default: mock)
     SENDGRID_API_KEY=...               (required for SendGrid)
-    EMAIL_FROM_ADDRESS=noreply@verfai.com
+    EMAIL_FROM_ADDRESS=verifaisupportacc@gmail.com
     EMAIL_FROM_NAME=Verif-AI
     FRONTEND_URL=http://localhost:5173
 
@@ -26,6 +26,7 @@ import json
 import logging
 import shutil
 import subprocess
+from html import escape
 from pathlib import Path
 from typing import Protocol
 
@@ -43,6 +44,8 @@ class EmailServiceProtocol(Protocol):
 
     def send_password_reset_email(self, email: str, token: str) -> bool: ...
 
+    def send_password_reset_code_email(self, email: str, code: str) -> bool: ...
+
     def send_mfa_code_email(self, email: str, code: str) -> bool: ...
 
     def send_password_change_code_email(self, email: str, code: str) -> bool: ...
@@ -55,6 +58,7 @@ class _TemplatedEmailServiceBase:
 
     def __init__(self):
         self.frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+        self.support_email = os.getenv('VERIFAI_SUPPORT_EMAIL', 'verifaisupportacc@gmail.com')
 
     def _send(self, to_email: str, subject: str, html: str) -> bool:
         raise NotImplementedError
@@ -66,6 +70,13 @@ class _TemplatedEmailServiceBase:
     def send_password_reset_email(self, email: str, token: str) -> bool:
         link = f"{self.frontend_url}/reset-password?token={token}"
         return self._send(email, "Reset Your Password - Verif-AI", _password_reset_html(link))
+
+    def send_password_reset_code_email(self, email: str, code: str) -> bool:
+        return self._send(
+            email,
+            "Your Password Reset Code - Verif-AI",
+            _password_reset_code_html(code),
+        )
 
     def send_mfa_code_email(self, email: str, code: str) -> bool:
         return self._send(email, "Your Verification Code - Verif-AI", _mfa_code_html(code))
@@ -81,102 +92,183 @@ class _TemplatedEmailServiceBase:
 # HTML template helpers
 # ---------------------------------------------------------------------------
 
-def _base_html(body_html: str) -> str:
-    """Wrap body content in a consistent HTML email template."""
+def _base_html(title: str, preheader: str, body_html: str) -> str:
+    """Build responsive, table-based HTML that remains readable in email clients."""
+    safe_title = escape(title)
+    safe_preheader = escape(preheader)
+    safe_support_email = escape(
+        os.getenv('VERIFAI_SUPPORT_EMAIL', 'verifaisupportacc@gmail.com'),
+        quote=True,
+    )
     return f"""<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<style>
-    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-    .button {{
-        display: inline-block;
-        padding: 12px 24px;
-        color: #ffffff;
-        text-decoration: none;
-        border-radius: 4px;
-        margin: 20px 0;
-    }}
-    .btn-green {{ background-color: #4CAF50; }}
-    .btn-red   {{ background-color: #f44336; }}
-    .code {{
-        font-size: 32px;
-        font-weight: bold;
-        color: #4CAF50;
-        letter-spacing: 5px;
-        padding: 20px;
-        background-color: #f5f5f5;
-        border-radius: 4px;
-        text-align: center;
-        margin: 20px 0;
-    }}
-    .footer {{ color: #666; font-size: 12px; margin-top: 30px; }}
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{safe_title}</title>
 </head>
-<body>
-<div class="container">
-{body_html}
-<div class="footer">
-    <p>&copy; 2026 Verif-AI. All rights reserved.</p>
-</div>
-</div>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#172033;">
+<div style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">{safe_preheader}</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f1f5f9;">
+  <tr><td align="center" style="padding:32px 14px;">
+    <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;">
+      <tr><td style="padding:0 0 16px 4px;">
+        <span style="font-size:22px;line-height:28px;font-weight:800;letter-spacing:-.5px;color:#172033;">Verif<span style="color:#2563eb;">-AI</span></span>
+      </td></tr>
+      <tr><td style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:36px 34px;">
+        {body_html}
+      </td></tr>
+      <tr><td style="padding:20px 8px 0;color:#64748b;font-size:12px;line-height:19px;">
+        <p style="margin:0 0 8px;">This automated message was sent because an action was started in Verif-AI.</p>
+        <p style="margin:0 0 8px;">Need help? Contact <a href="mailto:{safe_support_email}" style="color:#1d4ed8;text-decoration:underline;">{safe_support_email}</a>.</p>
+        <p style="margin:0;">&copy; 2026 Verif-AI. Please do not reply with passwords or verification codes.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
 </body>
 </html>"""
 
 
+def _email_heading(eyebrow: str, heading: str, description: str) -> str:
+    return (
+        f'<p style="margin:0 0 10px;color:#2563eb;font-size:12px;line-height:18px;'
+        f'font-weight:700;letter-spacing:1.4px;text-transform:uppercase;">{escape(eyebrow)}</p>'
+        f'<h1 style="margin:0 0 12px;color:#0f172a;font-size:26px;line-height:34px;'
+        f'font-weight:750;letter-spacing:-.4px;">{escape(heading)}</h1>'
+        f'<p style="margin:0 0 22px;color:#475569;font-size:15px;line-height:24px;">'
+        f'{escape(description)}</p>'
+    )
+
+
+def _email_code_steps(action: str, expiry: str) -> str:
+    return f"""
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:22px 0;">
+  <tr><td style="padding:18px 20px;background-color:#eff6ff;border:1px solid #dbeafe;border-radius:12px;">
+    <p style="margin:0 0 10px;color:#1e3a8a;font-size:14px;line-height:21px;font-weight:700;">How to use your code</p>
+    <ol style="margin:0;padding:0 0 0 20px;color:#334155;font-size:14px;line-height:23px;">
+      <li style="padding:0 0 5px;">Return to the Verif-AI page where you requested the code.</li>
+      <li style="padding:0 0 5px;">Enter the code exactly as shown and continue with {escape(action)}.</li>
+      <li>If it has expired, request a new code on that page and use the newest email.</li>
+    </ol>
+    <p style="margin:12px 0 0;color:#475569;font-size:13px;line-height:20px;"><strong>Expires in {escape(expiry)}.</strong> Codes may be replaced when you request another one.</p>
+  </td></tr>
+</table>
+"""
+
+
+def _security_notice(did_not_request: str) -> str:
+    safe_support_email = escape(
+        os.getenv('VERIFAI_SUPPORT_EMAIL', 'verifaisupportacc@gmail.com'),
+        quote=True,
+    )
+    return f"""
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:22px;">
+  <tr><td style="padding:16px 18px;background-color:#fff7ed;border-left:4px solid #f59e0b;border-radius:6px;">
+    <p style="margin:0;color:#7c2d12;font-size:13px;line-height:21px;">
+      {escape(did_not_request)} Ignore this email; do not share or forward the code. If you are concerned about your account, contact
+      <a href="mailto:{safe_support_email}" style="color:#9a3412;text-decoration:underline;">{safe_support_email}</a>.
+    </p>
+  </td></tr>
+</table>
+"""
+
+
 def _verification_html(verification_link: str) -> str:
-    return _base_html(f"""
-<h2>Welcome to Verif-AI!</h2>
-<p>Thank you for registering. Please verify your email address to activate your account.</p>
-<p><a href="{verification_link}" class="button btn-green">Verify Email Address</a></p>
-<p>Or copy and paste this link into your browser:</p>
-<p>{verification_link}</p>
-<p>This link will expire in 24 hours.</p>
-<p class="footer">If you didn't create an account, please ignore this email.</p>
-""")
+    safe_link = escape(verification_link, quote=True)
+    body = f"""
+{_email_heading('Account security', 'Confirm your email', 'Welcome to Verif-AI. Verify this email address to activate your account.')}
+<p style="margin:0 0 20px;">
+  <a href="{safe_link}" style="display:inline-block;padding:13px 20px;background-color:#2563eb;border-radius:9px;color:#ffffff;font-size:14px;line-height:20px;font-weight:700;text-decoration:none;">Verify email address</a>
+</p>
+<p style="margin:0 0 8px;color:#475569;font-size:13px;line-height:20px;">If the button does not work, copy this link into your browser:</p>
+<p style="margin:0 0 20px;overflow-wrap:anywhere;font-size:13px;line-height:20px;"><a href="{safe_link}" style="color:#1d4ed8;">{safe_link}</a></p>
+<p style="margin:0;padding:12px 14px;background-color:#f8fafc;border-radius:8px;color:#334155;font-size:13px;line-height:20px;">This verification link expires in <strong>24 hours</strong>. Once verified, return to Verif-AI and sign in.</p>
+{_security_notice("If you didn't create a Verif-AI account,")}
+"""
+    return _base_html(
+        'Confirm your Verif-AI email',
+        'Verify your email address to activate your account.',
+        body,
+    )
 
 
 def _password_reset_html(reset_link: str) -> str:
-    return _base_html(f"""
-<h2>Password Reset Request</h2>
-<p>We received a request to reset your password. Click the button below to create a new password:</p>
-<p><a href="{reset_link}" class="button btn-red">Reset Password</a></p>
-<p>Or copy and paste this link into your browser:</p>
-<p>{reset_link}</p>
-<p>This link will expire in 1 hour.</p>
-<p class="footer">If you didn't request a password reset, please ignore this email or contact support.</p>
-""")
+    safe_link = escape(reset_link, quote=True)
+    body = f"""
+{_email_heading('Account security', 'Reset your password', 'A password reset was requested for your Verif-AI account.')}
+<p style="margin:0 0 20px;">
+  <a href="{safe_link}" style="display:inline-block;padding:13px 20px;background-color:#2563eb;border-radius:9px;color:#ffffff;font-size:14px;line-height:20px;font-weight:700;text-decoration:none;">Choose a new password</a>
+</p>
+<p style="margin:0 0 8px;color:#475569;font-size:13px;line-height:20px;">If the button does not work, copy this link into your browser:</p>
+<p style="margin:0 0 20px;overflow-wrap:anywhere;font-size:13px;line-height:20px;"><a href="{safe_link}" style="color:#1d4ed8;">{safe_link}</a></p>
+<p style="margin:0;padding:12px 14px;background-color:#f8fafc;border-radius:8px;color:#334155;font-size:13px;line-height:20px;">This reset link expires in <strong>1 hour</strong>. Use it only once, then sign in with your new password.</p>
+{_security_notice("If you didn't request a password reset,")}
+"""
+    return _base_html(
+        'Reset your Verif-AI password',
+        'Use the secure link to choose a new password.',
+        body,
+    )
+
+
+def _password_reset_code_html(code: str) -> str:
+    body = f"""
+{_email_heading('Account security', 'Reset your password', 'Use the code below to continue resetting your Verif-AI password.')}
+<div style="margin:0;padding:18px 16px;background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;text-align:center;color:#0f172a;font-size:34px;line-height:42px;font-weight:800;letter-spacing:9px;">{escape(str(code))}</div>
+{_email_code_steps('reset your password', '10 minutes')}
+{_security_notice("If you didn't request a password reset,")}
+"""
+    return _base_html(
+        'Your Verif-AI password reset code',
+        'Enter this code on the password reset page.',
+        body,
+    )
 
 
 def _mfa_code_html(code: str) -> str:
-    return _base_html(f"""
-<h2>Your Verification Code</h2>
-<p>Enter this code to complete your login:</p>
-<div class="code">{code}</div>
-<p><strong>This code will expire in 5 minutes.</strong></p>
-<p class="footer">If you didn't request this code, please secure your account immediately.</p>
-""")
+    body = f"""
+{_email_heading('Sign-in verification', 'Your login code', 'Enter this code in the Verif-AI sign-in screen to complete your login.')}
+<div style="margin:0;padding:18px 16px;background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;text-align:center;color:#0f172a;font-size:34px;line-height:42px;font-weight:800;letter-spacing:9px;">{escape(str(code))}</div>
+{_email_code_steps('complete your sign-in', '5 minutes')}
+{_security_notice("If you didn't try to sign in,")}
+"""
+    return _base_html(
+        'Your Verif-AI sign-in code',
+        'Enter this code in Verif-AI to complete sign-in.',
+        body,
+    )
 
 
 def _password_change_code_html(code: str) -> str:
-    return _base_html(f"""
-<h2>Password Change Request</h2>
-<p>Use this code to confirm that you want to change your Verif-AI password:</p>
-<div class="code">{code}</div>
-<p><strong>This code will expire in 5 minutes.</strong></p>
-<p>If you did not request a password change, you can ignore this email. Your password will not change without your current password.</p>
-""")
+    body = f"""
+{_email_heading('Account security', 'Confirm password change', 'Use this code in Settings to continue changing your Verif-AI password.')}
+<div style="margin:0;padding:18px 16px;background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;text-align:center;color:#0f172a;font-size:34px;line-height:42px;font-weight:800;letter-spacing:9px;">{escape(str(code))}</div>
+{_email_code_steps('confirm the password change', '5 minutes')}
+<p style="margin:0;color:#475569;font-size:13px;line-height:21px;">The password change also requires your current password in the app.</p>
+{_security_notice("If you didn't request a password change,")}
+"""
+    return _base_html(
+        'Your Verif-AI password change code',
+        'Enter this code in Settings to confirm a password change.',
+        body,
+    )
 
 
 def _email_verification_code_html(code: str) -> str:
-    return _base_html(f"""
-<h2>Verify Your Email</h2>
-<p>Enter this code to verify your Verif-AI account:</p>
-<div class="code">{code}</div>
-<p><strong>This code will expire in 15 minutes.</strong></p>
-<p class="footer">If you didn't create an account, please ignore this email.</p>
-""")
+    body = f"""
+{_email_heading('Account security', 'Verify your email', 'Enter this code on the email verification screen to confirm your address.')}
+<div style="margin:0;padding:18px 16px;background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;text-align:center;color:#0f172a;font-size:34px;line-height:42px;font-weight:800;letter-spacing:9px;">{escape(str(code))}</div>
+{_email_code_steps('verify your email address', '15 minutes')}
+{_security_notice("If you didn't try to verify an email address,")}
+"""
+    return _base_html(
+        'Your Verif-AI email verification code',
+        'Enter this code to verify your email address.',
+        body,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +287,7 @@ class SendGridEmailService(_TemplatedEmailServiceBase):
     def __init__(self):
         super().__init__()
         self.api_key = os.getenv('SENDGRID_API_KEY')
-        self.from_address = os.getenv('EMAIL_FROM_ADDRESS', 'noreply@verfai.com')
+        self.from_address = os.getenv('EMAIL_FROM_ADDRESS', 'verifaisupportacc@gmail.com')
         self.from_name = os.getenv('EMAIL_FROM_NAME', 'Verif-AI')
 
         if not self.api_key:
@@ -249,7 +341,7 @@ class NodeMailerEmailService(_TemplatedEmailServiceBase):
 
     def __init__(self):
         super().__init__()
-        self.from_address = os.getenv('EMAIL_FROM_ADDRESS', 'noreply@verfai.com')
+        self.from_address = os.getenv('EMAIL_FROM_ADDRESS', 'verifaisupportacc@gmail.com')
         self.from_name = os.getenv('EMAIL_FROM_NAME', 'Verif-AI')
         self.node_executable = self._get_env('NODE_EXECUTABLE', 'node')
         self.timeout_seconds = int(self._get_env('NODEMAILER_TIMEOUT_SECONDS', '15'))
@@ -356,7 +448,10 @@ class SMTPEmailService(_TemplatedEmailServiceBase):
         self.use_tls = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
         self.username = os.getenv('EMAIL_HOST_USER')
         self.password = os.getenv('EMAIL_HOST_PASSWORD')
-        self.from_address = os.getenv('EMAIL_FROM_ADDRESS', self.username or 'noreply@verfai.com')
+        self.from_address = os.getenv(
+            'EMAIL_FROM_ADDRESS',
+            self.username or 'verifaisupportacc@gmail.com',
+        )
         self.from_name = os.getenv('EMAIL_FROM_NAME', 'Verif-AI')
 
         if not self.username or not self.password:
@@ -413,6 +508,12 @@ class MockEmailService(_TemplatedEmailServiceBase):
         logger.info(f"[MockEmail] Password reset email to {email}")
         logger.info(f"[MockEmail] Link: {link}")
         print(f"MOCK: Password reset email to {email} | Link: {link}")
+        return True
+
+    def send_password_reset_code_email(self, email: str, code: str) -> bool:
+        logger.info(f"[MockEmail] Password reset code email to {email}")
+        logger.info(f"[MockEmail] Code: {code}")
+        print(f"MOCK: Password reset code to {email} | Code: {code}")
         return True
 
     def send_mfa_code_email(self, email: str, code: str) -> bool:

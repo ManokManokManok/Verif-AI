@@ -388,7 +388,7 @@ export async function getReportDetails(reportId) {
  */
 export async function updateReportStatus(reportId, { status, resolutionNotes }) {
   const body = { status };
-  if (resolutionNotes) body.resolution_notes = resolutionNotes;
+  if (resolutionNotes !== undefined) body.resolution_notes = resolutionNotes;
   
   return authApiRequest(`/admin/reports/${reportId}/`, {
     method: 'PATCH',

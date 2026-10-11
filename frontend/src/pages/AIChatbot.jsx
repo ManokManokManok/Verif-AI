@@ -497,6 +497,7 @@ function AIChatbot() {
   return (
     <div className="detect detect--chatbot page-enter">
       <aside 
+        id="chatbot-history-sidebar"
         className={`detect__sidebar detect__sidebar--chatbot${sidebarOpen ? ' detect__sidebar--open' : ''}`} 
         style={{ width: isMobile ? (sidebarOpen ? 320 : 0) : (sidebarOpen ? 320 : 72) }}
       >
@@ -584,6 +585,16 @@ function AIChatbot() {
         flexDirection: 'column',
         minHeight: '100vh',
       }}>
+        <button
+          className="detect__mobile-history-toggle"
+          type="button"
+          aria-label={sidebarOpen ? 'Close chat history' : 'Open chat history'}
+          aria-expanded={sidebarOpen}
+          aria-controls="chatbot-history-sidebar"
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          {sidebarOpen ? '✕ Close' : '☰ History'}
+        </button>
         <header className="nav nav--detect nav--app" style={{ flexShrink: 0 }}>
           <AppNavLinks active="chatbot" />
           {isLoggedIn ? (
@@ -1093,4 +1104,3 @@ function AIChatbot() {
 }
 
 export default AIChatbot;
-

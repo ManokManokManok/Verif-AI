@@ -22,7 +22,7 @@ pip install -r backend\requirements.txt
 ```powershell
 Copy-Item backend\.env.example backend\.env
 ```
-Edit `backend/.env` with `DJANGO_SECRET_KEY`, `MONGODB_URI`, `MONGODB_DB_NAME`, and `JWT_SECRET_KEY`.
+Edit `backend/.env` with `DJANGO_SECRET_KEY`, `MONGODB_URI`, `MONGODB_DB_NAME`, and `JWT_SECRET_KEY`. Set a stable `PASSWORD_RESET_CODE_SECRET` as well (or keep the stable `JWT_SECRET_KEY` fallback) so reset codes remain verifiable for their 10-minute lifetime if the Django launcher is restarted.
 
 4. Run initial checks and start the server:
 ```powershell
@@ -30,6 +30,30 @@ python backend\manage.py check
 python backend\manage.py runserver
 ```
 Visit http://127.0.0.1:8000/api/health to confirm health.
+
+### Start the Vercel demo backend and tunnel (Windows)
+With the backend virtual environment active, run:
+```powershell
+cd backend
+python manage.py runserver_deployed
+```
+This opens two PowerShell windows: Django (bound to localhost, with debug
+disabled) and a Cloudflare Quick Tunnel. Keep both windows open while using
+the demo. The tunnel window prints a temporary `https://....trycloudflare.com`
+URL; each run creates a different URL. In Vercel Project Settings, update
+Production `VITE_API_URL` to that origin and `VITE_API_BASE_URL` to the same
+origin followed by `/api`, then redeploy the frontend.
+The backend also permits this Vercel project's deployment preview URLs, so
+preview builds can reach the demo API without changing the CORS configuration.
+Email-verification links created by this launcher point to the production
+Vercel frontend instead of localhost. Forgot-password requests now use a
+six-digit email code instead of a reset link.
+
+Stop the demo by pressing `Ctrl+C` in both opened windows. The launcher creates
+a temporary Django secret in the server process environment and does not write
+it to `.env`. `cloudflared.exe` must be on PATH or installed at
+`%LOCALAPPDATA%\Programs\cloudflared\cloudflared.exe`; alternatively set
+`CLOUDFLARED_PATH` before running the command.
 
 ## Clean Architecture Layout
 - `backend/src/domain`: Entities and business rules
@@ -52,7 +76,7 @@ This backend implements a comprehensive authentication system with JWT-based sta
 - **Role-Based Access Control**: User roles and permissions system
 - **Profile Management**: Get and update user profiles
 - **Email Verification**: Account verification via email tokens
-- **Password Reset**: Secure password reset flow via email
+- **Password Reset**: One-time six-digit email code (10-minute expiry, 60-second resend cooldown, three sends per hour, five incorrect attempts)
 - **Token Blacklisting**: Secure logout with token revocation
 - **Token Refresh**: Refresh access tokens using refresh tokens
 - **Enhanced Security**: Token validation and blacklisting
@@ -67,8 +91,8 @@ POST /api/auth/refresh            - Refresh access token
 POST /api/auth/logout             - Logout (blacklist tokens)
 POST /api/auth/send-verification  - Send email verification
 POST /api/auth/verify-email       - Verify email with token
-POST /api/auth/request-reset      - Request password reset
-POST /api/auth/reset-password     - Reset password with token
+POST /api/auth/request-reset      - Request a password reset code
+POST /api/auth/reset-password     - Reset password with email and code (legacy links remain temporarily supported)
 ```
 
 #### User Management Endpoints
@@ -119,11 +143,12 @@ curl -X POST http://localhost:8000/api/auth/request-reset \
   -H "Content-Type: application/json" \
   -d '{"email": "user@example.com"}'
 
-# Reset password with token
+# Reset password with the emailed code
 curl -X POST http://localhost:8000/api/auth/reset-password \
   -H "Content-Type: application/json" \
   -d '{
-    "token": "reset_token_here",
+    "email": "user@example.com",
+    "code": "123456",
     "new_password": "NewSecurePass123!"
   }'
 ```
