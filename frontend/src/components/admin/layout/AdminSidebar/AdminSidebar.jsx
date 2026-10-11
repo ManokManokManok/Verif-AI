@@ -95,11 +95,13 @@ export default function AdminSidebar({
                     aria-current={activeSection === section.id ? 'page' : undefined}
                   >
                     <span className="admin-sidebar__icon">
-                      <img
-                        src={section.icon}
-                        alt={`${section.label} icon`}
-                        className="admin-sidebar__icon-image"
-                      />
+                      {section.icon ? (
+                        <img
+                          src={section.icon}
+                          alt={`${section.label} icon`}
+                          className="admin-sidebar__icon-image"
+                        />
+                      ) : section.glyph}
                     </span>
                     <span className="admin-sidebar__label">{section.label}</span>
                   </a>
@@ -135,11 +137,13 @@ export default function AdminSidebar({
                 onClick={(event) => handleSectionLinkClick(event, section.id)}
                 aria-current={activeSection === section.id ? 'page' : undefined}
               >
-                <img
-                  src={section.icon}
-                  alt={`${section.label} icon`}
-                  className="admin-sidebar__icon-image"
-                />
+                {section.icon ? (
+                  <img
+                    src={section.icon}
+                    alt={`${section.label} icon`}
+                    className="admin-sidebar__icon-image"
+                  />
+                ) : section.glyph}
               </a>
             ))}
 

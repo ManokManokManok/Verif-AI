@@ -153,32 +153,33 @@ function getAuthHeaders() {
  * Core API request function with security enhancements.
  * 
  * @param {string} path - API endpoint path
- * @param {RequestInit} options - Fetch options
+ * @param {RequestInit & {responseType?: string}} options - Fetch options
  * @returns {Promise<any>} Response data
  * @throws {Error} With status and payload on failure
  */
 async function apiRequest(path, options = {}) {
+  const { responseType, ...requestOptions } = options;
   const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
 
   const headers = {
     'Content-Type': 'application/json',
-    ...(options.headers || {}),
+    ...(requestOptions.headers || {}),
   };
 
   const controller = new AbortController();
-  const timeoutId = options.signal
+  const timeoutId = requestOptions.signal
     ? null
     : setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let response;
   try {
     response = await fetch(url, {
-      ...options,
+      ...requestOptions,
       headers,
-      signal: options.signal ?? controller.signal,
+      signal: requestOptions.signal ?? controller.signal,
     });
   } catch (err) {
-    if (err.name === 'AbortError' && !options.signal) {
+    if (err.name === 'AbortError' && !requestOptions.signal) {
       const timeoutErr = new Error('Request timed out after 2 minutes');
       timeoutErr.name = 'TimeoutError';
       throw timeoutErr;
@@ -199,7 +200,9 @@ async function apiRequest(path, options = {}) {
   const isJson = response.headers
     .get('content-type')
     ?.includes('application/json');
-  const data = isJson ? await response.json() : null;
+  const data = isJson && (responseType !== 'blob' || !response.ok)
+    ? await response.json()
+    : null;
 
   if (!response.ok) {
     // Handle 401 Unauthorized — attempt token refresh
@@ -257,6 +260,10 @@ async function apiRequest(path, options = {}) {
     throw error;
   }
 
+  if (responseType === 'blob') return response.blob();
+  if (responseType === 'blob-with-headers') {
+    return { blob: await response.blob(), headers: response.headers };
+  }
   return data;
 }
 

@@ -60,8 +60,17 @@ function ForgotPassword() {
               </div>
             )}
             <button type="submit" className="auth__primary" disabled={loading}>
-              <strong>{loading ? 'Sending…' : 'Send Verification Code'}</strong>
+              <strong>Send Verification Code</strong>
             </button>
+            {loading && (
+              <div className="forgot-password__loading" role="status" aria-live="polite">
+                <span className="forgot-password__spinner" aria-hidden="true" />
+                <span>
+                  <strong>Sending your reset code</strong>
+                  <small>This can take a few seconds. Please keep this page open.</small>
+                </span>
+              </div>
+            )}
           </form>
 
           <p className="auth__single-footer-link">

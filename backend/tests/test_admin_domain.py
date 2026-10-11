@@ -580,6 +580,7 @@ class TestEnums:
         assert ReportType.FALSE_NEGATIVE.value == "false_negative"
         assert ReportType.BUG.value == "bug"
         assert ReportType.FEEDBACK.value == "feedback"
+        assert ReportType.SUPPORT.value == "support"
         assert ReportType.OTHER.value == "other"
     
     def test_statistics_period_values(self):

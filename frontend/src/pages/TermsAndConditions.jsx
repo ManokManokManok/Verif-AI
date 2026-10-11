@@ -5,68 +5,132 @@ const TERMS = [
   {
     number: '01',
     title: 'Acceptance of Terms',
-    content:
-      'By creating an account or using VerifAI, you agree to be bound by these Terms and Conditions. If you do not agree, please discontinue use of the service immediately.',
+    content: [
+      'These Terms explain the rules for using VerifAI. By accessing the service, you agree to these Terms. If you do not agree, do not use the service.',
+      'If you use VerifAI on behalf of another person or organization, you confirm that you are authorized to accept these Terms for them.',
+    ],
   },
   {
     number: '02',
     title: 'Eligibility',
-    content:
-      'You must be at least 13 years old to use VerifAI. By using the service, you represent that you meet this requirement.',
+    content: [
+      'You must be at least 13 years old, or the minimum age required to use an online service where you live if that age is higher. If you are below the age of majority where you live, use the service only with a parent or legal guardian’s permission and supervision.',
+      'VerifAI is not designed for children under 13. Do not create an account or submit a child’s personal information if you do not have authority to do so.',
+    ],
   },
   {
     number: '03',
-    title: 'User Responsibilities',
-    content:
-      'You agree to use VerifAI for lawful purposes only. You must not misuse the service, attempt to reverse-engineer any component, or use the platform to facilitate harmful or fraudulent activity. You are responsible for maintaining the confidentiality of your account credentials.',
+    title: 'Accounts and Acceptable Use',
+    content: [
+      'Provide accurate account information and keep your sign-in credentials confidential. You are responsible for activity carried out through your account; tell us promptly if you believe it has been accessed without permission.',
+      'Use VerifAI lawfully and do not interfere with its operation, probe or bypass its security, overload it, extract or reverse-engineer it except where the law permits, or use it to facilitate fraud, harassment, or other harm.',
+      'Only submit content that you have the right to use. Do not submit information that you are not comfortable sharing with the service and, where applicable, its AI providers.',
+    ],
   },
   {
     number: '04',
-    title: 'Privacy & Data Practices',
-    content:
-      'We are committed to protecting your privacy. VerifAI collects only the information necessary to provide and improve our services, including your email address, password (hashed), and analysis data. Raw messages and images for scam analysis are processed securely; images for OCR are processed on your device and not stored. We avoid retaining unnecessary personal data and keep security and audit logs for compliance, which may include user IDs and emails. For more details, please review our Privacy Policy (coming soon).',
+    title: 'Information We Collect',
+    content: [
+      'Account information: your email address, username, password hash, and information needed to authenticate and secure your account. We do not store your password in plain text.',
+      'Submitted content and results: text or images you submit for detection, the resulting verdict, scores, category, explanation, warning signs, and timestamps. For signed-in users, detection results are saved to the account history. Some image-analysis results also retain an image preview.',
+      'Chats: signed-in chatbot conversations and their messages are stored in conversation history. Guest chat is not saved to a signed-in account, but messages are processed to provide a response and may be held temporarily in server memory.',
+      'Service and security data: the service may record request paths, timestamps, HTTP methods, response status and timing, device type, browser user-agent, referrer, session identifiers, account identifiers, and a hashed IP address for usage analytics. Security or audit events may also record an IP address, account identifier, email address, user-agent, and the event details.',
+      'Browser storage: the app stores authentication tokens and preferences such as your selected theme in browser local storage. Some temporary flows use session storage. Do not use a shared or public device without signing out.',
+    ],
   },
   {
     number: '05',
-    title: 'Data Retention, Deletion & Model Improvement',
-    content:
-      'Audit logs are retained for 90 days. You may request account deletion at any time; your account and analysis history will be deleted or redacted as required. Some metadata may be retained for security and compliance purposes. For ongoing improvement of our detection models, anonymized and aggregated analysis data may be exported and used by administrators, even after deletion. Once data has been used for model training or improvement, it cannot be removed from those processes, but it will never be linked to your identity or used for any other purpose.',
+    title: 'How We Use and Process Information',
+    content: [
+      'We use submitted content to perform the requested scam analysis or answer a chatbot message; account and history data to provide sign-in, saved history, analytics, and data export features; and technical and security data to operate, troubleshoot, protect, and measure the service.',
+      'AI processing depends on the feature and deployment. Image analysis sends the submitted image and analysis prompt to Google Gemini. Chat and some text-generation features may use Google Gemini; chatbot generation can fall back to Gemma running with the service. Other detection may use VerifAI software or models. Do not submit passwords, payment credentials, government identifiers, or unrelated sensitive information.',
+      'When an external AI provider processes content, that provider receives the content needed for the request and processes it under its own terms and privacy practices. VerifAI does not control the provider’s retention or handling. Review the provider’s current terms before submitting sensitive content.',
+    ],
   },
   {
     number: '06',
-    title: 'Data Integrity',
-    content:
-      'Analysis records may be retained to support audits, investigations, and service quality. Where data is stored, it is handled according to our retention and access control policies.',
+    title: 'Storage, Retention, and Deletion',
+    content: [
+      'VerifAI stores account, analysis, and signed-in conversation records in its configured database. The current service does not apply one published automatic expiry period to all of these records. They may remain in active or archive storage until removed through an available feature or handled by an operational process.',
+      'Deleting an individual detection or clearing detection history removes it from your visible history and clears the submitted message text, but associated metadata (such as the result, scores, timestamp, and account association) is retained. The feature does not permanently erase every related record.',
+      'Deleting a conversation removes it from active conversation history but the current implementation archives a copy. Deleting your account removes the account from active accounts but archives a copy of the account record. Account deletion does not currently erase all associated analysis records, archived conversations, archived account data, or operational/security logs.',
+      'We have not verified a fixed retention period for archived records or operational logs. We will retain information only as long as needed for the purposes described here and as required or permitted by law, but exact deletion timing is not currently guaranteed. This description reflects current product behavior and may change as retention controls are implemented.',
+    ],
   },
   {
     number: '07',
-    title: 'Disclaimer',
-    content:
-      'VerifAI provides AI-powered guidance and scam prevention tools, but does not guarantee outcomes. Results are advisory and do not constitute legal, financial, or professional advice. Use of the service is at your own risk.',
+    title: 'Sharing and Service Providers',
+    content: [
+      'We do not publish your account data or make your submitted content public through the service. We share information with providers only as needed to operate features you use, including database hosting, AI processing, and account or security email delivery; to protect the service; or to comply with legal obligations.',
+      'The current AI integration may send content to Google Gemini as described above. Database and email providers depend on the deployment configuration. Providers may process data in locations different from yours and under their own terms. This page does not identify every provider or promise a particular hosting region.',
+      'The service may display aggregate scam-pattern analytics. These are derived from analysis records; aggregation does not by itself guarantee that information can never be re-identified.',
+    ],
   },
   {
     number: '08',
-    title: 'Limitation of Liability',
-    content:
-      'To the fullest extent permitted by law, VerifAI and its operators are not liable for any damages or losses resulting from your use of the service, including but not limited to direct, indirect, incidental, or consequential damages.',
+    title: 'Your Choices and Data Requests',
+    content: [
+      'You can review saved detection history and use the available data-export and deletion controls in the app. The export currently includes personal analytics and saved detection results, including retained message text; it does not include chats or uploaded image files.',
+      'You may have additional rights under the privacy laws that apply to you, such as requesting access, correction, deletion, or restriction of certain information. Those rights may have legal exceptions. The app does not currently provide a complete self-service process for every request, and deleted data may remain in the archives described above.',
+    ],
   },
   {
     number: '09',
-    title: 'Changes to Terms',
-    content:
-      'We may update these Terms and Conditions from time to time. Continued use of VerifAI after changes are posted constitutes your acceptance of the revised terms. Material changes will be communicated via the platform.',
+    title: 'Security and Privacy Limitations',
+    content: [
+      'We use technical and organizational measures intended to protect information, but no online service, transmission, or storage system can be guaranteed completely secure. We cannot promise that unauthorized access, loss, or disclosure will never occur.',
+      'If you believe your account or information has been compromised, stop using the affected session and contact verifaisupportacc@gmail.com. Do not send passwords or authentication codes in a support request.',
+    ],
   },
   {
     number: '10',
-    title: 'Governing Law',
-    content:
-      'These Terms and Conditions are governed by the laws of the Republic of the Philippines. Any disputes arising from or relating to these terms shall be resolved in the courts of the Philippines.',
+    title: 'Service Results and Availability',
+    content: [
+      'VerifAI provides automated scam-detection information and general educational guidance. Results can be incomplete, inaccurate, outdated, or wrong, and a “not scam” result does not establish that a message, person, link, or transaction is safe.',
+      'Do not rely on VerifAI as the sole basis for sending money, sharing credentials, making a legal or financial decision, or responding to an emergency. Verify requests through an independent, trusted channel and seek qualified professional advice where appropriate.',
+      'We may change, suspend, or discontinue features, including AI features, to maintain or improve the service. We do not guarantee uninterrupted availability or that every feature will remain available.',
+    ],
   },
   {
     number: '11',
-    title: 'Contact',
-    content:
-      'For questions or concerns regarding these terms or your data, please contact us at support@verifai.com. We aim to respond within 2–3 business days. (placeholder for now)',
+    title: 'Intellectual Property',
+    content: [
+      'VerifAI and its software, branding, and service materials are owned by their respective owners and protected by applicable intellectual-property laws. These Terms grant you a limited, revocable right to use the service for its intended purpose.',
+      'You retain rights you have in content you submit. You give VerifAI permission to process that content only as needed to provide, secure, and operate the features you request, subject to these Terms and applicable law.',
+    ],
+  },
+  {
+    number: '12',
+    title: 'Disclaimers and Liability',
+    content: [
+      'To the extent permitted by law, the service is provided “as is” and “as available,” without warranties that cannot lawfully be excluded. Nothing in these Terms limits rights or remedies that applicable law does not allow us to limit.',
+      'To the fullest extent permitted by law, VerifAI and its operators are not liable for indirect, incidental, special, consequential, or punitive loss arising from use of the service. This does not exclude liability that cannot be excluded or limited by law.',
+    ],
+  },
+  {
+    number: '13',
+    title: 'Changes to These Terms',
+    content: [
+      'We may revise these Terms as the service or legal requirements change. We will update the “Last updated” date when we publish a revision. Where the law requires notice or renewed consent for a material change, we will provide it.',
+      'The revised Terms apply from their stated effective date. Continuing to use the service after that date may constitute acceptance only to the extent permitted by applicable law.',
+    ],
+  },
+  {
+    number: '14',
+    title: 'Governing Law',
+    content: [
+      'These Terms are intended to be governed by the laws of the Republic of the Philippines, without displacing any mandatory consumer or privacy protections that apply where you live. Any forum or venue for a dispute is subject to those mandatory rights and applicable law.',
+    ],
+  },
+  {
+    number: '15',
+    title: 'Contact and Legal Review',
+    content: [
+      'For customer support, account verification, privacy questions, or data requests, email verifaisupportacc@gmail.com. Verif-AI is intended to use this mailbox as the sender for account emails; delivery depends on the email settings of the running deployment.',
+      'Do not email passwords, one-time codes, or other authentication secrets. Include only the information needed to explain your request.',
+      'This page describes current product behavior but is not a substitute for a jurisdiction-specific privacy notice or legal review. The service operator should have qualified counsel review these Terms and confirm the described data practices, retention periods, and provider details.',
+    ],
+    contactEmail: 'verifaisupportacc@gmail.com',
   },
 ];
 
@@ -178,7 +242,7 @@ function TermsAndConditions() {
         .terms-nav__theme:hover {
           border-color: var(--tc-btn-hover-border);
         }
-        .terms-nav__close {
+        .terms-nav__home {
           background: none;
           border: 1px solid var(--tc-btn-border);
           color: var(--tc-btn-color);
@@ -189,7 +253,7 @@ function TermsAndConditions() {
           font-weight: 500;
           transition: all 0.2s;
         }
-        .terms-nav__close:hover {
+        .terms-nav__home:hover {
           border-color: var(--tc-btn-hover-border);
           color: var(--tc-btn-hover-color);
         }
@@ -258,19 +322,6 @@ function TermsAndConditions() {
           border-top: 1px solid var(--tc-border);
         }
 
-        /* CLOSE TIP */
-        .terms-close-tip {
-          text-align: center;
-          padding: 18px 48px 4px;
-          font-size: 0.78rem;
-          color: var(--tc-muted);
-        }
-        .terms-close-tip a {
-          color: var(--tc-link);
-          text-decoration: none;
-        }
-        .terms-close-tip a:hover { text-decoration: underline; }
-
         /* CONTENT */
         .terms-content {
           max-width: 820px;
@@ -312,6 +363,8 @@ function TermsAndConditions() {
           color: var(--tc-body);
           margin: 0;
         }
+        .terms-section__text + .terms-section__text { margin-top: 8px; }
+        .terms-section__text a { color: var(--tc-link); }
 
         /* FOOTER */
         .terms-footer {
@@ -336,7 +389,6 @@ function TermsAndConditions() {
           .terms-nav { padding: 14px 20px; }
           .terms-hero { padding: 40px 20px 28px; }
           .terms-divider { padding: 0 20px; }
-          .terms-close-tip { padding: 14px 20px 0; }
           .terms-content { padding: 8px 20px 60px; }
           .terms-section { grid-template-columns: 1fr; gap: 6px; }
           .terms-section__number { display: none; }
@@ -360,11 +412,11 @@ function TermsAndConditions() {
             {dark ? '☀️' : '🌙'}
           </button>
           <button
-            className="terms-nav__close"
+            className="terms-nav__home"
             type="button"
-            onClick={() => window.close()}
+            onClick={() => navigate('/')}
           >
-            Close ✕
+            Back to Home
           </button>
         </div>
       </header>
@@ -378,29 +430,20 @@ function TermsAndConditions() {
         <div className="terms-hero__meta">
           <span className="terms-hero__meta-item">
             <span className="terms-hero__meta-dot" />
-            Effective January 2025
+            Effective October 11, 2026
           </span>
           <span className="terms-hero__meta-item">
             <span className="terms-hero__meta-dot" />
-            Last updated March 2025
+            Last updated October 11, 2026
           </span>
           <span className="terms-hero__meta-item">
             <span className="terms-hero__meta-dot" />
-            7 sections
+            {TERMS.length} sections
           </span>
         </div>
       </section>
 
       <hr className="terms-divider" />
-
-      {/* CLOSE TIP */}
-      <p className="terms-close-tip">
-        Opened from signup? Read through and{' '}
-        <a href="#" onClick={(e) => { e.preventDefault(); window.close(); }}>
-          close this tab
-        </a>{' '}
-        to return to registration.
-      </p>
 
       {/* SECTIONS */}
       <main className="terms-content">
@@ -409,7 +452,14 @@ function TermsAndConditions() {
             <span className="terms-section__number">{term.number}</span>
             <div className="terms-section__body">
               <h2 className="terms-section__title">{term.title}</h2>
-              <p className="terms-section__text">{term.content}</p>
+              {term.content.map((paragraph) => (
+                <p className="terms-section__text" key={paragraph}>{paragraph}</p>
+              ))}
+              {term.contactEmail && (
+                <p className="terms-section__text">
+                  <a href={`mailto:${term.contactEmail}`}>{term.contactEmail}</a>
+                </p>
+              )}
             </div>
           </div>
         ))}

@@ -15,6 +15,8 @@ function ResetPasswordCode() {
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendAt, setResendAt] = useState(
@@ -34,6 +36,12 @@ function ResetPasswordCode() {
     }, 1000);
     return () => window.clearTimeout(timer);
   }, [resendAt, secondsLeft]);
+
+  useEffect(() => {
+    if (!resetComplete) return undefined;
+    const timer = window.setTimeout(() => navigate('/login', { replace: true }), 2500);
+    return () => window.clearTimeout(timer);
+  }, [navigate, resetComplete]);
 
   if (!email) {
     return <Navigate to="/forgot-password" replace />;
@@ -113,7 +121,7 @@ function ResetPasswordCode() {
             <div className="auth__single-center auth__single-center--spaced">
               <div className="verify-icon verify-icon--success">✓</div>
               <p className="auth__subtitle auth__subtitle--spaced">
-                Your password has been reset successfully.
+                Your password has been reset successfully. Taking you to login…
               </p>
               <Link to="/login" className="auth__link auth__link--inline">
                 Back to Login
@@ -128,37 +136,59 @@ function ResetPasswordCode() {
   return (
     <div className="auth auth--single page-enter">
       <div className="auth__panel auth__panel--right auth__panel--single">
-        <div className="auth__single-card">
-          <h1 className="auth__title auth__title--compact">Enter Reset Code</h1>
-          <p className="auth__subtitle">
-            If an account exists for <strong>{email}</strong>, a six-digit code has been sent. It expires in 10 minutes.
+        <div className="auth__single-card reset-code">
+          <p className="reset-code__step">ACCOUNT RECOVERY <span>STEP 2 OF 2</span></p>
+          <h1 className="auth__title auth__title--compact">Verify your email</h1>
+          <p className="auth__subtitle reset-code__intro">
+            If an account exists for this address, we sent a six-digit code to:
           </p>
+          <p className="reset-code__email">{email}</p>
+          <p className="reset-code__expiry">The code expires 10 minutes after it was sent.</p>
 
           <form className="auth__form" onSubmit={handleSubmit}>
-            <label className="auth__field">
-              <span>Six-digit code</span>
+            <label className="auth__field reset-code__field">
+              <span>Verification code</span>
               <input
+                className="reset-code__input"
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="[0-9]{6}"
                 maxLength={6}
-                placeholder="Enter the code from your email"
+                placeholder="000000"
                 required
                 value={code}
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                aria-describedby="reset-code-hint"
               />
+              <span className="reset-code__hint" id="reset-code-hint">
+                Check your inbox and spam folder.
+              </span>
             </label>
+            <div className="reset-code__password-heading">
+              <span>Choose a new password</span>
+              <span>Use a password you haven&apos;t used before.</span>
+            </div>
             <label className="auth__field">
               <span>New password</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                placeholder="Enter new password"
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
+              <div className="reset-code__password-control">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Enter new password"
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="auth__password-toggle"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? 'Hide new password' : 'Show new password'}
+                >
+                  <PasswordEyeIcon slashed={!showPassword} />
+                </button>
+              </div>
             </label>
             {password.length > 0 && (
               <div className="password-requirements">
@@ -177,14 +207,24 @@ function ResetPasswordCode() {
             )}
             <label className="auth__field">
               <span>Confirm new password</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                placeholder="Confirm new password"
-                required
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-              />
+              <div className="reset-code__password-control">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Confirm new password"
+                  required
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="auth__password-toggle"
+                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'}
+                >
+                  <PasswordEyeIcon slashed={!showConfirmPassword} />
+                </button>
+              </div>
             </label>
             {error && (
               <div className="auth__error-container" role="alert">
@@ -196,10 +236,10 @@ function ResetPasswordCode() {
             </button>
           </form>
 
-          <div className="auth__single-center auth__single-center--spaced">
+          <div className="reset-code__actions" aria-live="polite">
             <button
               type="button"
-              className="auth__link"
+              className="auth__link reset-code__resend"
               disabled={loading || secondsLeft > 0}
               onClick={handleResend}
             >
@@ -207,7 +247,7 @@ function ResetPasswordCode() {
                 ? `${sendLimitReached ? 'Hourly limit — try again in' : 'Resend code in'} ${countdownLabel}`
                 : 'Resend code'}
             </button>
-            <Link to="/forgot-password" className="auth__link">
+            <Link to="/forgot-password" className="auth__link reset-code__change-email">
               Use a different email
             </Link>
           </div>
@@ -218,6 +258,35 @@ function ResetPasswordCode() {
         </div>
       </div>
     </div>
+  );
+}
+
+function PasswordEyeIcon({ slashed }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      {slashed && (
+        <path d="M4 20L20 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      )}
+    </svg>
   );
 }
 

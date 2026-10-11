@@ -5,10 +5,18 @@
  * Requires admin role for all operations.
  */
 
-import apiClient from './client';
+import apiClient, { authApiRequest } from './client';
 
 export async function getUserSafetySummary(timezone = Intl.DateTimeFormat().resolvedOptions().timeZone) {
   return apiClient.get('/analytics/my-summary/', { params: { timezone } });
+}
+
+export async function downloadUserDataExport(timezone = Intl.DateTimeFormat().resolvedOptions().timeZone) {
+  const params = new URLSearchParams({ timezone });
+  return authApiRequest(`/analytics/my-export/?${params.toString()}`, {
+    method: 'GET',
+    responseType: 'blob-with-headers',
+  });
 }
 
 export async function getUserAiSummary() {
