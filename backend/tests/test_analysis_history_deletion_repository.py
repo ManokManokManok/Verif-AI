@@ -122,3 +122,18 @@ def test_update_reviewed_result_preserves_model_output_and_appends_history():
     assert result.is_scam is True
     assert result.reviewed_result == review
     assert result.review_history == [review]
+
+
+def test_set_review_publication_updates_only_review_for_matching_report():
+    repo, collection = _make_repo()
+    collection.update_one.return_value.matched_count = 1
+
+    assert repo.set_review_publication("analysis-1", "report-1", True) is True
+
+    collection.update_one.assert_called_once_with(
+        {
+            "ref_id": "analysis-1",
+            "reviewed_result.report_id": "report-1",
+        },
+        {"$set": {"reviewed_result.is_published": True}},
+    )

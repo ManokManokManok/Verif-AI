@@ -27,6 +27,7 @@ def _public_reviewed_result(result):
     if not reviewed or not reviewed.get('is_published'):
         return None
     return {
+        'is_published': True,
         'is_scam': reviewed.get('is_scam'),
         'risk_score': reviewed.get('risk_score'),
         'risk_level': reviewed.get('risk_level'),
@@ -43,8 +44,45 @@ def _user_analysis_title(result, reviewed_result):
     if not reviewed_result:
         return result.scam_type or "Analysis Result"
     if reviewed_result['is_scam']:
-        return f"Human-reviewed: {reviewed_result['scam_type'] or 'Scam'}"
-    return "Human-reviewed: Legitimate"
+        return f"Admin-reviewed: {reviewed_result['scam_type'] or 'Scam'}"
+    return "Admin-reviewed: Legitimate"
+
+
+def _public_analysis_result_fields(result, reviewed_result):
+    """Use the published admin decision for all user-facing classification fields."""
+    if not reviewed_result:
+        return {
+            "is_scam": result.is_scam,
+            "scam_score": result.scam_score,
+            "legit_score": result.legit_score,
+            "label": result.label,
+            "scam_type": result.scam_type,
+            "type_confidence": result.type_confidence,
+            "summary": result.summary or "",
+            "details": result.details or "",
+            "key_markers": result.key_markers or [],
+            "risk_score": None,
+            "risk_level": None,
+            "needs_review": result.needs_review,
+            "review_reason": result.review_reason,
+        }
+
+    verdict = "Scam" if reviewed_result["is_scam"] else "Legitimate"
+    return {
+        "is_scam": reviewed_result["is_scam"],
+        "scam_score": None,
+        "legit_score": None,
+        "label": f"Admin-verified: {verdict}",
+        "scam_type": reviewed_result["scam_type"] or ("Scam" if reviewed_result["is_scam"] else "Not Scam"),
+        "type_confidence": None,
+        "summary": reviewed_result["summary"],
+        "details": reviewed_result["details"] or "",
+        "key_markers": reviewed_result["key_markers"],
+        "risk_score": reviewed_result["risk_score"],
+        "risk_level": reviewed_result["risk_level"],
+        "needs_review": False,
+        "review_reason": None,
+    }
 
 
 @api_view(['GET'])
@@ -94,26 +132,17 @@ def history_detail(request: Request, analysis_id: str) -> Response:
             return Response({'error': {'code': 'NOT_FOUND', 'message': 'Analysis not found'}}, status=status.HTTP_404_NOT_FOUND)
 
         reviewed_result = _public_reviewed_result(result)
+        result_fields = _public_analysis_result_fields(result, reviewed_result)
         # Return all fields for the analysis result
         return Response({
             'id': result.id,
             'ref_id': result.ref_id,
             'title': _user_analysis_title(result, reviewed_result),
-            'description': reviewed_result['summary'] if reviewed_result else result.summary or "",
-            'summary': reviewed_result['summary'] if reviewed_result else result.summary or "",
-            'details': reviewed_result['details'] if reviewed_result else result.details or "",
+            'description': result_fields['summary'],
+            **result_fields,
             'timestamp': result.created_at.isoformat() if result.created_at else None,
-            'is_scam': result.is_scam,
-            'scam_score': result.scam_score,
-            'legit_score': result.legit_score,
-            'label': result.label,
-            'scam_type': result.scam_type,
-            'type_confidence': result.type_confidence,
-            'key_markers': result.key_markers,
             'message': result.message,
             'image_attachment': result.image_attachment,
-            'needs_review': result.needs_review,
-            'review_reason': result.review_reason,
             'reviewed_result': reviewed_result,
         }, status=status.HTTP_200_OK)
     except Exception as e:
@@ -207,24 +236,17 @@ def history(request: Request) -> Response:
         history = []
         for result in analysis_results:
             reviewed_result = _public_reviewed_result(result)
+            result_fields = _public_analysis_result_fields(result, reviewed_result)
             history.append({
                 "id": result.id,
                 "ref_id": result.ref_id,
                 "title": _user_analysis_title(result, reviewed_result),
-                "description": reviewed_result['summary'] if reviewed_result else result.summary or "",
+                "description": result_fields["summary"],
                 "timestamp": result.created_at.isoformat() if result.created_at else None,
-                "is_scam": result.is_scam,
-                "scam_score": result.scam_score,
-                "legit_score": result.legit_score,
-                "label": result.label,
-                "scam_type": result.scam_type,
-                "type_confidence": result.type_confidence,
-                "key_markers": result.key_markers,
                 "message": result.message,
                 "image_attachment": result.image_attachment,
-                "needs_review": result.needs_review,
-                "review_reason": result.review_reason,
                 "reviewed_result": reviewed_result,
+                **result_fields,
             })
         return Response({"history": history}, status=status.HTTP_200_OK)
 

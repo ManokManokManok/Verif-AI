@@ -230,6 +230,22 @@ class AnalysisResultRepository:
             },
         )
         return self.get_by_ref_id(ref_id)
+
+    def set_review_publication(
+        self,
+        ref_id: str,
+        report_id: str,
+        is_published: bool,
+    ) -> bool:
+        """Publish or withdraw a review only when it belongs to the given report."""
+        result = self.collection.update_one(
+            {
+                "ref_id": ref_id,
+                "reviewed_result.report_id": report_id,
+            },
+            {"$set": {"reviewed_result.is_published": is_published}},
+        )
+        return result.matched_count == 1
     
     def get_by_message_hash(self, message_hash: str) -> Optional[AnalysisResult]:
         """

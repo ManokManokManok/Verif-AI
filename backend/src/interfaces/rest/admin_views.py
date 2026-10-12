@@ -915,6 +915,9 @@ def update_report(request: Request, report_id: str) -> Response:
         admin_repo = get_admin_repository()
         review_data = request.data.get('review')
         report = admin_repo.get_report_by_id(report_id)
+        analysis_repository = None
+        analysis = None
+        review_record = None
         if review_data is not None:
             if not isinstance(review_data, dict):
                 return Response({
@@ -1032,7 +1035,7 @@ def update_report(request: Request, report_id: str) -> Response:
             reviewed_at = datetime.now(timezone.utc).isoformat()
             review_record = {
                 'decision': decision,
-                'is_published': is_scam is not None,
+                'is_published': False,
                 'is_scam': is_scam,
                 'risk_score': risk_score,
                 'risk_level': _human_risk_level(risk_score) if is_scam is not None else None,
@@ -1045,19 +1048,6 @@ def update_report(request: Request, report_id: str) -> Response:
                 'reviewed_at': reviewed_at,
                 'report_id': report.report_id,
             }
-            updated_analysis = analysis_repository.update_reviewed_result(
-                analysis.ref_id,
-                review_record,
-                dict(review_record),
-            )
-            if not updated_analysis:
-                return Response({
-                    'success': False,
-                    'error': {
-                        'code': 'ANALYSIS_NOT_FOUND',
-                        'message': 'The linked analysis could not be updated'
-                    }
-                }, status=status.HTTP_404_NOT_FOUND)
 
         use_case = UpdateReportStatusUseCase(admin_repo)
         report_type = getattr(
@@ -1084,6 +1074,51 @@ def update_report(request: Request, report_id: str) -> Response:
         )
         
         if result.success:
+            if review_record is not None:
+                review_record['is_published'] = (
+                    new_status == ReportStatus.RESOLVED
+                    and review_record['is_scam'] is not None
+                )
+                updated_analysis = analysis_repository.update_reviewed_result(
+                    analysis.ref_id,
+                    review_record,
+                    dict(review_record),
+                )
+                if not updated_analysis:
+                    return Response({
+                        'success': False,
+                        'error': {
+                            'code': 'ANALYSIS_NOT_FOUND',
+                            'message': 'The linked analysis could not be updated'
+                        }
+                    }, status=status.HTTP_404_NOT_FOUND)
+            elif report and (report.analysis_ref_id or report.analysis_id):
+                analysis_repository = get_analysis_repository()
+                analysis_ref_id = report.analysis_ref_id or report.analysis_id
+                analysis = analysis_repository.get_by_ref_id(analysis_ref_id)
+                if not analysis:
+                    analysis = analysis_repository.get_by_id(analysis_ref_id)
+                existing_review = getattr(analysis, 'reviewed_result', None) if analysis else None
+                if (
+                    existing_review
+                    and existing_review.get('report_id') == report.report_id
+                    and existing_review.get('decision') in ('confirmed_scam', 'confirmed_legitimate')
+                ):
+                    should_publish = new_status == ReportStatus.RESOLVED
+                    if existing_review.get('is_published') != should_publish:
+                        publication_updated = analysis_repository.set_review_publication(
+                            analysis.ref_id,
+                            report.report_id,
+                            should_publish,
+                        )
+                        if not publication_updated:
+                            return Response({
+                                'success': False,
+                                'error': {
+                                    'code': 'REVIEW_UPDATE_FAILED',
+                                    'message': 'Could not update publication status for the human review'
+                                }
+                            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             report_payload = _enrich_report_payload(result.report.to_dict(), admin_repo)
             report_payload = _enrich_report_with_analysis(report_payload)
             return Response({
