@@ -2,6 +2,97 @@
   animation: navProfileClick 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.detect__reviewResultHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.detect__reviewResultHeader .detect__reviewContent {
+  text-align: left;
+}
+
+.detect__reviewRisk {
+  max-width: 620px;
+  margin-top: 16px;
+}
+
+.detect__reviewRiskHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 7px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.detect__reviewRiskHeader strong {
+  color: #f8fafc;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.detect__reviewRiskTrack {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.24);
+}
+
+.detect__reviewRiskTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #34d399 0%, #fbbf24 52%, #ef4444 100%);
+  transition: width 0.25s ease;
+}
+
+.detect__reviewIcon--scam {
+  color: #f87171;
+}
+
+.detect__reviewIcon--legit {
+  color: #34d399;
+}
+
+.detect__reviewResultSection {
+  margin-top: 15px;
+}
+
+.detect__reviewResultLabel {
+  margin: 0 0 7px;
+  color: #fcd34d;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.detect__reviewResultSummary {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 15px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.detect__reviewRationale {
+  padding: 12px 14px;
+  border-left: 3px solid rgba(251, 191, 36, 0.75);
+  border-radius: 4px 8px 8px 4px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.detect__reviewReason {
+  white-space: pre-wrap;
+}
+
+.detect__reviewResultSection .detect__markersList {
+  margin-top: 8px;
+}
+
 @keyframes navProfileClick {
   0% {
     transform: scale(1);
@@ -5657,6 +5748,28 @@ button {
   color: #92400e;
 }
 
+[data-theme="light"] .detect__reviewResultHeader {
+  border-bottom-color: rgba(120, 53, 15, 0.2);
+}
+
+[data-theme="light"] .detect__reviewResultLabel,
+[data-theme="light"] .detect__reviewResultSummary,
+[data-theme="light"] .detect__reviewResultSection .detect__reviewReason {
+  color: #422006;
+}
+
+[data-theme="light"] .detect__reviewRationale {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="light"] .detect__reviewRiskHeader {
+  color: #57534e;
+}
+
+[data-theme="light"] .detect__reviewRiskHeader strong {
+  color: #1c1917;
+}
+
 /* Graph Labels */
 [data-theme="light"] .detect__graphLabel {
   color: #1e293b;
@@ -6568,6 +6681,11 @@ button {
   margin-bottom: 4px;
   display: flex;
   justify-content: center;
+}
+
+.detect__resultCard--humanReviewed {
+  display: block;
+  padding: 22px 26px;
 }
 
 .detect__resultCard--review:hover {

@@ -455,7 +455,10 @@ class UpdateReportStatusUseCase:
         report_id: str,
         status: ReportStatus,
         admin_user_id: str,
-        resolution_notes: Optional[str] = None
+        resolution_notes: Optional[str] = None,
+        admin_email: Optional[str] = None,
+        activity_type: Optional[str] = None,
+        review_decision: Optional[str] = None,
     ) -> ReportResult:
         """
         Execute the use case to update a report's status.
@@ -465,6 +468,9 @@ class UpdateReportStatusUseCase:
             status: New status
             admin_user_id: ID of the admin making the update
             resolution_notes: Optional notes about resolution
+            admin_email: Email of the admin making the update
+            activity_type: Additional event context such as a support response
+            review_decision: Human review decision recorded with this update
             
         Returns:
             ReportResult containing the updated report or error
@@ -479,7 +485,10 @@ class UpdateReportStatusUseCase:
                 report_id=report_id,
                 status=status,
                 resolution_notes=resolution_notes,
-                assigned_to=admin_user_id
+                assigned_to=admin_user_id,
+                admin_email=admin_email,
+                activity_type=activity_type,
+                review_decision=review_decision,
             )
             
             return ReportResult(

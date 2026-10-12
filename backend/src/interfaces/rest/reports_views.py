@@ -86,6 +86,48 @@ def require_auth(view_func):
     return wrapper
 
 
+def _serialize_report_for_reporter(report):
+    """Expose report status and public replies without leaking admin audit data."""
+    report_data = report.to_dict()
+    public_report = {
+        key: report_data.get(key)
+        for key in (
+            'id',
+            'report_id',
+            'report_type',
+            'title',
+            'description',
+            'analysis_id',
+            'analysis_ref_id',
+            'status',
+            'is_open',
+            'is_resolved',
+            'created_at',
+            'updated_at',
+            'resolved_at',
+        )
+    }
+
+    if report.status == ReportStatus.RESOLVED:
+        public_report['status_message'] = 'Resolved by a Verif-AI admin.'
+    elif report.status == ReportStatus.DISMISSED:
+        public_report['status_message'] = 'Reviewed by a Verif-AI admin.'
+
+    if report.report_type == ReportType.SUPPORT:
+        public_responses = [
+            activity.get('resolution_notes')
+            for activity in report.activity_history
+            if (
+                activity.get('action') == 'support_response'
+                or 'support_response' in (activity.get('actions') or [])
+            )
+            and activity.get('resolution_notes')
+        ]
+        public_report['admin_response'] = public_responses[-1] if public_responses else None
+
+    return public_report
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 @rate_limit('api_write')  # Uses 'api_write' category for rate limiting
@@ -151,7 +193,7 @@ def submit_report(request):
     if result.success:
         return JsonResponse({
             'success': True,
-            'data': result.report.to_dict(),
+            'data': _serialize_report_for_reporter(result.report),
             'message': 'Report submitted successfully. Thank you for your feedback!'
         }, status=201)
     else:
@@ -211,7 +253,7 @@ def get_my_reports(request):
         return JsonResponse({
             'success': True,
             'data': {
-                'reports': [r.to_dict() for r in result.reports],
+                'reports': [_serialize_report_for_reporter(report) for report in result.reports],
                 'total': result.total_count,
                 'page': page,
                 'limit': limit,

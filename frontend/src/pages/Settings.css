@@ -1410,6 +1410,24 @@ button.settings-feature-item:not(:disabled):hover {
   white-space: pre-wrap;
 }
 
+.settings-modal__status-message,
+.settings-report-item__status-message {
+  padding: 10px 12px;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 8px;
+  background: rgba(34, 197, 94, 0.08);
+  color: var(--theme-text);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.settings-report-item__status-message {
+  display: inline-block;
+  margin: 0 0 0.75rem;
+  padding: 6px 9px;
+  font-size: 0.78rem;
+}
+
 .settings-modal__footer {
   padding: 16px 24px;
   border-top: 1px solid var(--theme-border);
