@@ -95,6 +95,33 @@ class GuestFeatureUsageTests(unittest.TestCase):
         claim_guest.assert_called_once()
         get_genai_provider.assert_not_called()
 
+    @patch('src.apps.chatbot.views.get_genai_provider')
+    @patch('src.apps.chatbot.views._extract_user_id_from_jwt', return_value=('user-123', True))
+    def test_image_analysis_returns_friendly_unavailable_message_after_provider_failures(
+        self,
+        _extract_user,
+        get_genai_provider,
+    ):
+        get_genai_provider.return_value.create_image_completion.side_effect = RuntimeError(
+            'Gemini image analysis is unavailable on all configured models'
+        )
+        request = self.api_factory.post(
+            '/api/chat/image-analysis/',
+            {'image': SimpleUploadedFile('sample.png', b'image-data', content_type='image/png')},
+            format='multipart',
+            HTTP_X_SESSION_ID=str(uuid4()),
+        )
+
+        response = views.analyze_image(request)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.data['error']['code'], 'SERVICE_UNAVAILABLE')
+        self.assertEqual(
+            response.data['error']['message'],
+            'Verif-AI image analysis is currently unavailable. Please try again later or use text-based analysis.',
+        )
+        get_genai_provider.return_value.create_image_completion.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -120,6 +120,7 @@ def test_nodemailer_send_calls_node_bridge(monkeypatch, tmp_path):
         class _Result:
             returncode = 0
             stderr = ''
+            stdout = '{"ok":true,"accepted":["recipient@example.com"],"rejected":[]}'
 
         return _Result()
 
@@ -131,6 +132,33 @@ def test_nodemailer_send_calls_node_bridge(monkeypatch, tmp_path):
     assert sent is True
     assert captured['command'][0] == 'node'
     assert 'recipient@example.com' in captured['input']
+
+
+def test_nodemailer_returns_false_when_recipient_is_rejected(monkeypatch, tmp_path):
+    script = tmp_path / 'nodemailer_sender.js'
+    script.write_text('console.log("ok")', encoding='utf-8')
+
+    monkeypatch.setenv('NODE_EXECUTABLE', 'node')
+    monkeypatch.setenv('NODEMAILER_SCRIPT_PATH', str(script))
+    monkeypatch.setenv('NODEMAILER_HOST', 'smtp.example.com')
+    monkeypatch.setenv('NODEMAILER_PORT', '587')
+    monkeypatch.setenv('NODEMAILER_USER', 'user@example.com')
+    monkeypatch.setenv('NODEMAILER_PASS', 'app-password')
+    monkeypatch.setattr(email_module.shutil, 'which', lambda _: '/usr/bin/node')
+
+    def _fake_run(command, input, text, capture_output, timeout, check):
+        class _Result:
+            returncode = 0
+            stderr = ''
+            stdout = '{"ok":true,"accepted":[],"rejected":["recipient@example.com"]}'
+
+        return _Result()
+
+    monkeypatch.setattr(email_module.subprocess, 'run', _fake_run)
+
+    provider = email_module.NodeMailerEmailService()
+
+    assert provider.send_mfa_code_email('recipient@example.com', '123456') is False
 
 
 def test_nodemailer_empty_host_falls_back_to_email_host(monkeypatch, tmp_path):
@@ -156,6 +184,7 @@ def test_nodemailer_empty_host_falls_back_to_email_host(monkeypatch, tmp_path):
         class _Result:
             returncode = 0
             stderr = ''
+            stdout = '{"ok":true,"accepted":["recipient@example.com"],"rejected":[]}'
 
         return _Result()
 
