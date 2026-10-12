@@ -191,7 +191,12 @@ def analyze_image(request: Request) -> Response:
         }, status=200)
     except RuntimeError as error:
         logger.error('[CHATBOT] Gemini image analysis unavailable: %s', error)
-        return Response({'error': {'code': 'SERVICE_UNAVAILABLE', 'message': 'Image analysis is currently unavailable'}}, status=503)
+        return Response({
+            'error': {
+                'code': 'SERVICE_UNAVAILABLE',
+                'message': 'Verif-AI image analysis is currently unavailable. Please try again later or use text-based analysis.',
+            }
+        }, status=503)
     except Exception as error:
         logger.error('[CHATBOT] Image analysis failed: %s', error, exc_info=True)
         return Response({'error': {'code': 'INTERNAL_ERROR', 'message': 'Unable to analyze this image'}}, status=500)
@@ -1170,4 +1175,3 @@ def get_analysis_guided_history(request: Request, conversation_id: str) -> Respo
                 'message': 'An unexpected error occurred'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
