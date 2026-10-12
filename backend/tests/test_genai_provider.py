@@ -11,6 +11,7 @@ class _FakeProvider:
         self.error = error
         self.calls = 0
         self.model_name = model_name
+        self.image_calls = 0
 
     def create_chat_completion(self, **_options):
         self.calls += 1
@@ -20,6 +21,12 @@ class _FakeProvider:
 
     def create_structured_completion(self, **_options):
         self.calls += 1
+        if self.error:
+            raise self.error
+        return self.response
+
+    def create_image_completion(self, **_options):
+        self.image_calls += 1
         if self.error:
             raise self.error
         return self.response
@@ -34,6 +41,63 @@ class _PermanentError(Exception):
 
 
 class GenAIProviderTests(unittest.TestCase):
+    def test_image_request_tries_configured_models_until_one_succeeds(self):
+        primary = _FakeProvider(error=_TransientError('busy'), model_name='primary')
+        first_fallback = _FakeProvider(error=_PermanentError('image unsupported'), model_name='first-fallback')
+        second_fallback = _FakeProvider(response={"choices": [{"message": {"content": "image result"}}]})
+        provider = GenAIProvider(gemini_provider=primary)
+        provider.gemini_fallback_models = ['first-fallback', 'second-fallback']
+        provider.gemini_fallbacks = {
+            'first-fallback': first_fallback,
+            'second-fallback': second_fallback,
+        }
+
+        result = provider.create_image_completion(
+            image_bytes=b'image',
+            mime_type='image/png',
+            system_prompt='system',
+            user_prompt='user',
+        )
+
+        self.assertEqual(result["choices"][0]["message"]["content"], "image result")
+        self.assertEqual(primary.image_calls, 1)
+        self.assertEqual(first_fallback.image_calls, 1)
+        self.assertEqual(second_fallback.image_calls, 1)
+
+    def test_image_request_fails_only_after_all_configured_models_fail(self):
+        primary = _FakeProvider(error=_TransientError('busy'), model_name='primary')
+        fallback = _FakeProvider(error=_PermanentError('image unsupported'))
+        provider = GenAIProvider(gemini_provider=primary)
+        provider.gemini_fallback_models = ['fallback']
+        provider.gemini_fallbacks = {'fallback': fallback}
+
+        with self.assertRaisesRegex(RuntimeError, 'all configured models'):
+            provider.create_image_completion(
+                image_bytes=b'image',
+                mime_type='image/png',
+                system_prompt='system',
+                user_prompt='user',
+            )
+
+        self.assertEqual(primary.image_calls, 1)
+        self.assertEqual(fallback.image_calls, 1)
+
+    def test_image_request_uses_configured_fallback_when_primary_is_unavailable(self):
+        fallback = _FakeProvider(response={"choices": [{"message": {"content": "image result"}}]})
+        provider = GenAIProvider(gemini_provider=None)
+        provider.gemini_fallback_models = ['fallback']
+        provider.gemini_fallbacks = {'fallback': fallback}
+
+        result = provider.create_image_completion(
+            image_bytes=b'image',
+            mime_type='image/png',
+            system_prompt='system',
+            user_prompt='user',
+        )
+
+        self.assertEqual(result["choices"][0]["message"]["content"], "image result")
+        self.assertEqual(fallback.image_calls, 1)
+
     def test_structured_request_tries_fallback_model_on_transient_failure(self):
         primary = _FakeProvider(error=_TransientError('busy'), model_name='primary')
         first_fallback = _FakeProvider(error=_TransientError('still busy'), model_name='first-fallback')
@@ -75,17 +139,64 @@ class GenAIProviderTests(unittest.TestCase):
         gemma_loader.assert_not_called()
         self.assertEqual(gemini.calls, 1)
 
-    def test_gemini_failure_falls_back_to_gemma(self):
+    def test_chat_tries_gemini_fallback_models_before_gemma(self):
         gemini = _FakeProvider(error=RuntimeError("quota"))
+        first_fallback = _FakeProvider(error=RuntimeError("still unavailable"))
+        second_fallback = _FakeProvider(
+            response={"choices": [{"message": {"content": "fallback model response"}}]}
+        )
         gemma = _FakeProvider(response={"choices": [{"message": {"content": "fallback"}}]})
         gemma_loader = unittest.mock.Mock(return_value=gemma)
         provider = GenAIProvider(gemini_provider=gemini, gemma_loader=gemma_loader)
+        provider.gemini_fallback_models = ["first-fallback", "second-fallback"]
+        provider.gemini_fallbacks = {
+            "first-fallback": first_fallback,
+            "second-fallback": second_fallback,
+        }
 
         result = provider.create_chat_completion(messages=[])
 
-        self.assertEqual(result["choices"][0]["message"]["content"], "fallback")
+        self.assertEqual(result["choices"][0]["message"]["content"], "fallback model response")
+        gemma_loader.assert_not_called()
+        self.assertEqual(gemini.calls, 1)
+        self.assertEqual(first_fallback.calls, 1)
+        self.assertEqual(second_fallback.calls, 1)
+
+    def test_chat_uses_gemma_only_after_all_gemini_models_fail(self):
+        gemini = _FakeProvider(error=RuntimeError("quota"))
+        first_fallback = _FakeProvider(error=RuntimeError("still unavailable"))
+        second_fallback = _FakeProvider(error=RuntimeError("also unavailable"))
+        gemma = _FakeProvider(response={"choices": [{"message": {"content": "gemma response"}}]})
+        gemma_loader = unittest.mock.Mock(return_value=gemma)
+        provider = GenAIProvider(gemini_provider=gemini, gemma_loader=gemma_loader)
+        provider.gemini_fallback_models = ["first-fallback", "second-fallback"]
+        provider.gemini_fallbacks = {
+            "first-fallback": first_fallback,
+            "second-fallback": second_fallback,
+        }
+
+        result = provider.create_chat_completion(messages=[])
+
+        self.assertEqual(result["choices"][0]["message"]["content"], "gemma response")
         gemma_loader.assert_called_once_with()
-        self.assertEqual(gemma.calls, 1)
+        self.assertEqual(gemini.calls, 1)
+        self.assertEqual(first_fallback.calls, 1)
+        self.assertEqual(second_fallback.calls, 1)
+
+    def test_chat_tries_gemini_fallback_when_primary_is_unavailable(self):
+        fallback = _FakeProvider(
+            response={"choices": [{"message": {"content": "fallback model response"}}]}
+        )
+        gemma_loader = unittest.mock.Mock()
+        provider = GenAIProvider(gemini_provider=None, gemma_loader=gemma_loader)
+        provider.gemini_fallback_models = ["fallback"]
+        provider.gemini_fallbacks = {"fallback": fallback}
+
+        result = provider.create_chat_completion(messages=[])
+
+        self.assertEqual(result["choices"][0]["message"]["content"], "fallback model response")
+        gemma_loader.assert_not_called()
+        self.assertEqual(fallback.calls, 1)
 
     def test_without_gemini_gemma_is_loaded_on_demand(self):
         gemma = _FakeProvider()

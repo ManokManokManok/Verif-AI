@@ -81,13 +81,13 @@ function App() {
   }, [location.pathname]);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' && window.matchMedia
-      ? window.matchMedia('(max-width: 600px)').matches
+      ? window.matchMedia('(max-width: 800px)').matches
       : false
   );
 
   useEffect(() => {
     if (!window.matchMedia) return undefined;
-    const mq = window.matchMedia('(max-width: 600px)');
+    const mq = window.matchMedia('(max-width: 800px)');
     const handler = (e) => setIsMobile(e.matches);
     if (mq.addEventListener) mq.addEventListener('change', handler);
     else mq.addListener(handler);

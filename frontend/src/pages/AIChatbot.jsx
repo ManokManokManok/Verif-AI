@@ -25,16 +25,61 @@ function AIChatbot() {
   const location = useLocation();
   const { isLoggedIn, isAdmin, logout, user, accessToken } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 800);
   const [text, setText] = useState('');
   const [guestTextUsed, setGuestTextUsed] = useState(() => hasGuestFeatureBeenUsed('text_chat'));
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const historyToggleRef = useRef(null);
+  const historyCloseRef = useRef(null);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    const handleResize = () => setIsMobile(window.innerWidth <= 800);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!isMobile || !sidebarOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    historyCloseRef.current?.focus();
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false);
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        const focusable = Array.from(
+          document.querySelectorAll(
+            '#chatbot-history-sidebar button, #chatbot-history-sidebar input, #chatbot-history-sidebar [href], #chatbot-history-sidebar [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter((element) => !element.hasAttribute('disabled'));
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first || !last) return;
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      if (window.innerWidth <= 800) {
+        historyToggleRef.current?.focus();
+      }
+    };
+  }, [isMobile, sidebarOpen]);
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('New Conversation');
@@ -496,19 +541,46 @@ function AIChatbot() {
 
   return (
     <div className="detect detect--chatbot page-enter">
+      {isMobile && sidebarOpen && (
+        <button
+          className="detect__history-backdrop"
+          type="button"
+          aria-label="Close chat history"
+          aria-hidden="true"
+          tabIndex={-1}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <aside 
         id="chatbot-history-sidebar"
         className={`detect__sidebar detect__sidebar--chatbot${sidebarOpen ? ' detect__sidebar--open' : ''}`} 
         style={{ width: isMobile ? (sidebarOpen ? 320 : 0) : (sidebarOpen ? 320 : 72) }}
+        role={isMobile && sidebarOpen ? 'dialog' : undefined}
+        aria-modal={isMobile && sidebarOpen ? 'true' : undefined}
+        aria-label={isMobile && sidebarOpen ? 'Chat history' : undefined}
       >
         <button
+          ref={historyCloseRef}
           className="detect__sidebtn detect__sidebtn--menu"
           type="button"
-          aria-label="Menu"
+          aria-label={sidebarOpen ? 'Close chat history' : 'Open chat history'}
           onClick={() => setSidebarOpen((open) => !open)}
         >
           {sidebarOpen ? '✕' : '☰'}
         </button>
+        {isMobile && sidebarOpen && (
+          <button
+            className="detect__history-new-chat"
+            type="button"
+            disabled={isFreshChat || isStartingChat}
+            onClick={() => {
+              setSidebarOpen(false);
+              handleNewChatClick();
+            }}
+          >
+            + New chat
+          </button>
+        )}
 
         {/* Conversation History - Only shown when sidebar is open and logged in */}
         {sidebarOpen && isLoggedIn && (
@@ -586,6 +658,7 @@ function AIChatbot() {
         minHeight: '100vh',
       }}>
         <button
+          ref={historyToggleRef}
           className="detect__mobile-history-toggle"
           type="button"
           aria-label={sidebarOpen ? 'Close chat history' : 'Open chat history'}
