@@ -820,6 +820,7 @@ class TestUserReportsEndpoint:
         mock_use_case = Mock()
         mock_use_case.execute.return_value = mock_result
         mock_use_case_class.return_value = mock_use_case
+        mock_get_repo.return_value.get_report_by_id.return_value = None
         
         request = api_factory.patch(
             '/api/admin/reports/report-123/',
@@ -832,6 +833,10 @@ class TestUserReportsEndpoint:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['success'] is True
 
+    @pytest.mark.parametrize(
+        ('report_status', 'expected_published'),
+        [('resolved', True), ('pending', False)],
+    )
     @patch('src.interfaces.rest.admin_views.require_admin')
     @patch('src.interfaces.rest.admin_views.extract_user_from_request')
     @patch('src.interfaces.rest.admin_views.get_analysis_repository')
@@ -839,7 +844,8 @@ class TestUserReportsEndpoint:
     @patch('src.interfaces.rest.admin_views.UpdateReportStatusUseCase')
     def test_update_report_saves_human_review(
         self, mock_use_case_class, mock_get_admin_repo, mock_get_analysis_repo,
-        mock_extract, mock_require_admin, api_factory, sample_user_report
+        mock_extract, mock_require_admin, api_factory, sample_user_report,
+        report_status, expected_published
     ):
         mock_require_admin.return_value = None
         mock_extract.return_value = ('admin-123', 'admin@test.com', ['admin'])
@@ -865,7 +871,7 @@ class TestUserReportsEndpoint:
         request = api_factory.patch(
             '/api/admin/reports/report-123/',
             {
-                'status': 'resolved',
+                'status': report_status,
                 'review': {
                     'decision': 'confirmed_scam',
                     'risk_score': 84,
@@ -885,7 +891,7 @@ class TestUserReportsEndpoint:
         review_record = analysis_repo.update_reviewed_result.call_args.args[1]
         history_event = analysis_repo.update_reviewed_result.call_args.args[2]
         assert review_record['decision'] == 'confirmed_scam'
-        assert review_record['is_published'] is True
+        assert review_record['is_published'] is expected_published
         assert review_record['risk_score'] == 84
         assert review_record['risk_level'] == 'high'
         assert review_record['scam_type'] == 'Banking Access & Payment'
@@ -899,6 +905,53 @@ class TestUserReportsEndpoint:
         assert update_args['admin_email'] == 'admin@test.com'
         assert update_args['activity_type'] == 'human_review'
         assert update_args['review_decision'] == 'confirmed_scam'
+
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    @patch('src.interfaces.rest.admin_views.extract_user_from_request')
+    @patch('src.interfaces.rest.admin_views.get_analysis_repository')
+    @patch('src.interfaces.rest.admin_views.get_admin_repository')
+    @patch('src.interfaces.rest.admin_views.UpdateReportStatusUseCase')
+    def test_update_report_publishes_saved_review_only_when_resolved(
+        self, mock_use_case_class, mock_get_admin_repo, mock_get_analysis_repo,
+        mock_extract, mock_require_admin, api_factory, sample_user_report
+    ):
+        mock_require_admin.return_value = None
+        mock_extract.return_value = ('admin-123', 'admin@test.com', ['admin'])
+        sample_user_report.analysis_ref_id = 'analysis-ref-123'
+        admin_repo = Mock()
+        admin_repo.get_report_by_id.return_value = sample_user_report
+        mock_get_admin_repo.return_value = admin_repo
+
+        analysis = Mock()
+        analysis.ref_id = 'analysis-ref-123'
+        analysis.reviewed_result = {
+            'report_id': sample_user_report.report_id,
+            'decision': 'confirmed_scam',
+            'is_published': False,
+        }
+        analysis_repo = Mock()
+        analysis_repo.get_by_ref_id.return_value = analysis
+        analysis_repo.set_review_publication.return_value = True
+        mock_get_analysis_repo.return_value = analysis_repo
+
+        use_case = Mock()
+        use_case.execute.return_value = Mock(success=True, report=sample_user_report)
+        mock_use_case_class.return_value = use_case
+
+        request = api_factory.patch(
+            '/api/admin/reports/report-123/',
+            {'status': 'resolved'},
+            format='json',
+            HTTP_AUTHORIZATION='******',
+        )
+        response = update_report(request, 'report-123')
+
+        assert response.status_code == status.HTTP_200_OK
+        analysis_repo.set_review_publication.assert_called_once_with(
+            'analysis-ref-123',
+            sample_user_report.report_id,
+            True,
+        )
 
     @patch('src.interfaces.rest.admin_views.require_admin')
     @patch('src.interfaces.rest.admin_views.extract_user_from_request')
