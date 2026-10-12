@@ -31,6 +31,44 @@ python backend\manage.py runserver
 ```
 Visit http://127.0.0.1:8000/api/health to confirm health.
 
+## MongoDB Backups and Restore
+
+Install MongoDB Database Tools (`mongodump` and `mongorestore`) and make sure they
+are on `PATH`. The script reads `MONGODB_URI_BACKEND` (or `MONGODB_URI`) and
+`MONGODB_DB_NAME` from the environment or `backend/.env`.
+
+Create a compressed backup and retain the 14 newest successful archives:
+
+```powershell
+python backend\scripts\backup_mongodb.py backup
+```
+
+By default, archives are written to `backend\backups\mongodb` (ignored by Git).
+For protection against loss of the application machine, set `MONGODB_BACKUP_DIR`
+to a separate mounted drive or an off-host location. Run the command periodically
+with Windows Task Scheduler; the script does not schedule itself. For a daily
+Task Scheduler action, set **Program/script** to your Python executable,
+**Add arguments** to
+`"C:\path\to\project\backend\scripts\backup_mongodb.py" backup --keep 14`,
+and **Start in** to `C:\path\to\project\backend`.
+Backups contain the whole database, including sensitive data, so restrict access
+to the backup location and copy critical archives off-site.
+
+Restore after checking the archive and the configured `MONGODB_DB_NAME`:
+
+```powershell
+python backend\scripts\backup_mongodb.py restore `
+  --archive "D:\database-backups\verfai_20261013T000000Z.archive.gz" `
+  --confirm-database verfai
+```
+
+Restore targets only the configured database's namespaces and recreates missing
+collections. Existing collections are not dropped by default, but documents
+with duplicate IDs can prevent a complete restore. Add `--drop-existing` only
+when you intentionally want to replace each restored collection from the archive.
+A successful backup command is not a substitute for periodically testing a
+restore to a separate test database.
+
 ### Start the Vercel demo backend and tunnel (Windows)
 With the backend virtual environment active, run:
 ```powershell
