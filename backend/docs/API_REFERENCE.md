@@ -602,57 +602,64 @@ Authorization: Bearer <access_token>
 
 #### Query Parameters
 - `page` (default: 1)
-- `limit` (default: 20, max: 100)
-- `status` (optional): pending, reviewed, resolved, rejected
-- `user_id` (optional): Filter by user
+- `limit` (default: 50, max: 100)
+- `status` (optional): pending, in_progress, resolved, dismissed
 
 #### Success Response (200 OK)
 ```json
 {
-  "reports": [
-    {
-      "id": "report_xyz789",
-      "user_id": "user_abc123",
-      "user_email": "user@example.com",
-      "analysis_id": "analysis_def456",
-      "reason": "Incorrect classification",
-      "status": "pending",
-      "created_at": "2026-02-18T09:00:00Z"
-    }
-  ],
-  "pagination": {
-    "current_page": 1,
-    "total_pages": 5,
-    "total_count": 89,
-    "limit": 20
+  "success": true,
+  "data": {
+    "reports": [],
+    "total": 0,
+    "page": 1,
+    "limit": 50,
+    "total_pages": 0
   }
 }
 ```
 
 ---
 
-### 10. Update Report Status
+### 10. Get Report Details
 
-**Endpoint:** `PUT /api/admin/reports/<report_id>/status/`  
-**Authentication:** Required (Admin with `manage_user_reports`)  
+**Endpoint:** `GET /api/admin/reports/<report_id>/detail/`
+**Authentication:** Required (Admin)
+
+Returns report content and reporter details. When linked to an analysis, the admin-only `analysis` object includes the original message, model verdict, likelihood scores, summary, details, indicators, and any prior human-review history.
+
+---
+
+### 11. Update Report and Record Human Review
+
+**Endpoint:** `PATCH /api/admin/reports/<report_id>/`
+**Authentication:** Required (Admin)
 **Rate Limit:** 30 requests / 1 minute
 
 #### Request Body
 ```json
 {
   "status": "resolved",
-  "admin_notes": "Reviewed and corrected classification"
+  "resolution_notes": "Reviewed and corrected classification",
+  "review": {
+    "decision": "confirmed_scam",
+    "risk_score": 84,
+    "scam_type": "Banking Access & Payment",
+    "summary": "This message is a high-risk attempt to steal bank account credentials.",
+    "details": "The sender is not an authorized bank domain and the link opens a credential collection page.",
+    "key_markers": ["Requests a password through an unverified link"],
+    "explanation": "The message impersonates the bank and requests credentials."
+  }
 }
 ```
 
-#### Success Response (200 OK)
-```json
-{
-  "message": "Report status updated successfully",
-  "report_id": "report_xyz789",
-  "status": "resolved"
-}
-```
+Review decisions are `confirmed_scam`, `confirmed_legitimate`, `inconclusive`, and `needs_more_info`. Confirmed decisions require a human-written `summary` (10-2000 characters) and `explanation` (10-2000 characters). A confirmed scam also requires `risk_score` (whole number, 0-100) and `scam_type`, which must be one of the 15 model-supported categories: Banking Access & Payment; Financial and Investment; Health and Wellness; Impersonation and Authority; International or Cross-Border; Job, Business, and Work-from-Home; Legal and Document; Mobile and Digital; Prize, Raffle & Reward; Property & Rental; Psychological, Urgency, & Emotional; Romance, Dating, and Relationship; Shopping and E-Commerce; Tax, Banking, and Loan; Tech and Online Account. The displayed risk band is derived from the score: Very low (0-19), Low (20-39), Medium (40-69), High (70-89), Very high (90-100). Confirmed legitimate results publish a 0% / Very low human risk estimate. `details` is optional (up to 5000 characters), and `key_markers` is an optional list of up to 10 indicators (up to 200 characters each). Inconclusive and needs-more-information decisions are recorded for admins but do not replace the result shown to the user.
+
+Confirmed decisions become the user-visible reviewed result. The original model output is retained, and every review decision is appended to the analysis review history.
+
+Every admin report update appends an `activity_history` entry containing the acting admin's user ID and email (when available), timestamp, resulting status, action type, any response/resolution notes, and any human-review decision. Support responses are retained as individual activity entries rather than only replacing the latest response.
+
+Reporter-facing report submission and report-history responses expose only public report fields. They omit admin assignment, admin identity, activity history, and internal resolution notes. Resolved reports include the generic message `Resolved by a Verif-AI admin.`; dismissed reports state that they were reviewed by a Verif-AI admin. Support replies are exposed separately as `admin_response` only when the activity was explicitly recorded as a support response.
 
 ---
 

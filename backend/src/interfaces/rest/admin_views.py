@@ -11,7 +11,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from django.http import HttpResponse
 import csv
@@ -23,6 +23,7 @@ from ...infrastructure.rate_limiter import get_client_ip as _get_client_ip
 from ...infrastructure.audit_logger import get_audit_logger, AuditEventType
 from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
 from ...infrastructure.mongodb.admin_repository import AdminRepository
+from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository
 from ...infrastructure.system.metrics_collector import get_metrics_collector
 from ...infrastructure.jwt_service import JWTService
@@ -46,6 +47,7 @@ from ...use_cases.admin.user_management import (
     UpdateUserRolesUseCase,
 )
 from ...domain.admin_entities import ReportStatus, StatisticsPeriod
+from ...domain.scam_types import scam_types
 from ...domain.services import BCryptPasswordHasher
 from .middleware import require_role, require_permission
 
@@ -68,6 +70,24 @@ def get_admin_repository():
     client = get_mongo_client()
     db_name = get_database_name()
     return AdminRepository(client, db_name)
+
+
+def get_analysis_repository():
+    client = get_mongo_client()
+    db_name = get_database_name()
+    return AnalysisResultRepository(client, db_name)
+
+
+def _human_risk_level(risk_score: int) -> str:
+    if risk_score < 20:
+        return 'very_low'
+    if risk_score < 40:
+        return 'low'
+    if risk_score < 70:
+        return 'medium'
+    if risk_score < 90:
+        return 'high'
+    return 'very_high'
 
 
 def get_user_repository():
@@ -210,6 +230,21 @@ def _enrich_report_payload(report_data: Dict[str, Any], admin_repo: AdminReposit
     """Attach computed reporter object to a report payload."""
     enriched = dict(report_data)
     enriched['reported_by'] = _resolve_reporter_info(enriched, admin_repo)
+    return enriched
+
+
+def _enrich_report_with_analysis(report_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach the linked analysis for admin investigation."""
+    enriched = dict(report_data)
+    ref_id = enriched.get('analysis_ref_id') or enriched.get('analysis_id')
+    enriched['analysis'] = None
+    if ref_id:
+        repository = get_analysis_repository()
+        analysis = repository.get_by_ref_id(ref_id)
+        if not analysis:
+            analysis = repository.get_by_id(ref_id)
+        if analysis:
+            enriched['analysis'] = analysis.to_dict()
     return enriched
 
 
@@ -804,6 +839,7 @@ def get_report(request: Request, report_id: str) -> Response:
         
         if result.success:
             report_payload = _enrich_report_payload(result.report.to_dict(), admin_repo)
+            report_payload = _enrich_report_with_analysis(report_payload)
             return Response({
                 'success': True,
                 'data': report_payload
@@ -845,7 +881,7 @@ def update_report(request: Request, report_id: str) -> Response:
         return auth_error
     
     try:
-        user_id, _, _ = extract_user_from_request(request)
+        user_id, admin_email, _ = extract_user_from_request(request)
         
         # Validate request body
         status_str = request.data.get('status')
@@ -875,18 +911,181 @@ def update_report(request: Request, report_id: str) -> Response:
             }, status=status.HTTP_400_BAD_REQUEST)
         
         resolution_notes = request.data.get('resolution_notes')
-        
+
         admin_repo = get_admin_repository()
+        review_data = request.data.get('review')
+        report = admin_repo.get_report_by_id(report_id)
+        if review_data is not None:
+            if not isinstance(review_data, dict):
+                return Response({
+                    'success': False,
+                    'error': {'code': 'INVALID_INPUT', 'message': 'Review must be an object'}
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            decision = review_data.get('decision')
+            decisions = {
+                'confirmed_scam': True,
+                'confirmed_legitimate': False,
+                'inconclusive': None,
+                'needs_more_info': None,
+            }
+            if not isinstance(decision, str) or decision not in decisions:
+                return Response({
+                    'success': False,
+                    'error': {'code': 'INVALID_INPUT', 'message': 'Invalid review decision'}
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            explanation = review_data.get('explanation')
+            if not isinstance(explanation, str) or len(explanation.strip()) < 10 or len(explanation) > 2000:
+                return Response({
+                    'success': False,
+                    'error': {
+                        'code': 'INVALID_INPUT',
+                        'message': 'Review explanation must be between 10 and 2000 characters'
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            is_scam = decisions[decision]
+            risk_score = review_data.get('risk_score')
+            scam_type = review_data.get('scam_type', '')
+            summary = review_data.get('summary', '')
+            details = review_data.get('details', '')
+            key_markers = review_data.get('key_markers', [])
+            if not isinstance(summary, str) or len(summary) > 2000:
+                return Response({
+                    'success': False,
+                    'error': {'code': 'INVALID_INPUT', 'message': 'Review summary must be at most 2000 characters'}
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if not isinstance(details, str) or len(details) > 5000:
+                return Response({
+                    'success': False,
+                    'error': {'code': 'INVALID_INPUT', 'message': 'Review details must be at most 5000 characters'}
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if (
+                not isinstance(key_markers, list)
+                or len(key_markers) > 10
+                or any(not isinstance(marker, str) or not marker.strip() or len(marker) > 200 for marker in key_markers)
+            ):
+                return Response({
+                    'success': False,
+                    'error': {'code': 'INVALID_INPUT', 'message': 'Review indicators must be a list of up to 10 items, each at most 200 characters'}
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if is_scam is not None:
+                if is_scam:
+                    if (
+                        not isinstance(risk_score, int)
+                        or isinstance(risk_score, bool)
+                        or not 0 <= risk_score <= 100
+                    ):
+                        return Response({
+                            'success': False,
+                            'error': {'code': 'INVALID_INPUT', 'message': 'Human risk score must be a whole number from 0 to 100'}
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                if len(summary.strip()) < 10:
+                    return Response({
+                        'success': False,
+                        'error': {'code': 'INVALID_INPUT', 'message': 'A human-written summary of at least 10 characters is required'}
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                if is_scam and (
+                    not isinstance(scam_type, str)
+                    or scam_type not in scam_types.values()
+                ):
+                    return Response({
+                        'success': False,
+                        'error': {
+                            'code': 'INVALID_INPUT',
+                            'message': 'Select one of the 15 supported scam types'
+                        }
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                if not is_scam:
+                    risk_score = 0
+                    scam_type = ''
+
+            if not report:
+                return Response({
+                    'success': False,
+                    'error': {'code': 'REPORT_NOT_FOUND', 'message': 'Report not found'}
+                }, status=status.HTTP_404_NOT_FOUND)
+            analysis_ref_id = report.analysis_ref_id or report.analysis_id
+            if not analysis_ref_id:
+                return Response({
+                    'success': False,
+                    'error': {
+                        'code': 'ANALYSIS_NOT_LINKED',
+                        'message': 'This report is not linked to an analysis'
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            analysis_repository = get_analysis_repository()
+            analysis = analysis_repository.get_by_ref_id(analysis_ref_id)
+            if not analysis:
+                analysis = analysis_repository.get_by_id(analysis_ref_id)
+            if not analysis:
+                return Response({
+                    'success': False,
+                    'error': {
+                        'code': 'ANALYSIS_NOT_FOUND',
+                        'message': 'The linked analysis could not be found'
+                    }
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            reviewed_at = datetime.now(timezone.utc).isoformat()
+            review_record = {
+                'decision': decision,
+                'is_published': is_scam is not None,
+                'is_scam': is_scam,
+                'risk_score': risk_score,
+                'risk_level': _human_risk_level(risk_score) if is_scam is not None else None,
+                'scam_type': scam_type.strip() if isinstance(scam_type, str) else '',
+                'summary': summary.strip(),
+                'details': details.strip(),
+                'key_markers': [marker.strip() for marker in key_markers],
+                'explanation': explanation.strip(),
+                'reviewed_by': user_id,
+                'reviewed_at': reviewed_at,
+                'report_id': report.report_id,
+            }
+            updated_analysis = analysis_repository.update_reviewed_result(
+                analysis.ref_id,
+                review_record,
+                dict(review_record),
+            )
+            if not updated_analysis:
+                return Response({
+                    'success': False,
+                    'error': {
+                        'code': 'ANALYSIS_NOT_FOUND',
+                        'message': 'The linked analysis could not be updated'
+                    }
+                }, status=status.HTTP_404_NOT_FOUND)
+
         use_case = UpdateReportStatusUseCase(admin_repo)
+        report_type = getattr(
+            getattr(report, 'report_type', None),
+            'value',
+            getattr(report, 'report_type', None),
+        )
+        has_response = isinstance(resolution_notes, str) and bool(resolution_notes.strip())
+        if report_type == 'support' and has_response:
+            activity_type = 'support_response'
+        elif review_data is not None:
+            activity_type = 'human_review'
+        else:
+            activity_type = 'status_updated'
+
         result = use_case.execute(
             report_id=report_id,
             status=new_status,
             admin_user_id=user_id,
-            resolution_notes=resolution_notes
+            resolution_notes=resolution_notes,
+            admin_email=admin_email,
+            activity_type=activity_type,
+            review_decision=review_data.get('decision') if isinstance(review_data, dict) else None,
         )
         
         if result.success:
             report_payload = _enrich_report_payload(result.report.to_dict(), admin_repo)
+            report_payload = _enrich_report_with_analysis(report_payload)
             return Response({
                 'success': True,
                 'data': report_payload

@@ -88,17 +88,17 @@ export default function UserStats({ onNotify }) {
     }
   };
 
-  const handleSaveReportChanges = async (report, status, resolutionNotes) => {
+  const handleSaveReportChanges = async (report, status, resolutionNotes, review) => {
     const reportId = report.report_id || report.id;
     setSavingReportChanges(true);
     try {
-      const response = await updateReportStatus(reportId, { status, resolutionNotes });
+      const response = await updateReportStatus(reportId, { status, resolutionNotes, review });
       if (!response.success) {
         throw new Error(response.error?.message || 'Failed to save report changes');
       }
       setSelectedReportDetails(response.data);
       await refreshReports();
-      onNotify?.('success', 'Report status and response saved');
+      onNotify?.('success', 'Report status and any review decision saved');
     } catch (err) {
       onNotify?.('error', `Failed to save report changes: ${err.message}`);
     } finally {

@@ -19,6 +19,47 @@ const REPORT_TYPE_LABELS = {
   other: 'Other',
 };
 
+const SCAM_TYPE_OPTIONS = [
+  'Banking Access & Payment',
+  'Financial and Investment',
+  'Health and Wellness',
+  'Impersonation and Authority',
+  'International or Cross-Border',
+  'Job, Business, and Work-from-Home',
+  'Legal and Document',
+  'Mobile and Digital',
+  'Prize, Raffle & Reward',
+  'Property & Rental',
+  'Psychological, Urgency, & Emotional',
+  'Romance, Dating, and Relationship',
+  'Shopping and E-Commerce',
+  'Tax, Banking, and Loan',
+  'Tech and Online Account',
+];
+
+const getHumanRiskLevel = (score) => {
+  if (score < 20) return 'Very low';
+  if (score < 40) return 'Low';
+  if (score < 70) return 'Medium';
+  if (score < 90) return 'High';
+  return 'Very high';
+};
+
+const getActivityLabel = (activity) => {
+  const actions = activity.actions || [activity.action || 'status_updated'];
+  const labels = [];
+  if (actions.includes('resolved')) labels.push('Report resolved');
+  if (actions.includes('dismissed')) labels.push('Report dismissed');
+  if (actions.includes('support_response')) labels.push('Admin responded to support request');
+  if (actions.includes('human_review')) {
+    labels.push(`Human review recorded${activity.review_decision ? `: ${activity.review_decision.replaceAll('_', ' ')}` : ''}`);
+  }
+  if (labels.length === 0) {
+    labels.push(`Report status updated${activity.status ? ` to ${activity.status.replaceAll('_', ' ')}` : ''}`);
+  }
+  return labels.join(' · ');
+};
+
 export default function ReportDetailsModal({
   isOpen,
   report,
@@ -31,10 +72,26 @@ export default function ReportDetailsModal({
 }) {
   const [editedStatus, setEditedStatus] = useState('pending');
   const [response, setResponse] = useState('');
+  const [reviewDecision, setReviewDecision] = useState('');
+  const [reviewRiskScore, setReviewRiskScore] = useState(50);
+  const [reviewScamType, setReviewScamType] = useState('');
+  const [reviewExplanation, setReviewExplanation] = useState('');
+  const [reviewSummary, setReviewSummary] = useState('');
+  const [reviewDetails, setReviewDetails] = useState('');
+  const [reviewMarkers, setReviewMarkers] = useState([]);
+  const [newReviewMarker, setNewReviewMarker] = useState('');
 
   useEffect(() => {
     setEditedStatus(report?.status || 'pending');
     setResponse(report?.resolution_notes || '');
+    setReviewDecision(report?.analysis?.reviewed_result?.decision || '');
+    setReviewRiskScore(report?.analysis?.reviewed_result?.risk_score ?? 50);
+    setReviewScamType(report?.analysis?.reviewed_result?.scam_type || '');
+    setReviewExplanation(report?.analysis?.reviewed_result?.explanation || '');
+    setReviewSummary(report?.analysis?.reviewed_result?.summary || '');
+    setReviewDetails(report?.analysis?.reviewed_result?.details || '');
+    setReviewMarkers(report?.analysis?.reviewed_result?.key_markers || []);
+    setNewReviewMarker('');
   }, [report]);
 
   if (!isOpen) return null;
@@ -46,12 +103,47 @@ export default function ReportDetailsModal({
   };
 
   const getReportTypeName = (type) => REPORT_TYPE_LABELS[type] || type;
+  const analysis = report?.analysis;
+  const existingReview = analysis?.reviewed_result;
+  const existingReviews = analysis?.review_history || [];
+  const reviewChanged = reviewDecision !== (existingReview?.decision || '')
+    || reviewRiskScore !== (existingReview?.risk_score ?? 50)
+    || reviewScamType !== (existingReview?.scam_type || '')
+    || reviewExplanation !== (existingReview?.explanation || '')
+    || reviewSummary !== (existingReview?.summary || '')
+    || reviewDetails !== (existingReview?.details || '')
+    || JSON.stringify(reviewMarkers) !== JSON.stringify(existingReview?.key_markers || []);
+  const reviewIsPublishDecision = reviewDecision === 'confirmed_scam' || reviewDecision === 'confirmed_legitimate';
+  const reviewIsValid = !reviewDecision
+    || (
+      reviewExplanation.trim().length >= 10
+      && reviewExplanation.length <= 2000
+      && (!reviewIsPublishDecision || (
+        reviewSummary.trim().length >= 10
+        && reviewSummary.length <= 2000
+        && reviewDetails.length <= 5000
+        && (reviewDecision !== 'confirmed_scam' || SCAM_TYPE_OPTIONS.includes(reviewScamType))
+        && (reviewDecision !== 'confirmed_scam' || (Number.isInteger(reviewRiskScore) && reviewRiskScore >= 0 && reviewRiskScore <= 100))
+        && reviewMarkers.length <= 10
+        && !newReviewMarker.trim()
+        && reviewMarkers.every((marker) => marker.trim().length > 0 && marker.length <= 200)
+      ))
+    );
+
+  const addReviewMarker = () => {
+    const marker = newReviewMarker.trim();
+    if (!marker || reviewMarkers.length >= 10 || reviewMarkers.some((item) => item.toLowerCase() === marker.toLowerCase())) {
+      return;
+    }
+    setReviewMarkers([...reviewMarkers, marker]);
+    setNewReviewMarker('');
+  };
 
   // Loading state
   if (loading) {
     return (
-      <div className="admin-modal__overlay" onClick={onClose}>
-        <div className="admin-modal report-details-modal" onClick={e => e.stopPropagation()}>
+      <div className="admin-modal__overlay report-details__overlay" onClick={onClose}>
+        <div className="admin-modal report-details-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
           <div className="report-details__loading">
             <div className="report-details__spinner" />
             <p>Loading report details...</p>
@@ -66,9 +158,11 @@ export default function ReportDetailsModal({
   const isPending = report.status === 'pending';
 
   return (
-    <div className="admin-modal__overlay" onClick={onClose}>
+    <div className="admin-modal__overlay report-details__overlay" onClick={onClose}>
       <div
         className="admin-modal report-details-modal"
+        role="dialog"
+        aria-modal="true"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -130,6 +224,73 @@ export default function ReportDetailsModal({
                   <code className="report-details__text">{report.analysis_id}</code>
                 </div>
               )}
+              {analysis && (
+                <div className="report-details__analysis">
+                  <h4 className="report-details__section-title">Original analysis output</h4>
+                  <div className="report-details__analysisVerdict">
+                    <span className={`report-details__verdictBadge ${analysis.is_scam ? 'report-details__verdictBadge--scam' : 'report-details__verdictBadge--legit'}`}>
+                      {analysis.is_scam ? 'Model flagged as scam' : 'Model marked as likely legitimate'}
+                    </span>
+                    {analysis.needs_review && <span className="report-details__autoFlag">Automatically flagged for review</span>}
+                  </div>
+                  <div className="report-details__metrics">
+                    <div><span>Scam likelihood</span><strong>{Number.isFinite(analysis.scam_score) ? `${analysis.scam_score.toFixed(1)}%` : 'N/A'}</strong></div>
+                    <div><span>Legitimate likelihood</span><strong>{Number.isFinite(analysis.legit_score) ? `${analysis.legit_score.toFixed(1)}%` : 'N/A'}</strong></div>
+                    <div><span>Type confidence</span><strong>{Number.isFinite(analysis.type_confidence) ? `${analysis.type_confidence.toFixed(1)}%` : 'N/A'}</strong></div>
+                    <div><span>Model type</span><strong>{analysis.scam_type || 'N/A'}</strong></div>
+                  </div>
+                  {analysis.needs_review && (
+                    <div className="report-details__analysisNote">
+                      <strong>Automatic review reason</strong>
+                      <p>{analysis.review_reason || 'Flagged for human review'}</p>
+                    </div>
+                  )}
+                  {(analysis.summary || analysis.details) && (
+                    <div className="report-details__analysisCopy">
+                      {analysis.summary && <div><label>Model summary</label><p>{analysis.summary}</p></div>}
+                      {analysis.details && <div><label>Model details</label><p>{analysis.details}</p></div>}
+                    </div>
+                  )}
+                  {analysis.key_markers?.length > 0 && (
+                    <div className="report-details__field report-details__field--full">
+                      <label>Model indicators</label>
+                      <ul className="report-details__indicatorList">
+                        {analysis.key_markers.map((marker, index) => <li key={`${index}-${marker}`}>{marker}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {analysis.message && (
+                    <div className="report-details__analysisMessage">
+                      <label>Analyzed message</label>
+                      <p>{analysis.message}</p>
+                    </div>
+                  )}
+                  {analysis.image_attachment?.data_url && (
+                    <div className="report-details__field report-details__field--full">
+                      <label>Analyzed image</label>
+                      <img
+                        src={analysis.image_attachment.data_url}
+                        alt="User-submitted analysis"
+                        className="report-details__analysisImage"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              {existingReviews.length > 0 && (
+                <div className="report-details__section">
+                  <h4 className="report-details__section-title">Human review history</h4>
+                  {existingReviews.slice().reverse().map((item, index) => (
+                    <div className="report-details__reviewHistoryItem" key={`${item.reviewed_at || 'review'}-${index}`}>
+                      <p className="report-details__text">
+                        {item.decision?.replaceAll('_', ' ')} · {formatDate(item.reviewed_at)} · {item.reviewed_by || 'Admin'}
+                      </p>
+                      {item.summary && <p className="report-details__description">{item.summary}</p>}
+                      <p className="report-details__description">{item.explanation}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
               {report.analysis_ref_id && (
                 <div className="report-details__field">
                   <label>Reference ID</label>
@@ -137,6 +298,40 @@ export default function ReportDetailsModal({
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {(report.activity_history?.length > 0 || report.assigned_to) && (
+          <div className="report-details__section">
+            <h4 className="report-details__section-title">Admin activity history</h4>
+            {report.activity_history?.length > 0 ? (
+              <ol className="report-details__activityList">
+                {report.activity_history.slice().reverse().map((activity, index) => (
+                  <li className="report-details__activityItem" key={`${activity.created_at || 'activity'}-${index}`}>
+                    <span className="report-details__activityMarker" aria-hidden="true" />
+                    <div className="report-details__activityBody">
+                      <strong>{getActivityLabel(activity)}</strong>
+                      <p className="report-details__activityMeta">
+                        {activity.admin_email || activity.admin_user_id || 'Admin'}
+                        {' · '}
+                        {formatDate(activity.created_at)}
+                      </p>
+                      {activity.resolution_notes && (
+                        <p className="report-details__description report-details__activityNote">
+                          {activity.resolution_notes}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="report-details__field">
+                <label>Currently assigned / latest handler</label>
+                <p className="report-details__text">{report.assigned_to}</p>
+                <small className="report-details__hint">Detailed action history is available for updates recorded after audit tracking was enabled.</small>
+              </div>
+            )}
           </div>
         )}
 
@@ -149,10 +344,14 @@ export default function ReportDetailsModal({
                 <label>Resolved At</label>
                 <p className="report-details__text">{formatDate(report.resolved_at)}</p>
               </div>
-              {report.assigned_to && (
+              {report.activity_history?.length > 0 && (
                 <div className="report-details__field">
-                  <label>Handled By</label>
-                  <p className="report-details__text">{report.assigned_to}</p>
+                  <label>Latest action by</label>
+                  <p className="report-details__text">
+                    {report.activity_history[report.activity_history.length - 1].admin_email
+                      || report.activity_history[report.activity_history.length - 1].admin_user_id
+                      || 'Admin'}
+                  </p>
                 </div>
               )}
             </div>
@@ -201,6 +400,196 @@ export default function ReportDetailsModal({
             </div>
           )}
         </div>
+        {analysis && (
+          <div className="report-details__section report-details__verification">
+            <div className="report-details__verificationHeader">
+              <div>
+                <h4 className="report-details__section-title">Human verification</h4>
+                <p className="report-details__description">
+                  Write the final result that the reporter will see. The original model output stays available above for comparison.
+                </p>
+              </div>
+              {reviewDecision && (
+                <button className="report-details__clearReview" type="button" onClick={() => setReviewDecision('')}>
+                  Clear review choice
+                </button>
+              )}
+            </div>
+            <label className="report-details__choiceLabel" id="report-review-decision-label">Decision</label>
+            <div className="report-details__decisionChoices" role="group" aria-labelledby="report-review-decision-label">
+              {[
+                ['confirmed_scam', 'Confirmed scam', 'Publish a human-verified scam result.'],
+                ['confirmed_legitimate', 'Confirmed legitimate', 'Publish a human-verified safe result.'],
+                ['inconclusive', 'Inconclusive', 'Record the review without changing the result.'],
+                ['needs_more_info', 'Needs more info', 'Keep the result unchanged while follow-up is needed.'],
+              ].map(([value, title, description]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`report-details__decisionChoice ${reviewDecision === value ? 'report-details__decisionChoice--selected' : ''}`}
+                  aria-pressed={reviewDecision === value}
+                  onClick={() => setReviewDecision(value)}
+                >
+                  <strong>{title}</strong>
+                  <span>{description}</span>
+                </button>
+              ))}
+            </div>
+            {reviewDecision && (
+              <div className="report-details__reviewEditor">
+                {reviewDecision === 'confirmed_scam' && (
+                  <div className="report-details__grid">
+                <div className="report-details__field">
+                  <label htmlFor="report-review-type">Scam type</label>
+                  <select
+                    id="report-review-type"
+                    className="report-details__editor"
+                    value={reviewScamType}
+                    onChange={(event) => setReviewScamType(event.target.value)}
+                    required
+                  >
+                    <option value="">Choose one of the 15 model categories</option>
+                    {SCAM_TYPE_OPTIONS.map((scamType) => (
+                      <option key={scamType} value={scamType}>{scamType}</option>
+                    ))}
+                  </select>
+                </div>
+                    <div className="report-details__field report-details__field--full">
+                      <div className="report-details__riskHeader">
+                        <label htmlFor="report-review-risk-score">Human risk estimate</label>
+                        <strong className={`report-details__riskValue report-details__riskValue--${getHumanRiskLevel(Number(reviewRiskScore)).toLowerCase().replace(' ', '-')}`}>
+                          {reviewRiskScore}% · {getHumanRiskLevel(Number(reviewRiskScore))}
+                        </strong>
+                      </div>
+                      <div className="report-details__riskControls">
+                        <input
+                          id="report-review-risk-score"
+                          className="report-details__riskSlider"
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={reviewRiskScore}
+                          onChange={(event) => setReviewRiskScore(Number(event.target.value))}
+                          aria-label="Human risk estimate percentage"
+                        />
+                        <div className="report-details__riskNumber">
+                          <input
+                            className="report-details__editor"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={reviewRiskScore}
+                            onChange={(event) => setReviewRiskScore(event.target.value === '' ? '' : Number(event.target.value))}
+                            aria-label="Human risk estimate number"
+                          />
+                          <span>%</span>
+                        </div>
+                      </div>
+                      <div className="report-details__riskScale" aria-hidden="true">
+                        <span>Very low<br />0–19</span>
+                        <span>Low<br />20–39</span>
+                        <span>Medium<br />40–69</span>
+                        <span>High<br />70–89</span>
+                        <span>Very high<br />90–100</span>
+                      </div>
+                      <small className="report-details__hint">A separate human estimate of the risk this message poses; it is not the model’s scam-likelihood score.</small>
+                    </div>
+                  </div>
+                )}
+                {reviewDecision === 'confirmed_legitimate' && (
+                  <div className="report-details__publishedRisk">
+                    <span>Published human risk estimate</span><strong>0% · Very low</strong>
+                  </div>
+                )}
+                {(reviewDecision === 'confirmed_scam' || reviewDecision === 'confirmed_legitimate') && (
+                  <>
+                    <div className="report-details__field report-details__field--full">
+                      <label htmlFor="report-review-summary">Human-written result summary <span className="report-details__required">Required</span></label>
+                      <textarea
+                        id="report-review-summary"
+                        className="report-details__editor report-details__editor--response"
+                        value={reviewSummary}
+                        onChange={(event) => setReviewSummary(event.target.value)}
+                        minLength={10}
+                        maxLength={2000}
+                        required
+                        placeholder="Write a concise summary of the verified result"
+                      />
+                      <small className="report-details__hint">This becomes the main summary shown with the result.</small>
+                    </div>
+                    <div className="report-details__field report-details__field--full">
+                      <label htmlFor="report-review-details">Additional human-reviewed details</label>
+                      <textarea
+                        id="report-review-details"
+                        className="report-details__editor report-details__editor--response"
+                        value={reviewDetails}
+                        onChange={(event) => setReviewDetails(event.target.value)}
+                        maxLength={5000}
+                        placeholder="Add context, evidence, or practical explanation"
+                      />
+                    </div>
+                    <div className="report-details__field report-details__field--full">
+                      <label htmlFor="report-review-indicator">Human-verified red flags / indicators</label>
+                      <div className="report-details__markerEditor">
+                        <input
+                          id="report-review-indicator"
+                          className="report-details__editor"
+                          value={newReviewMarker}
+                          onChange={(event) => setNewReviewMarker(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              addReviewMarker();
+                            }
+                          }}
+                          maxLength={200}
+                          disabled={reviewMarkers.length >= 10}
+                          placeholder={reviewMarkers.length >= 10 ? 'Maximum of 10 indicators reached' : 'Add a verified indicator and press Enter'}
+                        />
+                        <button
+                          className="report-details__addMarker"
+                          type="button"
+                          onClick={addReviewMarker}
+                          disabled={!newReviewMarker.trim() || reviewMarkers.length >= 10}
+                        >
+                          Add indicator
+                        </button>
+                      </div>
+                      {reviewMarkers.length > 0 ? (
+                        <ul className="report-details__markerChips">
+                          {reviewMarkers.map((marker, index) => (
+                            <li key={`${marker}-${index}`}>
+                              <span>{marker}</span>
+                              <button type="button" aria-label={`Remove ${marker}`} onClick={() => setReviewMarkers(reviewMarkers.filter((_, markerIndex) => markerIndex !== index))}>×</button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : <p className="report-details__hint">No human-verified indicators added.</p>}
+                    </div>
+                  </>
+                )}
+                <div className="report-details__field report-details__field--full">
+                  <label htmlFor="report-review-explanation">
+                    Reviewer rationale <span className="report-details__required">Required</span>
+                  </label>
+                  <textarea
+                    id="report-review-explanation"
+                    className="report-details__editor report-details__editor--response"
+                    value={reviewExplanation}
+                    onChange={(event) => setReviewExplanation(event.target.value)}
+                    minLength={10}
+                    maxLength={2000}
+                    required
+                    placeholder="Explain the evidence for this decision"
+                  />
+                  <small className="report-details__hint">This note is included with the human-reviewed result.</small>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Timestamps */}
         <div className="report-details__section report-details__section--no-border">
@@ -230,10 +619,19 @@ export default function ReportDetailsModal({
               report,
               editedStatus,
               report.report_type === 'support' ? response : undefined,
+              reviewDecision && reviewChanged ? {
+                decision: reviewDecision,
+                risk_score: reviewDecision === 'confirmed_legitimate' ? 0 : reviewRiskScore,
+                scam_type: reviewScamType,
+                summary: reviewSummary,
+                details: reviewDetails,
+                key_markers: reviewMarkers,
+                explanation: reviewExplanation,
+              } : undefined,
             )}
-            disabled={savingChanges}
+            disabled={savingChanges || !reviewIsValid}
           >
-            {savingChanges ? 'Saving...' : 'Save status and response'}
+            {savingChanges ? 'Saving...' : analysis ? 'Save report and review' : 'Save status and response'}
           </button>
           {isPending && (
             <>

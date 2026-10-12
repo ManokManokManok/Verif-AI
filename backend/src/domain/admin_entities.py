@@ -393,6 +393,7 @@ class UserReport:
     status: ReportStatus = ReportStatus.PENDING
     assigned_to: Optional[str] = None  # Admin user ID
     resolution_notes: Optional[str] = None
+    activity_history: List[Dict[str, Any]] = field(default_factory=list)
     
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -448,6 +449,7 @@ class UserReport:
             "status": self.status.value,
             "assigned_to": self.assigned_to,
             "resolution_notes": self.resolution_notes,
+            "activity_history": self.activity_history,
             "is_open": self.is_open,
             "is_resolved": self.is_resolved,
             "created_at": self.created_at.isoformat(),
@@ -471,6 +473,7 @@ class UserReport:
             status=ReportStatus(data.get("status", "pending")),
             assigned_to=data.get("assigned_to"),
             resolution_notes=data.get("resolution_notes"),
+            activity_history=data.get("activity_history", []),
             created_at=data.get("created_at", datetime.utcnow()),
             updated_at=data.get("updated_at", datetime.utcnow()),
             resolved_at=data.get("resolved_at"),
