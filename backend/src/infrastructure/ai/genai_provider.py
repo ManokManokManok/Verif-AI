@@ -200,15 +200,68 @@ class GenAIProvider:
         user_prompt: str,
         **options: Any,
     ) -> Dict[str, Any]:
-        if self.gemini is None:
-            raise RuntimeError("Gemini image analysis is unavailable")
-        return self.gemini.create_image_completion(
-            image_bytes=image_bytes,
-            mime_type=mime_type,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            **options,
-        )
+        last_error = None
+        primary_model = getattr(self.gemini, "model_name", None)
+        if self.gemini is not None:
+            try:
+                response = self.gemini.create_image_completion(
+                    image_bytes=image_bytes,
+                    mime_type=mime_type,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    **options,
+                )
+                logger.warning("[GENAI] Provider used: GEMINI (image; model=%s)", primary_model or "primary")
+                return response
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "[GEMINI] Image request failed on %s: %s; trying configured fallback models",
+                    primary_model or "primary",
+                    _safe_error_detail(exc),
+                )
+
+        for fallback_model in self.gemini_fallback_models:
+            if fallback_model == primary_model:
+                continue
+            try:
+                fallback = self.gemini_fallbacks.get(fallback_model)
+                if fallback is None:
+                    api_key = os.getenv("GEMINI_API_KEY")
+                    if not api_key or not self._gemini_enabled():
+                        continue
+                    fallback = GeminiProvider(api_key=api_key, model_name=fallback_model)
+                    self.gemini_fallbacks[fallback_model] = fallback
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "[GEMINI] Image fallback model %s could not be initialized: %s",
+                    fallback_model,
+                    _safe_error_detail(exc),
+                )
+                continue
+            try:
+                response = fallback.create_image_completion(
+                    image_bytes=image_bytes,
+                    mime_type=mime_type,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    **options,
+                )
+                logger.warning("[GENAI] Provider used: GEMINI (image; model=%s)", fallback_model)
+                return response
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "[GEMINI] Image request failed on %s: %s; trying the next configured model",
+                    fallback_model,
+                    _safe_error_detail(exc),
+                )
+
+        error = RuntimeError("Gemini image analysis is unavailable on all configured models")
+        if last_error:
+            raise error from last_error
+        raise error
 
     def create_structured_completion(
         self,

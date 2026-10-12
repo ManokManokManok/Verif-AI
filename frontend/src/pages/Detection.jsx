@@ -23,6 +23,8 @@ const ANALYSIS_STEPS = [
   'Running classifier...',
   'Generating summary...',
 ];
+const IMAGE_ANALYSIS_UNAVAILABLE_MESSAGE =
+  'Verif-AI image analysis is currently unavailable. Please try again later or use text-based analysis.';
 
 function getReviewExplanation(reviewReason) {
   if (reviewReason?.startsWith('Low classification confidence')) {
@@ -51,6 +53,7 @@ function Detection() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectionResult, setDetectionResult] = useState(null);
@@ -307,6 +310,8 @@ function Detection() {
         setGuestImageUsed(true);
       } else if (error.isRateLimited) {
         setRateLimitError(`Too many requests. Please wait ${error.retryAfter} and try again.`);
+      } else if (selectedImage && error.code === 'SERVICE_UNAVAILABLE') {
+        setValidationError(error.message || IMAGE_ANALYSIS_UNAVAILABLE_MESSAGE);
       } else if (error.isValidationError) {
         setValidationError(error.message);
       } else {
@@ -348,9 +353,7 @@ function Detection() {
     }, 500);
   };
 
-  // Handle image file selection
-  const handleImageSelect = async (e) => {
-    const file = e.target.files?.[0];
+  const handleImageFile = (file) => {
     if (!file) return;
 
     // Validate file type
@@ -384,6 +387,39 @@ function Detection() {
       setShowCropModal(true);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleImageSelect = (e) => {
+    handleImageFile(e.target.files?.[0]);
+  };
+
+  const handleInputDragOver = (e) => {
+    if (!Array.from(e.dataTransfer.types || []).includes('Files')) return;
+    e.preventDefault();
+    if (!isDetecting && !isAnalyzingImage) setIsDragOver(true);
+  };
+
+  const handleInputDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (isDetecting || isAnalyzingImage) return;
+
+    const files = Array.from(e.dataTransfer.files || []);
+    const file = files.find((item) => item.type.startsWith('image/')) || files[0];
+    handleImageFile(file);
+  };
+
+  const handleInputPaste = (e) => {
+    if (isDetecting || isAnalyzingImage) return;
+
+    const imageItem = Array.from(e.clipboardData?.items || []).find(
+      (item) => item.kind === 'file' && item.type.startsWith('image/'),
+    );
+    const file = imageItem?.getAsFile();
+    if (!file) return;
+
+    e.preventDefault();
+    handleImageFile(file);
   };
 
   const getCroppedImageBlob = async () => {
@@ -489,8 +525,11 @@ function Detection() {
     setGraphLegitWidth(0);
     const t = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        setGraphScamWidth(detectionResult.scam_score ?? 0);
-        setGraphLegitWidth(detectionResult.legit_score ?? 0);
+        const humanReview = detectionResult.reviewed_result?.is_published
+          ? detectionResult.reviewed_result
+          : null;
+        setGraphScamWidth(humanReview?.risk_score ?? detectionResult.scam_score ?? 0);
+        setGraphLegitWidth(humanReview ? 0 : detectionResult.legit_score ?? 0);
       });
     });
     return () => cancelAnimationFrame(t);
@@ -702,7 +741,7 @@ function Detection() {
 
               {/* Error messages */}
               {validationError && (
-                <div className="detect__error detect__error--validation">
+                <div className="detect__error detect__error--validation" role="alert">
                   {validationError}
                 </div>
               )}
@@ -838,7 +877,11 @@ function Detection() {
               )}
 
               {!selectedImage && <div
-                className={`detect__inputRow ${isFocused ? 'detect__inputRow--focused' : ''} ${isExpanded ? 'detect__inputRow--expanded' : ''}`}
+                className={`detect__inputRow ${isFocused ? 'detect__inputRow--focused' : ''} ${isExpanded ? 'detect__inputRow--expanded' : ''} ${isDragOver ? 'detect__inputRow--dragOver' : ''}`}
+                onDragEnter={handleInputDragOver}
+                onDragOver={handleInputDragOver}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleInputDrop}
               >
                 <button 
                   className="detect__plus" 
@@ -861,9 +904,10 @@ function Detection() {
                     className="detect__input"
                     value={text}
                     onChange={handleTextChange}
+                    onPaste={handleInputPaste}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
-                    placeholder={isMobile ? 'Paste here' : 'Paste suspicious message or email here, or click + to analyze an image...'}
+                    placeholder={isMobile ? 'Paste text or an image here' : 'Paste suspicious message or email here, or drop/paste an image to analyze...'}
                     rows={1}
                     maxLength={CONSTRAINTS.message.maxLength}
                     disabled={isAnalyzingImage}
@@ -910,7 +954,14 @@ function Detection() {
           ) : (
             <div className="detect__results" role="region" aria-label="Analysis results">
               <div className="detect__resultsHeader detect__resultsHeader--animate">
-                <h2 className="detect__resultsTitle">Analysis Results</h2>
+                <div className="detect__resultsHeading">
+                  <h2 className="detect__resultsTitle">Analysis Results</h2>
+                  {reviewedResult && (
+                    <span className="detect__adminVerifiedBadge" role="status">
+                      Admin verified
+                    </span>
+                  )}
+                </div>
                 <div className="detect__resultsActions">
                   {isLoggedIn && (
                     <button 
@@ -953,7 +1004,7 @@ function Detection() {
                         {reviewedResult.is_scam ? '!' : '✓'}
                       </div>
                       <div className="detect__reviewContent">
-                        <h3 className="detect__reviewTitle">Human-reviewed result</h3>
+                        <h3 className="detect__reviewTitle">Verified by a Verif-AI admin</h3>
                         <p className="detect__reviewText">
                           {reviewedResult.is_scam ? 'Confirmed scam' : 'Confirmed legitimate'}
                           {reviewedResult.risk_level ? ` · ${formatReviewRiskLevel(reviewedResult.risk_level)} human risk` : ''}
@@ -961,54 +1012,12 @@ function Detection() {
                         </p>
                       </div>
                     </div>
-                    {Number.isInteger(reviewedResult.risk_score) && (
-                      <div className="detect__reviewRisk">
-                        <div className="detect__reviewRiskHeader">
-                          <span>Human risk estimate</span>
-                          <strong>{reviewedResult.risk_score}% · {formatReviewRiskLevel(reviewedResult.risk_level)}</strong>
-                        </div>
-                        <div
-                          className="detect__reviewRiskTrack"
-                          role="img"
-                          aria-label={`Human risk estimate ${reviewedResult.risk_score} percent, ${formatReviewRiskLevel(reviewedResult.risk_level)} risk`}
-                        >
-                          <span style={{ width: `${reviewedResult.risk_score}%` }} />
-                        </div>
-                      </div>
-                    )}
-                    {reviewedResult.summary && (
-                      <section className="detect__reviewResultSection">
-                        <h4 className="detect__reviewResultLabel">Verified summary</h4>
-                        <p className="detect__reviewResultSummary">{reviewedResult.summary}</p>
-                      </section>
-                    )}
-                    {reviewedResult.details && (
-                      <section className="detect__reviewResultSection">
-                        <h4 className="detect__reviewResultLabel">Reviewer details</h4>
-                        <p className="detect__reviewReason">{reviewedResult.details}</p>
-                      </section>
-                    )}
-                    {reviewedResult.key_markers?.length > 0 && (
-                      <section className="detect__reviewResultSection">
-                        <h4 className="detect__reviewResultLabel">Verified red flags / indicators</h4>
-                        <ul className="detect__markersList">
-                          {reviewedResult.key_markers.map((marker, index) => (
-                            <li
-                              className={`detect__markerItem ${reviewedResult.is_scam ? 'detect__markerItem--scam' : 'detect__markerItem--legit'}`}
-                              key={`${marker}-${index}`}
-                            >
-                              {marker}
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    )}
-                    {reviewedResult.explanation && (
-                      <section className="detect__reviewResultSection detect__reviewRationale">
-                        <h4 className="detect__reviewResultLabel">Reviewer rationale</h4>
-                        <p className="detect__reviewReason">{reviewedResult.explanation}</p>
-                      </section>
-                    )}
+                    <p className="detect__reviewDisclosure">
+                      A Verif-AI admin reviewed this analysis. The result cards below show the admin&apos;s verified assessment.
+                      {reviewedResult.reviewed_at && (
+                        <> Reviewed {new Date(reviewedResult.reviewed_at).toLocaleString()}.</>
+                      )}
+                    </p>
                   </div>
                 )}
                 {detectionResult.needs_review && !reviewedResult && (
@@ -1033,8 +1042,10 @@ function Detection() {
 
                 {/* Summary & Original Message */}
                 <div className="detect__resultCard detect__resultCard--summary detect__resultCard--animate">
-                  <h3 className="detect__cardTitle">Original AI analysis</h3>
-                  <p className="detect__summary">{detectionResult.summary}</p>
+                  <h3 className="detect__cardTitle">
+                    {reviewedResult ? 'Admin-verified summary' : 'Summary'}
+                  </h3>
+                  <p className="detect__summary">{reviewedResult?.summary || detectionResult.summary}</p>
                   <h4 className="detect__cardSubtitle">{detectionResult.image_attachment ? 'Analyzed Image' : 'Analyzed Message'}</h4>
                   {detectionResult.image_attachment?.data_url ? (
                     <img
@@ -1051,34 +1062,46 @@ function Detection() {
 
                 {/* Likelihood Graph */}
                 <div className="detect__resultCard detect__resultCard--graph detect__resultCard--animate">
-                  <h3 className="detect__cardTitle">Original model likelihood</h3>
+                  <h3 className="detect__cardTitle">
+                    {reviewedResult ? 'Admin-assessed risk' : 'Likelihood'}
+                  </h3>
                   <div className="detect__graph">
                     <div
                       className="detect__donut"
                       style={{ '--scam-percentage': `${graphScamWidth}%` }}
                       role="img"
-                      aria-label={`Scam likelihood ${graphScamWidth.toFixed(1)} percent, legitimate likelihood ${graphLegitWidth.toFixed(1)} percent`}
+                      aria-label={reviewedResult
+                        ? `Admin-assessed risk ${reviewedResult.risk_score} percent, ${formatReviewRiskLevel(reviewedResult.risk_level)}`
+                        : `Scam likelihood ${graphScamWidth.toFixed(1)} percent, legitimate likelihood ${graphLegitWidth.toFixed(1)} percent`}
                     >
                       <div className="detect__donutCenter">
                         <strong>{graphScamWidth.toFixed(1)}%</strong>
-                        <span>scam</span>
+                        <span>{reviewedResult ? 'admin risk' : 'scam'}</span>
                       </div>
                     </div>
                     <div className="detect__graphLabels">
-                      <div className="detect__graphLabel detect__graphLabel--scam">
-                        <span className="detect__graphDot detect__graphDot--scam" />
-                        Scam: {(detectionResult.scam_score ?? 0).toFixed(1)}%
-                      </div>
-                      <div className="detect__graphLabel detect__graphLabel--legit">
-                        <span className="detect__graphDot detect__graphDot--legit" />
-                        Legit: {(detectionResult.legit_score ?? 0).toFixed(1)}%
-                      </div>
+                      {reviewedResult ? (
+                        <div className="detect__graphLabel detect__graphLabel--scam">
+                          Verif-AI admin risk estimate: {reviewedResult.risk_score}% · {formatReviewRiskLevel(reviewedResult.risk_level)}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="detect__graphLabel detect__graphLabel--scam">
+                            <span className="detect__graphDot detect__graphDot--scam" />
+                            Scam: {(detectionResult.scam_score ?? 0).toFixed(1)}%
+                          </div>
+                          <div className="detect__graphLabel detect__graphLabel--legit">
+                            <span className="detect__graphDot detect__graphDot--legit" />
+                            Legit: {(detectionResult.legit_score ?? 0).toFixed(1)}%
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="detect__verdict detect__verdict--animate">
                     <span className={`detect__verdictLabel ${displayedIsScam ? 'detect__verdictLabel--scam' : 'detect__verdictLabel--legit'}`}>
                       {reviewedResult
-                        ? (displayedIsScam ? 'Human-reviewed: scam' : 'Human-reviewed: legitimate')
+                        ? (displayedIsScam ? 'Admin-verified: scam' : 'Admin-verified: legitimate')
                         : (displayedIsScam ? 'Likely to be a scam' : 'Likely to be legit')}
                     </span>
                   </div>
@@ -1086,8 +1109,26 @@ function Detection() {
 
                 {/* Details & Markers */}
                 <div className="detect__resultCard detect__resultCard--details detect__resultCard--animate">
-                  <h3 className="detect__cardTitle">Original model details</h3>
-                  {(detectionResult.is_scam || detectionResult.details) && (
+                  <h3 className="detect__cardTitle">
+                    {reviewedResult ? 'Admin-verified details' : 'Details'}
+                  </h3>
+                  {reviewedResult ? (
+                    <div className="detect__scamType detect__scamType--animate">
+                      {reviewedResult.is_scam && reviewedResult.scam_type && (
+                        <>
+                          <div className="detect__detailLabel">Verified scam type</div>
+                          <div className="detect__detailValue">{reviewedResult.scam_type}</div>
+                        </>
+                      )}
+                      {reviewedResult.details && <p className="detect__summary">{reviewedResult.details}</p>}
+                      {reviewedResult.explanation && (
+                        <div className="detect__reviewRationale">
+                          <h4 className="detect__reviewResultLabel">Admin rationale</h4>
+                          <p className="detect__reviewReason">{reviewedResult.explanation}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (detectionResult.is_scam || detectionResult.details) && (
                     <div className="detect__scamType detect__scamType--animate">
                       {detectionResult.is_scam && detectionResult.scam_type && (
                         <>
@@ -1101,16 +1142,16 @@ function Detection() {
                       {detectionResult.details && <p className="detect__summary">{detectionResult.details}</p>}
                     </div>
                   )}
-                  {detectionResult.key_markers && detectionResult.key_markers.length > 0 && (
+                  {(reviewedResult?.key_markers || detectionResult.key_markers)?.length > 0 && (
                     <div className="detect__markers">
-                      <h4 className={`detect__markersTitle ${!detectionResult.is_scam ? 'detect__markersTitle--legit' : 'detect__markersTitle--scam'}`}>
-                        Original model indicators
+                      <h4 className={`detect__markersTitle ${!displayedIsScam ? 'detect__markersTitle--legit' : 'detect__markersTitle--scam'}`}>
+                        {reviewedResult ? 'Admin-verified signs and indicators' : 'Key linguistic markers'}
                       </h4>
                       <ul className="detect__markersList">
-                        {detectionResult.key_markers.map((marker, idx) => (
+                        {(reviewedResult?.key_markers || detectionResult.key_markers).map((marker, idx) => (
                           <li
                             key={idx}
-                            className={`detect__markerItem detect__markerItem--animate ${!detectionResult.is_scam ? 'detect__markerItem--legit' : 'detect__markerItem--scam'}`}
+                            className={`detect__markerItem detect__markerItem--animate ${!displayedIsScam ? 'detect__markerItem--legit' : 'detect__markerItem--scam'}`}
                             style={{ animationDelay: `${0.35 + idx * 0.06}s` }}
                           >
                             {marker}

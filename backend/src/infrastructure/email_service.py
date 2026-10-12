@@ -424,6 +424,25 @@ class NodeMailerEmailService(_TemplatedEmailServiceBase):
             )
             return False
 
+        try:
+            response = json.loads(result.stdout or '')
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.error(f"Nodemailer returned an invalid response for {to_email}: {exc}")
+            return False
+
+        accepted = response.get('accepted') if isinstance(response, dict) else None
+        if (
+            not isinstance(response, dict)
+            or response.get('ok') is not True
+            or not isinstance(accepted, list)
+            or not any(
+                isinstance(address, str) and address.casefold() == to_email.casefold()
+                for address in accepted
+            )
+        ):
+            logger.error(f"Nodemailer did not accept recipient {to_email}")
+            return False
+
         logger.info(f"Email sent to {to_email} via Nodemailer")
         return True
 
