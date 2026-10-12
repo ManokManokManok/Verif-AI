@@ -1007,7 +1007,10 @@ class AdminRepository:
         report_id: str,
         status: ReportStatus,
         resolution_notes: Optional[str] = None,
-        assigned_to: Optional[str] = None
+        assigned_to: Optional[str] = None,
+        admin_email: Optional[str] = None,
+        activity_type: Optional[str] = None,
+        review_decision: Optional[str] = None,
     ) -> UserReport:
         """
         Update a report's status.
@@ -1017,6 +1020,9 @@ class AdminRepository:
             status: New status
             resolution_notes: Optional resolution notes
             assigned_to: Optional admin user ID
+            admin_email: Email of the admin performing the action
+            activity_type: Additional event context such as a support response
+            review_decision: Human review decision recorded with this update
             
         Returns:
             Updated UserReport entity
@@ -1037,11 +1043,35 @@ class AdminRepository:
         
         if status in [ReportStatus.RESOLVED, ReportStatus.DISMISSED]:
             update_doc["resolved_at"] = datetime.utcnow()
+
+        activity = {
+            "admin_user_id": assigned_to,
+            "admin_email": admin_email,
+            "status": status.value,
+            "action": activity_type or "status_updated",
+            "actions": [
+                "status_updated",
+                *(
+                    [status.value]
+                    if status in [ReportStatus.RESOLVED, ReportStatus.DISMISSED]
+                    else []
+                ),
+                *([activity_type] if activity_type and activity_type != "status_updated" else []),
+                *(["human_review"] if review_decision else []),
+            ],
+            "resolution_notes": resolution_notes,
+            "review_decision": review_decision,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        update_operations = {
+            "$set": update_doc,
+            "$push": {"activity_history": activity},
+        }
         
         # Try updating by report_id first
         result = self.reports_collection.find_one_and_update(
             {"report_id": report_id},
-            {"$set": update_doc},
+            update_operations,
             return_document=True
         )
         
@@ -1050,7 +1080,7 @@ class AdminRepository:
             try:
                 result = self.reports_collection.find_one_and_update(
                     {"_id": ObjectId(report_id)},
-                    {"$set": update_doc},
+                    update_operations,
                     return_document=True
                 )
             except Exception:
@@ -1092,6 +1122,7 @@ class AdminRepository:
             status=ReportStatus(doc.get("status", "pending")),
             assigned_to=doc.get("assigned_to"),
             resolution_notes=doc.get("resolution_notes"),
+            activity_history=doc.get("activity_history", []),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
             resolved_at=doc.get("resolved_at"),

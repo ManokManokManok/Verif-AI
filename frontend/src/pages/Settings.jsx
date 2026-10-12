@@ -835,6 +835,12 @@ export default function Settings() {
                             </span>
                           </div>
 
+                          {report.status_message && (
+                            <p className="settings-report-item__status-message">
+                              {report.status_message}
+                            </p>
+                          )}
+
                           {report.description && (
                             <p className="settings-report-item__desc">
                               {report.description.length > 120
@@ -1296,11 +1302,16 @@ export default function Settings() {
                   {selectedReport.description || 'No detailed description provided.'}
                 </div>
               </div>
-              {selectedReport.report_type === REPORT_TYPES.SUPPORT && selectedReport.resolution_notes && (
+              {selectedReport.status_message && (
+                <div className="settings-modal__status-message" role="status">
+                  {selectedReport.status_message}
+                </div>
+              )}
+              {selectedReport.report_type === REPORT_TYPES.SUPPORT && selectedReport.admin_response && (
                 <div className="settings-modal__section">
                   <h4 className="settings-modal__section-label">Admin response</h4>
                   <div className="settings-modal__desc-box">
-                    {selectedReport.resolution_notes}
+                    {selectedReport.admin_response}
                   </div>
                 </div>
               )}

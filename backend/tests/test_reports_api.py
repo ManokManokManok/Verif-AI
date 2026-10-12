@@ -25,6 +25,7 @@ from src.interfaces.rest.reports_views import (
     get_report_types,
     extract_user_from_request,
     require_auth,
+    _serialize_report_for_reporter,
 )
 from src.domain.admin_entities import (
     ReportType,
@@ -229,6 +230,64 @@ class TestSubmitReport:
 class TestGetMyReports:
     """Tests for the get_my_reports endpoint."""
 
+    def test_public_report_hides_internal_admin_audit_data(self):
+        """Reporter responses should not include admin identities or private notes."""
+        report = UserReport(
+            report_id='report-resolved',
+            user_id='user-123',
+            user_email='test@example.com',
+            report_type=ReportType.FALSE_POSITIVE,
+            title='False positive',
+            description='This result was incorrectly flagged.',
+            status=ReportStatus.RESOLVED,
+            assigned_to='admin-456',
+            resolution_notes='Internal investigation details.',
+            activity_history=[{
+                'admin_user_id': 'admin-456',
+                'admin_email': 'admin@example.com',
+                'action': 'human_review',
+                'resolution_notes': 'Private review notes.',
+            }],
+        )
+
+        public_report = _serialize_report_for_reporter(report)
+
+        assert public_report['status_message'] == 'Resolved by a Verif-AI admin.'
+        assert 'assigned_to' not in public_report
+        assert 'activity_history' not in public_report
+        assert 'user_email' not in public_report
+        assert 'resolution_notes' not in public_report
+        assert 'admin@example.com' not in json.dumps(public_report)
+        assert 'Private review notes.' not in json.dumps(public_report)
+
+    def test_public_support_report_exposes_only_explicit_support_response(self):
+        """Only responses explicitly marked for the reporter are public."""
+        report = UserReport(
+            report_id='report-support',
+            user_id='user-123',
+            report_type=ReportType.SUPPORT,
+            title='Need help',
+            description='Please help with my account.',
+            status=ReportStatus.RESOLVED,
+            resolution_notes='Internal notes, not for the reporter.',
+            activity_history=[
+                {
+                    'action': 'status_updated',
+                    'resolution_notes': 'Private status notes.',
+                },
+                {
+                    'action': 'support_response',
+                    'resolution_notes': 'We have resolved your issue.',
+                },
+            ],
+        )
+
+        public_report = _serialize_report_for_reporter(report)
+
+        assert public_report['admin_response'] == 'We have resolved your issue.'
+        assert 'Internal notes' not in json.dumps(public_report)
+        assert 'Private status notes' not in json.dumps(public_report)
+
     @patch('src.interfaces.rest.reports_views.AdminRepository')
     @patch('src.interfaces.rest.reports_views.extract_user_from_request')
     def test_returns_user_reports(self, mock_extract, mock_repo_class, api_factory, sample_report):
@@ -238,7 +297,15 @@ class TestGetMyReports:
             'email': 'test@example.com',
             'roles': ['user'],
         }
-        
+
+        sample_report.status = ReportStatus.RESOLVED
+        sample_report.assigned_to = 'admin-456'
+        sample_report.resolution_notes = 'Internal review notes.'
+        sample_report.activity_history = [{
+            'admin_user_id': 'admin-456',
+            'admin_email': 'admin@example.com',
+            'action': 'human_review',
+        }]
         mock_reports = [sample_report]
         
         mock_repo = Mock()
@@ -257,6 +324,12 @@ class TestGetMyReports:
         assert data['success'] is True
         assert len(data['data']['reports']) == 1
         assert data['data']['total'] == 1
+        public_report = data['data']['reports'][0]
+        assert public_report['status_message'] == 'Resolved by a Verif-AI admin.'
+        assert 'assigned_to' not in public_report
+        assert 'activity_history' not in public_report
+        assert 'resolution_notes' not in public_report
+        assert 'admin@example.com' not in json.dumps(public_report)
         
         # Verify user_id filter was applied
         mock_repo.get_reports.assert_called_once()

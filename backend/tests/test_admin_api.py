@@ -28,6 +28,7 @@ import json
 
 # Import views to test
 from src.interfaces.rest.admin_views import (
+    _human_risk_level,
     model_health,
     model_health_summary,
     analysis_stats,
@@ -36,6 +37,7 @@ from src.interfaces.rest.admin_views import (
     user_stats,
     list_reports,
     update_report,
+    get_report,
     list_users,
     get_user,
     delete_user,
@@ -47,6 +49,8 @@ from src.interfaces.rest.admin_views import (
     parse_date_param,
     parse_period_param,
 )
+
+
 from src.domain.admin_entities import (
     ModelHealthMetrics,
     AnalysisStatistics,
@@ -57,6 +61,25 @@ from src.domain.admin_entities import (
     StatisticsPeriod,
 )
 from src.domain.entities import User
+
+
+@pytest.mark.parametrize(
+    ('score', 'level'),
+    [
+        (0, 'very_low'),
+        (19, 'very_low'),
+        (20, 'low'),
+        (39, 'low'),
+        (40, 'medium'),
+        (69, 'medium'),
+        (70, 'high'),
+        (89, 'high'),
+        (90, 'very_high'),
+        (100, 'very_high'),
+    ],
+)
+def test_human_risk_level_uses_documented_bands(score, level):
+    assert _human_risk_level(score) == level
 
 
 @pytest.fixture
@@ -698,6 +721,43 @@ class TestUserReportsEndpoint:
         assert response.status_code == status.HTTP_200_OK
         call_args = mock_use_case.execute.call_args
         assert call_args.kwargs['status'] == ReportStatus.PENDING
+
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    @patch('src.interfaces.rest.admin_views.get_analysis_repository')
+    @patch('src.interfaces.rest.admin_views.get_admin_repository')
+    @patch('src.interfaces.rest.admin_views.GetReportByIdUseCase')
+    def test_get_report_includes_linked_analysis(
+        self, mock_use_case_class, mock_get_admin_repo, mock_get_analysis_repo,
+        mock_require_admin, api_factory, sample_user_report
+    ):
+        mock_require_admin.return_value = None
+        sample_user_report.analysis_ref_id = 'analysis-ref-123'
+        admin_repo = Mock()
+        mock_get_admin_repo.return_value = admin_repo
+
+        result = Mock(success=True, report=sample_user_report)
+        use_case = Mock()
+        use_case.execute.return_value = result
+        mock_use_case_class.return_value = use_case
+
+        analysis = Mock()
+        analysis.to_dict.return_value = {
+            'ref_id': 'analysis-ref-123',
+            'message': 'The original analyzed message',
+            'is_scam': True,
+        }
+        analysis_repo = Mock()
+        analysis_repo.get_by_ref_id.return_value = analysis
+        mock_get_analysis_repo.return_value = analysis_repo
+
+        request = api_factory.get(
+            '/api/admin/reports/report-123/detail/',
+            HTTP_AUTHORIZATION='******'
+        )
+        response = get_report(request, 'report-123')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['data']['analysis']['message'] == 'The original analyzed message'
     
     @patch('src.interfaces.rest.admin_views.require_admin')
     @patch('src.interfaces.rest.admin_views.get_admin_repository')
@@ -771,6 +831,183 @@ class TestUserReportsEndpoint:
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data['success'] is True
+
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    @patch('src.interfaces.rest.admin_views.extract_user_from_request')
+    @patch('src.interfaces.rest.admin_views.get_analysis_repository')
+    @patch('src.interfaces.rest.admin_views.get_admin_repository')
+    @patch('src.interfaces.rest.admin_views.UpdateReportStatusUseCase')
+    def test_update_report_saves_human_review(
+        self, mock_use_case_class, mock_get_admin_repo, mock_get_analysis_repo,
+        mock_extract, mock_require_admin, api_factory, sample_user_report
+    ):
+        mock_require_admin.return_value = None
+        mock_extract.return_value = ('admin-123', 'admin@test.com', ['admin'])
+        sample_user_report.analysis_ref_id = 'analysis-ref-123'
+        admin_repo = Mock()
+        admin_repo.get_report_by_id.return_value = sample_user_report
+        mock_get_admin_repo.return_value = admin_repo
+
+        analysis = Mock()
+        analysis.ref_id = 'analysis-ref-123'
+        analysis.to_dict.return_value = {'ref_id': 'analysis-ref-123'}
+        analysis_repo = Mock()
+        analysis_repo.get_by_ref_id.return_value = analysis
+        updated_analysis = Mock()
+        analysis_repo.update_reviewed_result.return_value = updated_analysis
+        mock_get_analysis_repo.return_value = analysis_repo
+
+        result = Mock(success=True, report=sample_user_report)
+        use_case = Mock()
+        use_case.execute.return_value = result
+        mock_use_case_class.return_value = use_case
+
+        request = api_factory.patch(
+            '/api/admin/reports/report-123/',
+            {
+                'status': 'resolved',
+                'review': {
+                    'decision': 'confirmed_scam',
+                    'risk_score': 84,
+                    'scam_type': 'Banking Access & Payment',
+                    'summary': 'The message impersonates the bank to steal account access.',
+                    'details': 'The link leads to a credential harvesting page.',
+                    'key_markers': ['Requests password via an external link'],
+                    'explanation': 'The message impersonates the bank and requests credentials.',
+                },
+            },
+            format='json',
+            HTTP_AUTHORIZATION='******'
+        )
+        response = update_report(request, 'report-123')
+
+        assert response.status_code == status.HTTP_200_OK
+        review_record = analysis_repo.update_reviewed_result.call_args.args[1]
+        history_event = analysis_repo.update_reviewed_result.call_args.args[2]
+        assert review_record['decision'] == 'confirmed_scam'
+        assert review_record['is_published'] is True
+        assert review_record['risk_score'] == 84
+        assert review_record['risk_level'] == 'high'
+        assert review_record['scam_type'] == 'Banking Access & Payment'
+        assert review_record['summary'] == 'The message impersonates the bank to steal account access.'
+        assert review_record['details'] == 'The link leads to a credential harvesting page.'
+        assert review_record['key_markers'] == ['Requests password via an external link']
+        assert review_record['reviewed_by'] == 'admin-123'
+        assert history_event == review_record
+        update_args = use_case.execute.call_args.kwargs
+        assert update_args['admin_user_id'] == 'admin-123'
+        assert update_args['admin_email'] == 'admin@test.com'
+        assert update_args['activity_type'] == 'human_review'
+        assert update_args['review_decision'] == 'confirmed_scam'
+
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    @patch('src.interfaces.rest.admin_views.extract_user_from_request')
+    @patch('src.interfaces.rest.admin_views.get_admin_repository')
+    @patch('src.interfaces.rest.admin_views.UpdateReportStatusUseCase')
+    def test_update_report_tracks_support_response_admin(
+        self, mock_use_case_class, mock_get_admin_repo, mock_extract,
+        mock_require_admin, api_factory, sample_user_report
+    ):
+        from src.domain.admin_entities import ReportType
+
+        mock_require_admin.return_value = None
+        mock_extract.return_value = ('admin-123', 'admin@test.com', ['admin'])
+        sample_user_report.report_type = ReportType.SUPPORT
+        admin_repo = Mock()
+        admin_repo.get_report_by_id.return_value = sample_user_report
+        mock_get_admin_repo.return_value = admin_repo
+
+        result = Mock(success=True, report=sample_user_report)
+        use_case = Mock()
+        use_case.execute.return_value = result
+        mock_use_case_class.return_value = use_case
+
+        request = api_factory.patch(
+            '/api/admin/reports/report-123/',
+            {
+                'status': 'in_progress',
+                'resolution_notes': 'We are investigating this request.',
+            },
+            format='json',
+            HTTP_AUTHORIZATION='******'
+        )
+        response = update_report(request, 'report-123')
+
+        assert response.status_code == status.HTTP_200_OK
+        call_args = use_case.execute.call_args.kwargs
+        assert call_args['admin_user_id'] == 'admin-123'
+        assert call_args['admin_email'] == 'admin@test.com'
+        assert call_args['activity_type'] == 'support_response'
+        assert call_args['resolution_notes'] == 'We are investigating this request.'
+
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    def test_update_report_rejects_review_without_explanation(
+        self, mock_require_admin, api_factory
+    ):
+        mock_require_admin.return_value = None
+        request = api_factory.patch(
+            '/api/admin/reports/report-123/',
+            {
+                'status': 'resolved',
+                'review': {'decision': 'confirmed_legitimate'},
+            },
+            format='json',
+            HTTP_AUTHORIZATION='******'
+        )
+
+        response = update_report(request, 'report-123')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error']['code'] == 'INVALID_INPUT'
+
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    def test_update_report_requires_summary_for_published_review(
+        self, mock_require_admin, api_factory
+    ):
+        mock_require_admin.return_value = None
+        request = api_factory.patch(
+            '/api/admin/reports/report-123/',
+            {
+                'status': 'resolved',
+                'review': {
+                    'decision': 'confirmed_legitimate',
+                    'explanation': 'Verified from the sender identity and linked destination.',
+                },
+            },
+            format='json',
+            HTTP_AUTHORIZATION='******'
+        )
+
+        response = update_report(request, 'report-123')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error']['message'] == 'A human-written summary of at least 10 characters is required'
+
+    @patch('src.interfaces.rest.admin_views.require_admin')
+    def test_update_report_rejects_unsupported_scam_type(
+        self, mock_require_admin, api_factory
+    ):
+        mock_require_admin.return_value = None
+        request = api_factory.patch(
+            '/api/admin/reports/report-123/',
+            {
+                'status': 'resolved',
+                'review': {
+                    'decision': 'confirmed_scam',
+                    'risk_score': 75,
+                    'scam_type': 'Phishing',
+                    'summary': 'The message is a scam attempting to obtain user credentials.',
+                    'explanation': 'The message uses a deceptive link to collect bank credentials.',
+                },
+            },
+            format='json',
+            HTTP_AUTHORIZATION='******'
+        )
+
+        response = update_report(request, 'report-123')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error']['message'] == 'Select one of the 15 supported scam types'
     
     @patch('src.interfaces.rest.admin_views.require_admin')
     def test_update_report_missing_status(self, mock_require_admin, api_factory):

@@ -7,7 +7,7 @@ These entities are framework-agnostic and contain only business logic.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from enum import IntEnum
 import uuid
 
@@ -89,6 +89,8 @@ class AnalysisResult:
     # Low confidence review fields
     needs_review: bool = False
     review_reason: Optional[str] = None
+    reviewed_result: Optional[Dict[str, Any]] = None
+    review_history: List[Dict[str, Any]] = field(default_factory=list)
 
 
     
@@ -164,6 +166,10 @@ class AnalysisResult:
             "details": self.details,
             "image_attachment": self.image_attachment,
             "key_markers": self.key_markers,
+            "needs_review": self.needs_review,
+            "review_reason": self.review_reason,
+            "reviewed_result": self.reviewed_result,
+            "review_history": self.review_history,
         }
 
         if self.id:

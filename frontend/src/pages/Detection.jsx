@@ -40,6 +40,10 @@ function getReviewExplanation(reviewReason) {
   return 'The model was not confident enough in one or more parts of this analysis.';
 }
 
+function formatReviewRiskLevel(riskLevel) {
+  return riskLevel?.replaceAll('_', ' ') || '';
+}
+
 function Detection() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -517,12 +521,14 @@ function Detection() {
             conversationType: 'analysis_guided',
             analysisContext: {
               ref_id: detectionResult.ref_id || 'guest-temp-ref',
-              is_scam: detectionResult.is_scam,
-              scam_type: detectionResult.scam_type || 'Scam Detection',
+              is_scam: reviewedResult?.is_scam ?? detectionResult.is_scam,
+              scam_type: reviewedResult?.scam_type || detectionResult.scam_type || 'Scam Detection',
               scam_score: detectionResult.scam_score,
               legit_score: detectionResult.legit_score,
-              summary: detectionResult.summary,
-              key_markers: detectionResult.key_markers || [],
+              summary: reviewedResult?.summary || detectionResult.summary,
+              details: reviewedResult?.details || detectionResult.details,
+              key_markers: reviewedResult?.key_markers || detectionResult.key_markers || [],
+              reviewed_result: reviewedResult,
             }
           }
         });
@@ -535,12 +541,14 @@ function Detection() {
           conversationType: 'analysis_guided',
           analysisContext: {
             ref_id: detectionResult.ref_id || 'guest-temp-ref',
-            is_scam: detectionResult.is_scam,
-            scam_type: detectionResult.scam_type || 'Scam Detection',
+            is_scam: reviewedResult?.is_scam ?? detectionResult.is_scam,
+            scam_type: reviewedResult?.scam_type || detectionResult.scam_type || 'Scam Detection',
             scam_score: detectionResult.scam_score,
             legit_score: detectionResult.legit_score,
-            summary: detectionResult.summary,
-            key_markers: detectionResult.key_markers || [],
+            summary: reviewedResult?.summary || detectionResult.summary,
+            details: reviewedResult?.details || detectionResult.details,
+            key_markers: reviewedResult?.key_markers || detectionResult.key_markers || [],
+            reviewed_result: reviewedResult,
           }
         }
       });
@@ -548,6 +556,11 @@ function Detection() {
       setIsOpeningGuidance(false);
     }
   };
+
+  const reviewedResult = detectionResult?.reviewed_result?.is_published
+    ? detectionResult.reviewed_result
+    : null;
+  const displayedIsScam = reviewedResult?.is_scam ?? detectionResult?.is_scam;
 
   return (
     <div className="detect page-enter" style={{ gridTemplateColumns: sidebarOpen ? '320px 1fr' : '72px 1fr' }}>
@@ -933,7 +946,72 @@ function Detection() {
 
               <div className="detect__resultsGrid">
                 {/* Low Confidence Review Notice */}
-                {detectionResult.needs_review && (
+                {reviewedResult && (
+                  <div className="detect__resultCard detect__resultCard--review detect__resultCard--humanReviewed detect__resultCard--animate">
+                    <div className="detect__reviewResultHeader">
+                      <div className={`detect__reviewIcon ${reviewedResult.is_scam ? 'detect__reviewIcon--scam' : 'detect__reviewIcon--legit'}`}>
+                        {reviewedResult.is_scam ? '!' : '✓'}
+                      </div>
+                      <div className="detect__reviewContent">
+                        <h3 className="detect__reviewTitle">Human-reviewed result</h3>
+                        <p className="detect__reviewText">
+                          {reviewedResult.is_scam ? 'Confirmed scam' : 'Confirmed legitimate'}
+                          {reviewedResult.risk_level ? ` · ${formatReviewRiskLevel(reviewedResult.risk_level)} human risk` : ''}
+                          {reviewedResult.is_scam && reviewedResult.scam_type ? ` · ${reviewedResult.scam_type}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    {Number.isInteger(reviewedResult.risk_score) && (
+                      <div className="detect__reviewRisk">
+                        <div className="detect__reviewRiskHeader">
+                          <span>Human risk estimate</span>
+                          <strong>{reviewedResult.risk_score}% · {formatReviewRiskLevel(reviewedResult.risk_level)}</strong>
+                        </div>
+                        <div
+                          className="detect__reviewRiskTrack"
+                          role="img"
+                          aria-label={`Human risk estimate ${reviewedResult.risk_score} percent, ${formatReviewRiskLevel(reviewedResult.risk_level)} risk`}
+                        >
+                          <span style={{ width: `${reviewedResult.risk_score}%` }} />
+                        </div>
+                      </div>
+                    )}
+                    {reviewedResult.summary && (
+                      <section className="detect__reviewResultSection">
+                        <h4 className="detect__reviewResultLabel">Verified summary</h4>
+                        <p className="detect__reviewResultSummary">{reviewedResult.summary}</p>
+                      </section>
+                    )}
+                    {reviewedResult.details && (
+                      <section className="detect__reviewResultSection">
+                        <h4 className="detect__reviewResultLabel">Reviewer details</h4>
+                        <p className="detect__reviewReason">{reviewedResult.details}</p>
+                      </section>
+                    )}
+                    {reviewedResult.key_markers?.length > 0 && (
+                      <section className="detect__reviewResultSection">
+                        <h4 className="detect__reviewResultLabel">Verified red flags / indicators</h4>
+                        <ul className="detect__markersList">
+                          {reviewedResult.key_markers.map((marker, index) => (
+                            <li
+                              className={`detect__markerItem ${reviewedResult.is_scam ? 'detect__markerItem--scam' : 'detect__markerItem--legit'}`}
+                              key={`${marker}-${index}`}
+                            >
+                              {marker}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
+                    {reviewedResult.explanation && (
+                      <section className="detect__reviewResultSection detect__reviewRationale">
+                        <h4 className="detect__reviewResultLabel">Reviewer rationale</h4>
+                        <p className="detect__reviewReason">{reviewedResult.explanation}</p>
+                      </section>
+                    )}
+                  </div>
+                )}
+                {detectionResult.needs_review && !reviewedResult && (
                   <div className="detect__resultCard detect__resultCard--review detect__resultCard--animate">
                     <div className="detect__reviewBanner">
                       <div className="detect__reviewIcon">🔍</div>
@@ -955,7 +1033,7 @@ function Detection() {
 
                 {/* Summary & Original Message */}
                 <div className="detect__resultCard detect__resultCard--summary detect__resultCard--animate">
-                  <h3 className="detect__cardTitle">Summary</h3>
+                  <h3 className="detect__cardTitle">Original AI analysis</h3>
                   <p className="detect__summary">{detectionResult.summary}</p>
                   <h4 className="detect__cardSubtitle">{detectionResult.image_attachment ? 'Analyzed Image' : 'Analyzed Message'}</h4>
                   {detectionResult.image_attachment?.data_url ? (
@@ -973,7 +1051,7 @@ function Detection() {
 
                 {/* Likelihood Graph */}
                 <div className="detect__resultCard detect__resultCard--graph detect__resultCard--animate">
-                  <h3 className="detect__cardTitle">Scam Likelihood</h3>
+                  <h3 className="detect__cardTitle">Original model likelihood</h3>
                   <div className="detect__graph">
                     <div
                       className="detect__donut"
@@ -998,15 +1076,17 @@ function Detection() {
                     </div>
                   </div>
                   <div className="detect__verdict detect__verdict--animate">
-                    <span className={`detect__verdictLabel ${detectionResult.is_scam ? 'detect__verdictLabel--scam' : 'detect__verdictLabel--legit'}`}>
-                      {detectionResult.is_scam ? 'Likely to be a scam' : 'Likely to be legit'}
+                    <span className={`detect__verdictLabel ${displayedIsScam ? 'detect__verdictLabel--scam' : 'detect__verdictLabel--legit'}`}>
+                      {reviewedResult
+                        ? (displayedIsScam ? 'Human-reviewed: scam' : 'Human-reviewed: legitimate')
+                        : (displayedIsScam ? 'Likely to be a scam' : 'Likely to be legit')}
                     </span>
                   </div>
                 </div>
 
                 {/* Details & Markers */}
                 <div className="detect__resultCard detect__resultCard--details detect__resultCard--animate">
-                  <h3 className="detect__cardTitle">Details</h3>
+                  <h3 className="detect__cardTitle">Original model details</h3>
                   {(detectionResult.is_scam || detectionResult.details) && (
                     <div className="detect__scamType detect__scamType--animate">
                       {detectionResult.is_scam && detectionResult.scam_type && (
@@ -1024,7 +1104,7 @@ function Detection() {
                   {detectionResult.key_markers && detectionResult.key_markers.length > 0 && (
                     <div className="detect__markers">
                       <h4 className={`detect__markersTitle ${!detectionResult.is_scam ? 'detect__markersTitle--legit' : 'detect__markersTitle--scam'}`}>
-                        Key Linguistic Markers
+                        Original model indicators
                       </h4>
                       <ul className="detect__markersList">
                         {detectionResult.key_markers.map((marker, idx) => (
