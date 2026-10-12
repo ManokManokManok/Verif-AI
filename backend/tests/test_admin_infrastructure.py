@@ -364,12 +364,22 @@ class TestAdminRepository:
         updated = repo.update_report_status(
             "report1",
             ReportStatus.RESOLVED,
-            resolution_notes="Fixed"
+            resolution_notes="Fixed",
+            assigned_to="admin-123",
+            admin_email="admin@example.com",
+            activity_type="status_updated",
         )
         
         assert updated.status == ReportStatus.RESOLVED
         assert updated.resolution_notes == "Fixed"
         assert updated.resolved_at is not None
+        update_doc = mock_mongo_client["test_db"].user_reports.find_one_and_update.call_args.args[1]
+        activity = update_doc["$push"]["activity_history"]
+        assert activity["admin_user_id"] == "admin-123"
+        assert activity["admin_email"] == "admin@example.com"
+        assert activity["status"] == "resolved"
+        assert "resolved" in activity["actions"]
+        assert activity["resolution_notes"] == "Fixed"
     
     def test_update_report_status_not_found(self, mock_mongo_client):
         """Test updating report that doesn't exist."""

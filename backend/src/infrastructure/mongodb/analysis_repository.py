@@ -214,6 +214,38 @@ class AnalysisResultRepository:
             return None
         
         return self._document_to_entity(doc)
+
+    def update_reviewed_result(
+        self,
+        ref_id: str,
+        reviewed_result: Dict[str, Any],
+        review_event: Dict[str, Any],
+    ) -> Optional[AnalysisResult]:
+        """Persist an admin decision while preserving the model-generated fields."""
+        self.collection.update_one(
+            {"ref_id": ref_id},
+            {
+                "$set": {"reviewed_result": reviewed_result},
+                "$push": {"review_history": review_event},
+            },
+        )
+        return self.get_by_ref_id(ref_id)
+
+    def set_review_publication(
+        self,
+        ref_id: str,
+        report_id: str,
+        is_published: bool,
+    ) -> bool:
+        """Publish or withdraw a review only when it belongs to the given report."""
+        result = self.collection.update_one(
+            {
+                "ref_id": ref_id,
+                "reviewed_result.report_id": report_id,
+            },
+            {"$set": {"reviewed_result.is_published": is_published}},
+        )
+        return result.matched_count == 1
     
     def get_by_message_hash(self, message_hash: str) -> Optional[AnalysisResult]:
         """
@@ -352,6 +384,8 @@ class AnalysisResultRepository:
             "key_markers": entity.key_markers,
             "needs_review": entity.needs_review,
             "review_reason": entity.review_reason,
+            "reviewed_result": entity.reviewed_result,
+            "review_history": entity.review_history,
         }
         if entity.id:
             doc["_id"] = entity.id
@@ -386,4 +420,6 @@ class AnalysisResultRepository:
             key_markers=doc.get("key_markers"),
             needs_review=doc.get("needs_review", False),
             review_reason=doc.get("review_reason"),
+            reviewed_result=doc.get("reviewed_result"),
+            review_history=doc.get("review_history", []),
         )

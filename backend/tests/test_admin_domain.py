@@ -468,6 +468,13 @@ class TestUserReport:
             "description": "Something is wrong",
             "status": "in_progress",
             "assigned_to": "admin789",
+            "activity_history": [
+                {
+                    "admin_user_id": "admin789",
+                    "admin_email": "admin@example.com",
+                    "action": "support_response",
+                }
+            ],
         }
         
         report = UserReport.from_dict(data)
@@ -477,6 +484,8 @@ class TestUserReport:
         assert report.report_type == ReportType.BUG
         assert report.status == ReportStatus.IN_PROGRESS
         assert report.assigned_to == "admin789"
+        assert report.activity_history[0]["admin_email"] == "admin@example.com"
+        assert report.to_dict()["activity_history"] == report.activity_history
 
 
 class TestAdminActivityLog:

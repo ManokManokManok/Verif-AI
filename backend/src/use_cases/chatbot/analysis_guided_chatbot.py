@@ -225,21 +225,44 @@ class AnalysisGuidedChatbotUseCase:
     
     def _generate_title_from_analysis(self, analysis: AnalysisResult) -> str:
         """Generate conversation title from analysis result."""
-        if analysis.is_scam:
-            return f"Guidance: {analysis.scam_type}"
+        reviewed = analysis.reviewed_result
+        is_scam = reviewed.get("is_scam") if reviewed and reviewed.get("is_published") else analysis.is_scam
+        scam_type = reviewed.get("scam_type") if reviewed and reviewed.get("is_published") else analysis.scam_type
+        if is_scam:
+            return f"Guidance: {scam_type}"
         else:
             return "Guidance: Legitimate Message"
-    
+
     def _format_analysis_for_llm(self, analysis: AnalysisResult) -> str:
         """Format analysis result for LLM system prompt context."""
+        reviewed = analysis.reviewed_result
+        has_human_review = bool(reviewed and reviewed.get("is_published"))
         context_parts = [
             "=== ANALYSIS RESULTS ===",
-            f"Verdict: {'🚨 SCAM DETECTED' if analysis.is_scam else '✅ LEGITIMATE'}",
-            f"Confidence: Scam {analysis.scam_score:.1f}% / Legitimate {analysis.legit_score:.1f}%",
         ]
-        
+
+        if has_human_review:
+            context_parts.extend([
+                "A human reviewer has verified this result. Treat this decision as authoritative.",
+                f"Human-reviewed verdict: {'SCAM' if reviewed.get('is_scam') else 'LEGITIMATE'}",
+                f"Human-reviewed risk estimate: {reviewed.get('risk_score', 'not specified')}% "
+                f"({reviewed.get('risk_level') or 'not specified'})",
+                f"Human-reviewed summary: {reviewed.get('summary') or 'No reviewer summary provided.'}",
+                f"Human-reviewed details: {reviewed.get('details') or 'No additional reviewer details provided.'}",
+                f"Reviewer explanation: {reviewed.get('explanation') or 'No explanation provided.'}",
+                "Human-reviewed indicators: " + (
+                    "; ".join(reviewed.get("key_markers") or []) or "None provided."
+                ),
+                "Original model output (not the final reviewed decision):",
+            ])
+
+        context_parts.extend([
+            f"Model verdict: {'🚨 SCAM DETECTED' if analysis.is_scam else '✅ LEGITIMATE'}",
+            f"Model confidence: Scam {analysis.scam_score:.1f}% / Legitimate {analysis.legit_score:.1f}%",
+        ])
+
         if analysis.is_scam:
-            context_parts.append(f"Scam Type: {analysis.scam_type}")
+            context_parts.append(f"Model scam type: {analysis.scam_type}")
             context_parts.append(f"Type Confidence: {analysis.type_confidence:.1f}%")
         
         if analysis.summary:
@@ -264,17 +287,29 @@ class AnalysisGuidedChatbotUseCase:
     
     def _format_analysis_for_context(self, analysis: AnalysisResult) -> Dict[str, Any]:
         """Format analysis result for API response."""
+        reviewed = analysis.reviewed_result
+        has_human_review = bool(reviewed and reviewed.get("is_published"))
+        is_scam = reviewed.get("is_scam") if has_human_review else analysis.is_scam
+        scam_type = reviewed.get("scam_type") if has_human_review else analysis.scam_type
         return {
             "ref_id": analysis.ref_id,
-            "is_scam": analysis.is_scam,
+            "is_scam": is_scam,
             "scam_score": analysis.scam_score,
             "legit_score": analysis.legit_score,
             "label": analysis.label,
-            "scam_type": analysis.scam_type if analysis.is_scam else None,
-            "type_confidence": analysis.type_confidence if analysis.is_scam else None,
-            "summary": analysis.summary,
-            "details": analysis.details,
+            "scam_type": scam_type if is_scam else None,
+            "type_confidence": analysis.type_confidence if is_scam else None,
+            "summary": (reviewed.get("summary") or reviewed.get("explanation") or analysis.summary)
+            if has_human_review else analysis.summary,
+            "details": reviewed.get("details") if has_human_review else analysis.details,
             "image_attachment": analysis.image_attachment,
-            "key_markers": analysis.key_markers,
-            "message": analysis.message
+            "key_markers": reviewed.get("key_markers") if has_human_review else analysis.key_markers,
+            "message": analysis.message,
+            "reviewed_result": {
+                key: reviewed.get(key)
+                for key in (
+                    "is_scam", "risk_score", "risk_level", "scam_type", "summary", "details",
+                    "key_markers", "explanation", "reviewed_at"
+                )
+            } if has_human_review else None,
         }

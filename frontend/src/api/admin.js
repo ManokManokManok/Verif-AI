@@ -386,9 +386,10 @@ export async function getReportDetails(reportId) {
  * @param {string} data.resolutionNotes - Optional resolution notes
  * @returns {Promise<Object>} Updated report
  */
-export async function updateReportStatus(reportId, { status, resolutionNotes }) {
+export async function updateReportStatus(reportId, { status, resolutionNotes, review }) {
   const body = { status };
   if (resolutionNotes !== undefined) body.resolution_notes = resolutionNotes;
+  if (review !== undefined) body.review = review;
   
   return authApiRequest(`/admin/reports/${reportId}/`, {
     method: 'PATCH',
