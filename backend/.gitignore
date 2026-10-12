@@ -11,6 +11,7 @@
 
 # Local folders (development notes/scripts)
 plans/
+backups/
 
 # Python cache / compiled files
 __pycache__/
@@ -41,4 +42,3 @@ logs/
 
 /frontend/node_modules/
 /frontend/dist/
-
