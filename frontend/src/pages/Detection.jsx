@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail, deleteAnalysisHistoryItem } from '../api/analysis';
 import {
@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import AppNavLinks from '../components/AppNavLinks';
 import ChatHistoryList from '../components/ChatHistoryList';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
-import { ReportModal } from '../components/reports';
+import { ReportModal, MyReportModal } from '../components/reports';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
@@ -59,6 +59,8 @@ function Detection() {
   const [detectionResult, setDetectionResult] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
   const [isDeletingHistoryId, setIsDeletingHistoryId] = useState(null);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
@@ -70,11 +72,13 @@ function Detection() {
   const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
   const [isStartingNewAnalysis, setIsStartingNewAnalysis] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isMyReportOpen, setIsMyReportOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const progressIntervalRef = useRef(null);
   const stepIntervalRef = useRef(null);
   const textareaRef = useRef(null);
+  const activeAnalysisIdRef = useRef(null);
 
   // Handle location state for opening a specific analysis result (e.g. from Settings reports)
   useEffect(() => {
@@ -112,29 +116,66 @@ function Detection() {
   const [cropImageElement, setCropImageElement] = useState(null);
   const fileInputRef = useRef(null);
 
-  const refreshHistory = async () => {
+  const refreshHistory = useCallback(async () => {
     if (!isLoggedIn) {
       setChatHistory([]);
+      setHistoryError(null);
+      setIsHistoryLoading(false);
       return;
     }
 
+    setIsHistoryLoading(true);
+    setHistoryError(null);
     try {
       const res = await getChatHistory();
       if (Array.isArray(res?.history)) {
-        // For authenticated users, respect empty history (do not fall back to mock data).
         setChatHistory(res.history);
         return;
       }
+      throw new Error('The history response did not contain an analysis list.');
     } catch (err) {
-      // Fall through to fallback behavior below.
+      console.error('[HISTORY] Failed to load analysis history:', err);
+      setHistoryError('Failed to load analysis history. Please try again.');
+    } finally {
+      setIsHistoryLoading(false);
     }
-
-    setChatHistory([]);
-  };
+  }, [isLoggedIn]);
 
   useEffect(() => {
-    refreshHistory();
-  }, [isLoggedIn]);
+    activeAnalysisIdRef.current = detectionResult?.id || detectionResult?.ref_id || null;
+  }, [detectionResult]);
+
+  const refreshPageData = useCallback(async () => {
+    await refreshHistory();
+
+    const activeAnalysisId = activeAnalysisIdRef.current;
+    if (!isLoggedIn || !activeAnalysisId) return;
+
+    try {
+      const detail = await getAnalysisDetail(activeAnalysisId);
+      if (detail) setDetectionResult(detail);
+    } catch (err) {
+      console.warn('[DETECTION] Failed to refresh the active analysis:', err);
+    }
+  }, [isLoggedIn, refreshHistory]);
+
+  useEffect(() => {
+    refreshPageData();
+
+    const handleWindowFocus = () => {
+      refreshPageData();
+    };
+    const handlePageShow = (event) => {
+      if (event.persisted) refreshPageData();
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [refreshPageData]);
 
   useEffect(() => {
     if (!window.matchMedia) return undefined;
@@ -617,19 +658,28 @@ function Detection() {
             <div className="detect__chat-title">Chat History</div>
             {isLoggedIn ? (
               <>
+                {historyError && (
+                  <div className="chatbot__history-empty" role="alert">
+                    <p>{historyError}</p>
+                    <button type="button" onClick={refreshHistory}>Retry</button>
+                  </div>
+                )}
                 <ChatHistoryList
                   items={chatHistory.map((chat) => ({
                     id: chat.id,
                     title: chat.title,
                     subtitle: chat.description,
                     date: chat.timestamp,
+                    badge: chat.reviewed_result?.is_published ? 'Admin verified' : null,
                     active: !!detectionResult?.id && detectionResult.id === chat.id,
                     deleting: isDeletingHistoryId === chat.id,
                     onSelect: () => handleChatClick(chat),
                     onDelete: chat.id ? () => handleDeleteHistoryItem(chat.id) : null,
                   }))}
-                  emptyText="No analyses yet"
-                />              </>
+                  loading={isHistoryLoading}
+                  emptyText={historyError ? 'History unavailable' : 'No analyses yet'}
+                />
+              </>
             ) : (
               <div className="chatbot__anonymous-box" style={{ margin: '15px' }}>
                 <div className="chatbot__anonymous-icon">🛡️</div>
@@ -950,7 +1000,91 @@ function Detection() {
                   {text.length} / {CONSTRAINTS.message.maxLength}
                 </div>
               )}
+
+              {!isDetecting && !imagePreview && (
+                <section className="detect__guide" aria-label="How VerifAI works">
+                  <h2 className="detect__guideTitle">How it works</h2>
+                  <ol className="detect__guideSteps">
+                    <li className="detect__guideStep">
+                      <span className="detect__guideNum" aria-hidden="true">1</span>
+                      <div>
+                        <strong>Submit</strong>
+                        <p>Paste a suspicious message or email, or drop in a screenshot.</p>
+                      </div>
+                    </li>
+                    <li className="detect__guideStep">
+                      <span className="detect__guideNum" aria-hidden="true">2</span>
+                      <div>
+                        <strong>We analyze</strong>
+                        <p>Our AI checks the wording for scam patterns and picks the likely scam type.</p>
+                      </div>
+                    </li>
+                    <li className="detect__guideStep">
+                      <span className="detect__guideNum" aria-hidden="true">3</span>
+                      <div>
+                        <strong>Review the result</strong>
+                        <p>See the summary and key warning signs. Think it's wrong? Report it and an admin will verify.</p>
+                      </div>
+                    </li>
+                  </ol>
+                  <p className="detect__guideTip">
+                    Tip: never share passwords, OTPs, or card numbers in a message you want checked.
+                    {!isLoggedIn && ' Log in to save your results and report issues.'}
+                  </p>
+                </section>
+              )}
             </>
+          ) : detectionResult.result_type === 'gatekeeper' ? (
+            <div className="detect__results" role="region" aria-label="Gatekeeper result">
+              <div className={`detect__gate detect__gate--${detectionResult.route} detect__gate--${detectionResult.caution_level || 'none'}`}>
+                <span className="detect__gateBadge">
+                  {detectionResult.route === 'limited' ? 'Preliminary assessment' : "Couldn't analyze this"}
+                </span>
+                <h2 className="detect__gateTitle">{detectionResult.headline}</h2>
+                <p className="detect__gateText">{detectionResult.explanation}</p>
+                {detectionResult.observed_signs?.length > 0 && (
+                  <div className="detect__gateSection">
+                    <h3>What looks risky</h3>
+                    <ul>{detectionResult.observed_signs.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                  </div>
+                )}
+                {detectionResult.missing_context?.length > 0 && (
+                  <div className="detect__gateSection">
+                    <h3>What would help</h3>
+                    <ul>{detectionResult.missing_context.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                  </div>
+                )}
+                {detectionResult.suggested_action && (
+                  <p className="detect__gateAction">{detectionResult.suggested_action}</p>
+                )}
+                {detectionResult.route === 'limited' && (
+                  <p className="detect__gateNote">
+                    This is not a full analysis and has no risk score. Paste the complete message for a full result.
+                  </p>
+                )}
+                <div className="detect__gateTips">
+                  <h3>How to get the best result</h3>
+                  <ul>
+                    <li>
+                      <strong>Paste the full message.</strong> Promo or scam texts work best when complete, e.g.
+                      <em> &quot;Hey! You&apos;re eligible for a 20,000 peso prize! Click bit.ly/riskylink now to claim.&quot;</em>
+                    </li>
+                    <li>
+                      <strong>Include the details.</strong> Sender, links, amounts, deadlines and what you&apos;re asked to do help the classifier.
+                    </li>
+                    <li>
+                      <strong>Try the Image feature.</strong> A screenshot keeps the sender, layout and links together, and works for messages split across several parts.
+                    </li>
+                    <li>
+                      <strong>One message at a time.</strong> Questions, commands or unrelated text can&apos;t be classified.
+                    </li>
+                  </ul>
+                </div>
+                <button type="button" className="detect__gateBtn" onClick={handleNewAnalysis}>
+                  Try again
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="detect__results" role="region" aria-label="Analysis results">
               <div className="detect__resultsHeader detect__resultsHeader--animate">
@@ -964,14 +1098,25 @@ function Detection() {
                 </div>
                 <div className="detect__resultsActions">
                   {isLoggedIn && (
-                    <button 
-                      className="detect__reportBtn" 
-                      type="button"
-                      onClick={() => setIsReportModalOpen(true)}
-                      title="Report an issue with this analysis"
-                    >
-                      Report Issue
-                    </button>
+                    detectionResult.user_report ? (
+                      <button
+                        className="detect__reportBtn"
+                        type="button"
+                        onClick={() => setIsMyReportOpen(true)}
+                        title="You already reported this analysis. View your report."
+                      >
+                        View My Report
+                      </button>
+                    ) : (
+                      <button 
+                        className="detect__reportBtn" 
+                        type="button"
+                        onClick={() => setIsReportModalOpen(true)}
+                        title="Report an issue with this analysis"
+                      >
+                        Report Issue
+                      </button>
+                    )
                   )}
                   <button
                     className="detect__newAnalysis"
@@ -993,6 +1138,9 @@ function Detection() {
 
                 {/* AI disclaimer */}
                 <div className="detect__disclaimer">AI can still make mistakes — please treat these results as guidance, not definitive.</div>
+                <div className="detect__nextSteps">
+                  <strong>What next?</strong> Review the summary and warning signs below, ask the AI for guidance on what to do, or report the result if it looks wrong.
+                </div>
               </div>
 
               <div className="detect__resultsGrid">
@@ -1198,6 +1346,13 @@ function Detection() {
         onClose={() => setIsReportModalOpen(false)}
         analysisId={detectionResult?.id}
         analysisRefId={detectionResult?.ref_id}
+        onSubmitted={(report) => setDetectionResult((prev) => (prev ? { ...prev, user_report: report } : prev))}
+      />
+
+      <MyReportModal
+        isOpen={isMyReportOpen}
+        onClose={() => setIsMyReportOpen(false)}
+        report={detectionResult?.user_report}
       />
 
       {/* Logout Confirmation Modal */}

@@ -128,6 +128,40 @@ def _serialize_report_for_reporter(report):
     return public_report
 
 
+def get_reporter_reports_for_analyses(user_id, analyses):
+    """Map analysis ref_id -> the user's own report (reporter-safe fields only)."""
+    keys = set()
+    for analysis in analyses:
+        for value in (getattr(analysis, 'ref_id', None), getattr(analysis, 'id', None)):
+            if value:
+                keys.add(str(value))
+    if not user_id or not keys:
+        return {}
+
+    repository = get_admin_repository()
+    docs = repository.reports_collection.find({
+        'user_id': user_id,
+        '$or': [
+            {'analysis_ref_id': {'$in': list(keys)}},
+            {'analysis_id': {'$in': list(keys)}},
+        ],
+    }).sort('created_at', 1)
+
+    by_key = {}
+    for doc in docs:
+        serialized = _serialize_report_for_reporter(repository._document_to_report(doc))
+        for key in (doc.get('analysis_ref_id'), doc.get('analysis_id')):
+            if key:
+                by_key[str(key)] = serialized
+
+    result = {}
+    for analysis in analyses:
+        report = by_key.get(str(analysis.ref_id)) or by_key.get(str(analysis.id))
+        if report:
+            result[analysis.ref_id] = report
+    return result
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 @rate_limit('api_write')  # Uses 'api_write' category for rate limiting
@@ -197,6 +231,14 @@ def submit_report(request):
             'message': 'Report submitted successfully. Thank you for your feedback!'
         }, status=201)
     else:
+        if result.error_code == 'ANALYSIS_ALREADY_REPORTED':
+            return JsonResponse({
+                'success': False,
+                'error': {
+                    'code': result.error_code,
+                    'message': result.error_message,
+                },
+            }, status=409)
         return JsonResponse({
             'success': False,
             'error': result.error_message

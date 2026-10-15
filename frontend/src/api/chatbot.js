@@ -131,7 +131,7 @@ export async function analyzeImage(imageFileOrBlob, accessToken = null) {
     error.code = data.error?.code;
     throw error;
   }
-  if (!accessToken) markGuestFeatureUsed('image_analysis');
+  if (!accessToken && data.route !== 'rejected') markGuestFeatureUsed('image_analysis');
   return data;
 }
 
