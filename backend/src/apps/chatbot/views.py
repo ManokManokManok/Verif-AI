@@ -25,7 +25,7 @@ from ...domain.scam_types import scam_types
 from ...infrastructure.ai.genai_provider import get_genai_provider
 from ...infrastructure.rate_limiter import rate_limit
 from ...infrastructure.validators import sanitize_for_logging
-from .guest_limits import claim_guest_use
+from .guest_limits import claim_guest_use, release_guest_use
 
 
 logger = logging.getLogger(__name__)
@@ -46,9 +46,10 @@ Why: 2-4 concise sentences identifying visible evidence such as impersonation, u
 What to do: 2-4 practical safety actions, including whether to avoid clicking, replying, paying, or sharing information
 
 Be honest about uncertainty. If the image is blurry, cropped, unreadable, or lacks enough context, say so and choose Inconclusive rather than guessing. Never claim certainty from appearance alone.
+If the image has nothing to do with messages, offers, payments, accounts, websites, or other possible scam content (e.g. a landscape, a pet, a meme, a random object, a blank image), do NOT force a scam analysis: use verdict "Unrelated" and explain in "summary" what the image seems to be and why it cannot be assessed.
 
 Return ONLY valid JSON with this exact shape:
-{"verdict":"Scam|Likely scam|Suspicious|Likely legitimate|Inconclusive","confidence":0,"scam_type":"one allowed type or null","summary":"2-4 sentences","details":"specific visible evidence","key_markers":["3-5 short markers"]}
+{"verdict":"Scam|Likely scam|Suspicious|Likely legitimate|Inconclusive|Unrelated","confidence":0,"scam_type":"one allowed type or null","summary":"2-4 sentences","details":"specific visible evidence","key_markers":["3-5 short markers"]}
 Confidence must be an integer from 0 to 100. Use one of the predetermined scam types when appropriate, or null for legitimate and inconclusive results."""
 
 
@@ -155,6 +156,21 @@ def analyze_image(request: Request) -> Response:
         )
         assistant_reply = response['choices'][0]['message']['content'].strip()
         report = _parse_image_report(assistant_reply)
+        if report['verdict'].lower() == 'unrelated':
+            if not is_authenticated:
+                release_guest_use(_get_session_id(request), 'image_analysis')
+            return Response({
+                'result_type': 'gatekeeper',
+                'route': 'rejected',
+                'reason_code': 'unrelated',
+                'headline': "This image doesn't look related to a scam",
+                'explanation': report['summary'],
+                'observed_signs': [],
+                'missing_context': [],
+                'caution_level': 'none',
+                'suggested_action': 'Upload a screenshot of the suspicious message, offer, payment request, or website you want checked.',
+                'is_authenticated': is_authenticated,
+            }, status=200)
         attachment = _image_attachment(image_bytes, image_file.content_type)
         report['image_attachment'] = attachment
         user_message = 'Image submitted for scam and fraud analysis.'
