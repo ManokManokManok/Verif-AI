@@ -8,6 +8,7 @@ user statistics, user reports, and admin activity logs.
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, timedelta, timezone
 from pymongo import MongoClient, DESCENDING, ASCENDING
+from pymongo.errors import DuplicateKeyError
 from pymongo.collection import Collection
 from pymongo.database import Database
 from bson import ObjectId
@@ -23,6 +24,7 @@ from ...domain.admin_entities import (
     ReportType,
     StatisticsPeriod,
     ReportNotFoundError,
+    AnalysisAlreadyReportedError,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,12 @@ class AdminRepository:
         self.reports_collection.create_index("status")
         self.reports_collection.create_index("created_at")
         self.reports_collection.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+        self.reports_collection.create_index(
+            [("analysis_report_key", ASCENDING)],
+            unique=True,
+            partialFilterExpression={"analysis_report_key": {"$type": "string"}},
+            name="unique_analysis_report",
+        )
 
         
         # Activity logs indexes
@@ -921,6 +929,40 @@ class AdminRepository:
         Returns:
             Created report with generated ID
         """
+        linked_ids = {
+            value.strip()
+            for value in (report.analysis_id, report.analysis_ref_id)
+            if isinstance(value, str) and value.strip()
+        }
+        analysis_report_key = None
+        if linked_ids:
+            lookup_terms = [{"ref_id": {"$in": list(linked_ids)}}]
+            object_ids = [
+                ObjectId(value) for value in linked_ids if ObjectId.is_valid(value)
+            ]
+            if object_ids:
+                lookup_terms.append({"_id": {"$in": object_ids}})
+
+            analysis_doc = self.analysis_collection.find_one({"$or": lookup_terms})
+            if isinstance(analysis_doc, dict) and analysis_doc.get("ref_id"):
+                analysis_report_key = str(analysis_doc["ref_id"])
+                report.analysis_ref_id = analysis_report_key
+                linked_ids.add(analysis_report_key)
+            else:
+                analysis_report_key = report.analysis_ref_id or report.analysis_id
+
+            existing_report_query = {
+                "$or": [
+                    {"analysis_report_key": analysis_report_key},
+                    {"analysis_ref_id": {"$in": list(linked_ids)}},
+                    {"analysis_id": {"$in": list(linked_ids)}},
+                ]
+            }
+            if self.reports_collection.find_one(existing_report_query):
+                raise AnalysisAlreadyReportedError(
+                    "This analysis already has a report. Please update the existing report instead."
+                )
+
         doc = {
             "report_id": report.report_id,
             "user_id": report.user_id,
@@ -937,8 +979,15 @@ class AdminRepository:
             "updated_at": report.updated_at,
             "resolved_at": report.resolved_at,
         }
+        if analysis_report_key:
+            doc["analysis_report_key"] = analysis_report_key
         
-        result = self.reports_collection.insert_one(doc)
+        try:
+            result = self.reports_collection.insert_one(doc)
+        except DuplicateKeyError as error:
+            raise AnalysisAlreadyReportedError(
+                "This analysis already has a report. Please update the existing report instead."
+            ) from error
         report.id = str(result.inserted_id)
         return report
     

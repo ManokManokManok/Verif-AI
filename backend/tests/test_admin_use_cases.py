@@ -23,6 +23,7 @@ from src.domain.admin_entities import (
     StatisticsPeriod,
     MetricsCollectionError,
     ReportNotFoundError,
+    AnalysisAlreadyReportedError,
     InvalidReportDataError,
     UserDeletionError,
     AdminOperationError,
@@ -548,6 +549,25 @@ class TestSubmitUserReportUseCase:
         assert result.success is True
         assert result.report.user_id == ""
         assert result.report.analysis_ref_id == "analysis-123"
+
+    def test_execute_returns_conflict_when_analysis_already_has_report(self, mock_admin_repository):
+        mock_admin_repository.create_report.side_effect = AnalysisAlreadyReportedError(
+            "This analysis already has a report."
+        )
+        use_case = SubmitUserReportUseCase(mock_admin_repository)
+
+        result = use_case.execute(
+            user_id="user123",
+            user_email="user@example.com",
+            report_type=ReportType.FALSE_POSITIVE,
+            title="Incorrect classification",
+            description="This analysis was incorrectly classified.",
+            analysis_ref_id="analysis-123",
+        )
+
+        assert result.success is False
+        assert result.error_code == "ANALYSIS_ALREADY_REPORTED"
+        assert result.error_message == "This analysis already has a report."
 
 
 class TestUpdateReportStatusUseCase:

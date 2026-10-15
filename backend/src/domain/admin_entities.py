@@ -567,6 +567,11 @@ class ReportNotFoundError(AdminOperationError):
     pass
 
 
+class AnalysisAlreadyReportedError(AdminOperationError):
+    """Exception raised when an analysis already has a linked report."""
+    pass
+
+
 class InvalidReportStatusError(AdminOperationError):
     """Exception raised when an invalid report status transition is attempted."""
     pass
