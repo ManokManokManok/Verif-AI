@@ -643,7 +643,22 @@ export default function ReportDetailsModal({
               </button>
               <button
                 className="admin-modal__btn admin-modal__btn--info"
-                onClick={() => onResolve?.(report)}
+                disabled={savingChanges || !reviewIsValid}
+                onClick={() => {
+                  if (analysis && reviewDecision && reviewChanged) {
+                    onSaveChanges?.(report, 'resolved', report.report_type === 'support' ? response : undefined, {
+                      decision: reviewDecision,
+                      risk_score: reviewDecision === 'confirmed_legitimate' ? 0 : reviewRiskScore,
+                      scam_type: reviewScamType,
+                      summary: reviewSummary,
+                      details: reviewDetails,
+                      key_markers: reviewMarkers,
+                      explanation: reviewExplanation,
+                    });
+                  } else {
+                    onResolve?.(report);
+                  }
+                }}
               >
                 Resolve
               </button>

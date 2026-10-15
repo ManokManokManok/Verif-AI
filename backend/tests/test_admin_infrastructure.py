@@ -9,6 +9,7 @@ import pytest
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 import time
+from pymongo.errors import DuplicateKeyError
 
 from src.domain.admin_entities import (
     ModelHealthMetrics,
@@ -20,6 +21,7 @@ from src.domain.admin_entities import (
     ReportStatus,
     ReportType,
     StatisticsPeriod,
+    AnalysisAlreadyReportedError,
     MetricsCollectionError,
     ReportNotFoundError,
 )
@@ -275,6 +277,75 @@ class TestAdminRepository:
         
         assert created_report.id == "mock_id_123"
         mock_mongo_client["test_db"].user_reports.insert_one.assert_called_once()
+
+    def test_create_report_sets_unique_key_for_linked_analysis(self, mock_mongo_client):
+        from src.infrastructure.mongodb.admin_repository import AdminRepository
+
+        db = mock_mongo_client["test_db"]
+        db.analysis_results.find_one.return_value = {"ref_id": "analysis-ref-123"}
+        db.user_reports.find_one.return_value = None
+        db.user_reports.insert_one.return_value.inserted_id = "mock_report_id"
+        repo = AdminRepository(mock_mongo_client, "test_db")
+        report = UserReport(
+            user_id="user123",
+            report_type=ReportType.FALSE_POSITIVE,
+            title="Incorrect classification",
+            description="This analysis was incorrectly classified.",
+            analysis_id="507f1f77bcf86cd799439011",
+            analysis_ref_id="analysis-ref-123",
+        )
+
+        repo.create_report(report)
+
+        doc = db.user_reports.insert_one.call_args.args[0]
+        assert doc["analysis_report_key"] == "analysis-ref-123"
+        assert doc["analysis_ref_id"] == "analysis-ref-123"
+        db.user_reports.create_index.assert_any_call(
+            [("analysis_report_key", 1)],
+            unique=True,
+            partialFilterExpression={"analysis_report_key": {"$type": "string"}},
+            name="unique_analysis_report",
+        )
+
+    def test_create_report_rejects_existing_report_for_analysis(self, mock_mongo_client):
+        from src.infrastructure.mongodb.admin_repository import AdminRepository
+
+        db = mock_mongo_client["test_db"]
+        db.analysis_results.find_one.return_value = {"ref_id": "analysis-ref-123"}
+        db.user_reports.find_one.return_value = {"report_id": "existing-report"}
+        repo = AdminRepository(mock_mongo_client, "test_db")
+        report = UserReport(
+            user_id="another-user",
+            report_type=ReportType.FALSE_NEGATIVE,
+            title="Incorrect classification",
+            description="This analysis was incorrectly classified.",
+            analysis_id="analysis-ref-123",
+            analysis_ref_id="analysis-ref-123",
+        )
+
+        with pytest.raises(AnalysisAlreadyReportedError):
+            repo.create_report(report)
+
+        db.user_reports.insert_one.assert_not_called()
+
+    def test_create_report_translates_unique_index_race_to_duplicate_error(self, mock_mongo_client):
+        from src.infrastructure.mongodb.admin_repository import AdminRepository
+
+        db = mock_mongo_client["test_db"]
+        db.analysis_results.find_one.return_value = {"ref_id": "analysis-ref-123"}
+        db.user_reports.find_one.return_value = None
+        db.user_reports.insert_one.side_effect = DuplicateKeyError("duplicate key")
+        repo = AdminRepository(mock_mongo_client, "test_db")
+        report = UserReport(
+            user_id="user123",
+            report_type=ReportType.FALSE_POSITIVE,
+            title="Incorrect classification",
+            description="This analysis was incorrectly classified.",
+            analysis_ref_id="analysis-ref-123",
+        )
+
+        with pytest.raises(AnalysisAlreadyReportedError):
+            repo.create_report(report)
     
     def test_get_reports_with_status_filter(self, mock_mongo_client):
         """Test getting reports with status filter."""

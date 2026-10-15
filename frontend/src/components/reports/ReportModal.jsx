@@ -52,6 +52,7 @@ function ReportModal({
   analysisId = null,
   analysisRefId = null,
   preselectedType = null,
+  onSubmitted = null,
 }) {
   const [reportTypes, setReportTypes] = useState(DEFAULT_REPORT_TYPES);
   const [selectedType, setSelectedType] = useState(preselectedType || '');
@@ -119,12 +120,13 @@ function ReportModal({
 
       if (result.success) {
         setSuccess(true);
+        onSubmitted?.(result.data);
         // Auto-close after success
         setTimeout(() => {
           onClose();
         }, 2000);
       } else {
-        setError(result.error || 'Failed to submit report');
+        setError(result.error?.message || (typeof result.error === 'string' ? result.error : 'Failed to submit report'));
       }
     } catch (err) {
       setError(err.message || 'Failed to submit report. Please try again.');
@@ -272,6 +274,7 @@ ReportModal.propTypes = {
   analysisId: PropTypes.string,
   analysisRefId: PropTypes.string,
   preselectedType: PropTypes.string,
+  onSubmitted: PropTypes.func,
 };
 
 export default ReportModal;

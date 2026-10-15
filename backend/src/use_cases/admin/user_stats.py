@@ -18,6 +18,7 @@ from ...domain.admin_entities import (
     StatisticsPeriod,
     ReportNotFoundError,
     InvalidReportDataError,
+    AnalysisAlreadyReportedError,
 )
 
 
@@ -97,6 +98,7 @@ class ReportResult:
     report: Optional[UserReport]
     success: bool
     error_message: Optional[str] = None
+    error_code: Optional[str] = None
     
     def to_dict(self) -> dict:
         """Convert to dictionary for API response."""
@@ -415,6 +417,13 @@ class SubmitUserReportUseCase:
             return ReportResult(
                 report=created_report,
                 success=True
+            )
+        except AnalysisAlreadyReportedError as e:
+            return ReportResult(
+                report=None,
+                success=False,
+                error_message=str(e),
+                error_code="ANALYSIS_ALREADY_REPORTED",
             )
         except InvalidReportDataError as e:
             return ReportResult(

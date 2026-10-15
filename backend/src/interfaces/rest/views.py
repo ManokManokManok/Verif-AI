@@ -40,6 +40,16 @@ def _public_reviewed_result(result):
     }
 
 
+def _user_reports_for(user_id, analyses):
+    """Best-effort lookup; a failure must never break history loading."""
+    try:
+        from .reports_views import get_reporter_reports_for_analyses
+        return get_reporter_reports_for_analyses(user_id, analyses)
+    except Exception as report_error:
+        logger.warning(f"[REPORTS] Could not attach user reports: {report_error}")
+        return {}
+
+
 def _user_analysis_title(result, reviewed_result):
     if not reviewed_result:
         return result.scam_type or "Analysis Result"
@@ -144,6 +154,7 @@ def history_detail(request: Request, analysis_id: str) -> Response:
             'message': result.message,
             'image_attachment': result.image_attachment,
             'reviewed_result': reviewed_result,
+            'user_report': _user_reports_for(user_id, [result]).get(result.ref_id),
         }, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"[HISTORY_DETAIL] Error: {str(e)}", exc_info=True)
@@ -171,6 +182,7 @@ from ...use_cases.security_auth import (
 )
 from ...use_cases.ai.scam_detection import ScamDetectionUseCase
 from ...use_cases.ai.llm_analysis import LLMAnalysisUseCase
+from ...use_cases.ai.gatekeeper import GatekeeperUseCase
 from ...use_cases.ai.low_confidence_review import check_confidence, check_confidence_and_report
 from ...domain.services import (
     BCryptPasswordHasher, EmailValidator, PasswordValidator,
@@ -233,6 +245,7 @@ def history(request: Request) -> Response:
         # Query analysis results for this user using repository method
         repository = get_analysis_repository()
         analysis_results = repository.get_by_user_id(user_id, limit=50)
+        user_reports = _user_reports_for(user_id, analysis_results)
         history = []
         for result in analysis_results:
             reviewed_result = _public_reviewed_result(result)
@@ -246,6 +259,7 @@ def history(request: Request) -> Response:
                 "message": result.message,
                 "image_attachment": result.image_attachment,
                 "reviewed_result": reviewed_result,
+                "user_report": user_reports.get(result.ref_id),
                 **result_fields,
             })
         return Response({"history": history}, status=status.HTTP_200_OK)
@@ -1733,6 +1747,16 @@ def detect_scam(request: Request) -> Response:
         # Log sanitized message for security monitoring
         logger.info(f"[SCAM DETECTION] Analyzing message: {sanitize_for_logging(message, 100)}")
         
+        # Gatekeeper: screen the message before BERT
+        gate = GatekeeperUseCase(get_genai_provider()).evaluate(message)
+        if gate['route'] != 'analyze':
+            logger.info(f"[GATEKEEPER] route={gate['route']} reason={gate['reason_code']}")
+            return Response({
+                'message': message,
+                'result_type': 'gatekeeper',
+                **gate,
+            }, status=status.HTTP_200_OK)
+
         # Load BERT model (cached after first load)
         tokenizer, model, scam_types = load_multihead_model()
         

@@ -31,6 +31,7 @@ from src.domain.admin_entities import (
     ReportType,
     ReportStatus,
     UserReport,
+    AnalysisAlreadyReportedError,
 )
 
 
@@ -200,6 +201,42 @@ class TestGetReportTypes:
 
 class TestSubmitReport:
     """Tests for the submit_report endpoint."""
+
+    @patch('src.interfaces.rest.reports_views.AdminRepository')
+    @patch('src.interfaces.rest.reports_views.extract_user_from_request')
+    def test_returns_conflict_when_analysis_already_has_report(
+        self, mock_extract, mock_repo_class, api_factory
+    ):
+        mock_extract.return_value = {
+            'user_id': 'user-123',
+            'email': 'test@example.com',
+            'roles': ['user'],
+        }
+        mock_repo = mock_repo_class.return_value
+        mock_repo.create_report.side_effect = AnalysisAlreadyReportedError(
+            "This analysis already has a report."
+        )
+        request = api_factory.post(
+            '/api/reports/',
+            data=json.dumps({
+                'report_type': 'false_positive',
+                'title': 'Incorrect classification',
+                'description': 'This analysis was incorrectly classified.',
+                'analysis_ref_id': 'analysis-ref-123',
+            }),
+            content_type='application/json',
+        )
+
+        response = submit_report(request)
+
+        assert response.status_code == 409
+        assert json.loads(response.content) == {
+            'success': False,
+            'error': {
+                'code': 'ANALYSIS_ALREADY_REPORTED',
+                'message': 'This analysis already has a report.',
+            },
+        }
 
     @patch('src.interfaces.rest.reports_views.extract_user_from_request')
     def test_rejects_unauthenticated(self, mock_extract, api_factory):
