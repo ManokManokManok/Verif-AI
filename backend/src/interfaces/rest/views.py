@@ -245,23 +245,35 @@ def history(request: Request) -> Response:
         # Query analysis results for this user using repository method
         repository = get_analysis_repository()
         analysis_results = repository.get_by_user_id(user_id, limit=50)
-        user_reports = _user_reports_for(user_id, analysis_results)
+        try:
+            user_reports = _user_reports_for(user_id, analysis_results)
+        except Exception as report_error:
+            logger.warning(f"[HISTORY] Could not load user reports: {report_error}")
+            user_reports = {}
         history = []
         for result in analysis_results:
-            reviewed_result = _public_reviewed_result(result)
-            result_fields = _public_analysis_result_fields(result, reviewed_result)
-            history.append({
-                "id": result.id,
-                "ref_id": result.ref_id,
-                "title": _user_analysis_title(result, reviewed_result),
-                "description": result_fields["summary"],
-                "timestamp": result.created_at.isoformat() if result.created_at else None,
-                "message": result.message,
-                "image_attachment": result.image_attachment,
-                "reviewed_result": reviewed_result,
-                "user_report": user_reports.get(result.ref_id),
-                **result_fields,
-            })
+            try:
+                reviewed_result = _public_reviewed_result(result)
+                result_fields = _public_analysis_result_fields(result, reviewed_result)
+                attachment = result.image_attachment
+                if isinstance(attachment, dict) and attachment.get('data_url'):
+                    # The list never renders the image; the detail endpoint returns the full preview.
+                    attachment = {k: v for k, v in attachment.items() if k != 'data_url'}
+                    attachment['has_preview'] = True
+                history.append({
+                    "id": result.id,
+                    "ref_id": result.ref_id,
+                    "title": _user_analysis_title(result, reviewed_result),
+                    "description": result_fields["summary"],
+                    "timestamp": result.created_at.isoformat() if result.created_at else None,
+                    "message": result.message,
+                    "image_attachment": attachment,
+                    "reviewed_result": reviewed_result,
+                    "user_report": user_reports.get(result.ref_id),
+                    **result_fields,
+                })
+            except Exception as item_error:
+                logger.warning(f"[HISTORY] Skipping malformed analysis {getattr(result, 'id', None)}: {item_error}")
         return Response({"history": history}, status=status.HTTP_200_OK)
 
     except Exception as e:
