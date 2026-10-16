@@ -23,6 +23,17 @@ from src.infrastructure.mongodb.connection import (
 )
 
 
+@pytest.fixture(autouse=True)
+def propagate_security_logs():
+    """Django's LOGGING config disables propagation on 'security', which hides it from caplog."""
+    import logging
+    security_logger = logging.getLogger('security')
+    previous = security_logger.propagate
+    security_logger.propagate = True
+    yield
+    security_logger.propagate = previous
+
+
 class TestTLSEnforcement:
     """Test TLS enforcement for MongoDB connections."""
     

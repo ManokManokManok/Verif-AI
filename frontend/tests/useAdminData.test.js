@@ -259,8 +259,8 @@ describe('useUsers', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.users).toEqual(mockUsersData.users);
-    expect(result.current.pagination.total).toBe(2);
+    expect(result.current.data.users).toEqual(mockUsersData.users);
+    expect(result.current.data.pagination.total).toBe(2);
     expect(adminApi.getUsers).toHaveBeenCalled();
   });
 

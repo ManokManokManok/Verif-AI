@@ -35,7 +35,7 @@ vi.mock('../src/api/chatbot', () => ({
 }));
 
 vi.mock('../src/components/AppNavLinks', () => ({ default: () => <nav /> }));
-vi.mock('../src/components/reports', () => ({ ReportModal: () => null }));
+vi.mock('../src/components/reports', () => ({ ReportModal: () => null, MyReportModal: () => null }));
 vi.mock('../src/components/auth/LogoutConfirmModal', () => ({ default: () => null }));
 vi.mock('react-image-crop', () => ({
   default: ({ children }) => <div>{children}</div>,
@@ -113,7 +113,8 @@ describe('Detection image analysis errors', () => {
   });
 
   it('shows a retry action instead of presenting a failed history request as empty', async () => {
-    getChatHistory.mockRejectedValueOnce(new Error('Request failed'));
+    // A 401 is not retried automatically, so the error state shows immediately
+    getChatHistory.mockRejectedValueOnce(Object.assign(new Error('Request failed'), { status: 401 }));
 
     render(
       <MemoryRouter>

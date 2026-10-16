@@ -195,7 +195,8 @@ from ...infrastructure.mongodb.repositories import MongoDBUserRepository, MongoD
 from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.token_blacklist_service import MongoDBTokenBlacklistService
-from ...infrastructure.ai.loaders import load_multihead_model
+from ...infrastructure.ai.loaders import load_multihead_model, lite_mode
+from ...use_cases.ai.gemini_classification import GeminiClassificationUseCase
 from ...infrastructure.ai.genai_provider import get_genai_provider
 from ...infrastructure.rate_limiter import rate_limit, check_rate_limit
 from ...infrastructure.rate_limiter import get_client_ip as _get_client_ip
@@ -1769,36 +1770,65 @@ def detect_scam(request: Request) -> Response:
                 **gate,
             }, status=status.HTTP_200_OK)
 
-        # Load BERT model (cached after first load)
-        tokenizer, model, scam_types = load_multihead_model()
-        
-        if model is None or tokenizer is None:
-            logger.error("[SCAM DETECTION] Model or tokenizer is None")
-            return Response({
-                'error': {
-                    'code': 'MODEL_NOT_LOADED',
-                    'message': 'Scam detection model is not available'
-                }
-            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        
-        # Step 1: BERT Analysis
-        scam_detection = ScamDetectionUseCase(tokenizer, model, scam_types)
-        bert_result = scam_detection.detect(message)
-        
-        # Log BERT result
-        logger.info(f"[BERT] Label: {bert_result['label']}")
-        logger.info(f"[BERT] Scam Score: {bert_result['scam_score']:.2f}%")
-        logger.info(f"[BERT] Legit Score: {bert_result['legit_score']:.2f}%")
-        if bert_result['is_scam']:
-            logger.info(f"[BERT] Scam Type: {bert_result['scam_type']}")
-            logger.info(f"[BERT] Type Confidence: {bert_result['type_confidence']:.2f}%")
-        
-        # Step 2: Gemini-first generative analysis with lazy Gemma fallback
+        # Classification: local BERT, or Gemini only when LITE_MODE is on
+        # (or when the local model cannot be loaded).
+        use_gemini_classifier = lite_mode()
+        bert_result = None
         llm_result = {'summary': '', 'key_markers': []}
 
+        if not use_gemini_classifier:
+            try:
+                tokenizer, model, scam_types = load_multihead_model()
+            except Exception as load_error:
+                logger.error(f"[SCAM DETECTION] Local model unavailable: {load_error}")
+                tokenizer = model = scam_types = None
+
+            if model is None or tokenizer is None:
+                if get_genai_provider().gemini is None:
+                    return Response({
+                        'error': {
+                            'code': 'MODEL_NOT_LOADED',
+                            'message': 'Scam detection model is not available'
+                        }
+                    }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                logger.warning("[SCAM DETECTION] Falling back to Gemini classification")
+                use_gemini_classifier = True
+            else:
+                # Step 1: BERT Analysis
+                scam_detection = ScamDetectionUseCase(tokenizer, model, scam_types)
+                bert_result = scam_detection.detect(message)
+
+        if use_gemini_classifier:
+            try:
+                gemini_result = GeminiClassificationUseCase(get_genai_provider()).detect(message)
+            except Exception as classify_error:
+                logger.error(f"[GEMINI CLASSIFIER] Error: {classify_error}")
+                return Response({
+                    'error': {
+                        'code': 'MODEL_NOT_LOADED',
+                        'message': 'Scam detection is temporarily unavailable'
+                    }
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            llm_result = {
+                'summary': gemini_result.pop('summary'),
+                'key_markers': gemini_result.pop('key_markers'),
+            }
+            bert_result = gemini_result
+
+        # Log classifier result
+        logger.info(f"[CLASSIFIER] Label: {bert_result['label']}")
+        logger.info(f"[CLASSIFIER] Scam Score: {bert_result['scam_score']:.2f}%")
+        logger.info(f"[CLASSIFIER] Legit Score: {bert_result['legit_score']:.2f}%")
+        if bert_result['is_scam']:
+            logger.info(f"[CLASSIFIER] Scam Type: {bert_result['scam_type']}")
+            logger.info(f"[CLASSIFIER] Type Confidence: {bert_result['type_confidence']:.2f}%")
+        
+        # Step 2: Gemini-first generative analysis with lazy Gemma fallback
+        # (already produced by the Gemini classifier when it was used)
         try:
-            llm_analysis = LLMAnalysisUseCase(get_genai_provider())
-            llm_result = llm_analysis.analyze(message, bert_result)
+            if not use_gemini_classifier:
+                llm_analysis = LLMAnalysisUseCase(get_genai_provider())
+                llm_result = llm_analysis.analyze(message, bert_result)
             logger.info(f"[GENAI] Summary: {llm_result.get('summary','')[:100]}...")
             logger.info(f"[GENAI] Key Markers: {llm_result.get('key_markers')}")
         except Exception as llm_error:
@@ -1860,8 +1890,8 @@ def detect_scam(request: Request) -> Response:
                 scam_type=bert_result.get('scam_type') or 'Not Scam',
                 confidence_bps=confidence_bps,
                 is_scam=bert_result['is_scam'],
-                analyzer_type='bert',
-                analyzer_version='v1',
+                analyzer_type='llm' if use_gemini_classifier else 'bert',
+                analyzer_version='gemini-classifier-v1' if use_gemini_classifier else 'v1',
                 message_hash=message_hash,
                 user_id=resolved_user_id,
                 message=message if resolved_user_id else None,
@@ -1954,7 +1984,7 @@ def detect_scam(request: Request) -> Response:
 @rate_limit('api_write')
 def extract_text_from_image(request: Request) -> Response:
     """
-    Extract text from uploaded image using high-accuracy PaddleOCR.
+    Extract text from an uploaded image using Gemini vision.
     Text is automatically cleaned and organized for scam detection.
     
     Request: multipart/form-data
@@ -2015,11 +2045,13 @@ def extract_text_from_image(request: Request) -> Response:
         
         logger.info(f"[OCR] Processing image: {image_file.name} ({image_file.size / 1024:.1f}KB)")
         
-        # Process image through OCR pipeline
+        # Transcribe via Gemini vision, then clean up the text
         from src.use_cases.ai.image_classification import ImageClassificationUseCase
         
-        image_classifier = ImageClassificationUseCase(use_gpu=False)
-        result = image_classifier.process_image(image_file.read(), return_metadata=True)
+        image_classifier = ImageClassificationUseCase(get_genai_provider())
+        result = image_classifier.process_image(
+            image_file.read(), image_file.content_type, return_metadata=True
+        )
         
         if 'error' in result:
             return Response({

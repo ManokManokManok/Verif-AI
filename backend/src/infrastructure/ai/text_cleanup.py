@@ -140,7 +140,7 @@ def process_ocr_output(ocr_result: Dict[str, Any]) -> Dict[str, Any]:
     End-to-end processing of OCR output for classification.
     
     Args:
-        ocr_result: Output from OCRService.extract_text()
+        ocr_result: Output with 'text' and 'confidence' keys
         
     Returns:
         Processed result optimized for classification

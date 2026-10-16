@@ -496,14 +496,16 @@ class TestAdminRepository:
             100,  # total_users
             80,   # verified_users
             10,   # new_users (with date filter)
+            90,   # active_users (is_active=True)
         ]
         mock_mongo_client["test_db"].analysis_results.count_documents.return_value = 250
         
         # Mock aggregate pipelines (active users, power users, top power user)
         mock_mongo_client["test_db"].analysis_results.aggregate.side_effect = [
-            iter([{"active_users": 50}]),
+            iter([{"engaged_users": 50}]),
             iter([{"power_users": 3}]),
             iter([{"_id": "user-123", "total_detections": 75}]),
+            iter([]),  # top susceptive users
         ]
         
         # Mock visits
@@ -598,12 +600,13 @@ class TestUserRepositoryAdminExtensions:
         repo = MongoDBUserRepository(mock_mongo_client, "test_db")
         users, total = repo.get_all_users(search="test@email.com")
         
-        # Verify find was called with $or for search
+        # Search is combined with the soft-delete filter via $and
         call_args = mock_mongo_client["test_db"].users.find.call_args[0][0]
-        assert "$or" in call_args
+        assert "$and" in call_args
+        assert any("$or" in clause and any("email" in c for c in clause["$or"]) for clause in call_args["$and"])
     
     def test_delete_user_soft_delete(self, mock_mongo_client):
-        """Test soft deleting a user."""
+        """Test soft deleting (archiving) a user."""
         from src.infrastructure.mongodb.repositories import MongoDBUserRepository
         from bson import ObjectId
         
@@ -613,16 +616,16 @@ class TestUserRepositoryAdminExtensions:
             "email": "user@test.com"
         }
         
-        # Mock update result
         mock_result = MagicMock()
-        mock_result.modified_count = 1
-        mock_mongo_client["test_db"].users.update_one.return_value = mock_result
+        mock_result.deleted_count = 1
+        mock_mongo_client["test_db"].users.delete_one.return_value = mock_result
         
         repo = MongoDBUserRepository(mock_mongo_client, "test_db")
         result = repo.delete_user("507f1f77bcf86cd799439011", hard_delete=False)
         
         assert result is True
-        mock_mongo_client["test_db"].users.update_one.assert_called_once()
+        mock_mongo_client["test_db"].archived_users.insert_one.assert_called_once()
+        mock_mongo_client["test_db"].users.delete_one.assert_called_once()
     
     def test_delete_user_hard_delete(self, mock_mongo_client):
         """Test hard deleting a user."""
