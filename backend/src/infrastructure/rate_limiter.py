@@ -124,6 +124,9 @@ class RateLimiter:
         Returns:
             Tuple of (is_limited, retry_after_seconds, response_headers)
         """
+        if os.getenv('RATE_LIMIT_ENABLED', 'true').strip().lower() in ('false', '0', 'no', 'off'):
+            return False, None, {}
+
         limits = self._limits.get(category, self._limits['default'])
         max_requests = limits['requests']
         window_seconds = limits['window']

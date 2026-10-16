@@ -46,10 +46,10 @@ Why: 2-4 concise sentences identifying visible evidence such as impersonation, u
 What to do: 2-4 practical safety actions, including whether to avoid clicking, replying, paying, or sharing information
 
 Be honest about uncertainty. If the image is blurry, cropped, unreadable, or lacks enough context, say so and choose Inconclusive rather than guessing. Never claim certainty from appearance alone.
-If the image has nothing to do with messages, offers, payments, accounts, websites, or other possible scam content (e.g. a landscape, a pet, a meme, a random object, a blank image), do NOT force a scam analysis: use verdict "Unrelated" and explain in "summary" what the image seems to be and why it cannot be assessed.
+If the image has nothing to do with messages, offers, payments, accounts, websites, or other possible scam content (e.g. a landscape, a pet, a meme, a random object, a blank image), do NOT force a scam analysis: use verdict "Unrelated". In "summary" describe what the image actually shows (e.g. "a photo of a dog on a beach", "an AI-generated landscape") and why it can't be assessed for scams. In "suggestion" say what kind of image to upload instead.
 
 Return ONLY valid JSON with this exact shape:
-{"verdict":"Scam|Likely scam|Suspicious|Likely legitimate|Inconclusive|Unrelated","confidence":0,"scam_type":"one allowed type or null","summary":"2-4 sentences","details":"specific visible evidence","key_markers":["3-5 short markers"]}
+{"verdict":"Scam|Likely scam|Suspicious|Likely legitimate|Inconclusive|Unrelated","confidence":0,"scam_type":"one allowed type or null","summary":"2-4 sentences","details":"specific visible evidence","key_markers":["3-5 short markers"],"suggestion":"only for Unrelated: what to upload instead, otherwise empty"}
 Confidence must be an integer from 0 to 100. Use one of the predetermined scam types when appropriate, or null for legitimate and inconclusive results."""
 
 
@@ -115,6 +115,7 @@ def _parse_image_report(raw_text: str) -> dict:
         'summary': str(report.get('summary', 'No summary was returned.')),
         'details': str(report.get('details', '')),
         'key_markers': report.get('key_markers') if isinstance(report.get('key_markers'), list) else [],
+        'suggestion': str(report.get('suggestion') or '').strip()[:300],
     }
 
 
@@ -168,7 +169,8 @@ def analyze_image(request: Request) -> Response:
                 'observed_signs': [],
                 'missing_context': [],
                 'caution_level': 'none',
-                'suggested_action': 'Upload a screenshot of the suspicious message, offer, payment request, or website you want checked.',
+                'suggested_action': report['suggestion'] or 'Upload a screenshot of the suspicious message, offer, payment request, or website you want checked.',
+                'source': 'image',
                 'is_authenticated': is_authenticated,
             }, status=200)
         attachment = _image_attachment(image_bytes, image_file.content_type)
