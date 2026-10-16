@@ -991,6 +991,13 @@ function Detection() {
                     value={text}
                     onChange={handleTextChange}
                     onPaste={handleInputPaste}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        const canSubmit = text.trim() && !validationError && !isDetecting && !isAnalyzingImage;
+                        if (canSubmit) handleDetect();
+                      }
+                    }}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
                     placeholder={isMobile ? 'Paste text or an image here' : 'Paste suspicious message or email here, or drop/paste an image to analyze...'}
@@ -1230,14 +1237,22 @@ function Detection() {
                 {detectionResult.needs_review && !reviewedResult && (
                   <div className="detect__resultCard detect__resultCard--review detect__resultCard--animate">
                     <div className="detect__reviewBanner">
-                      <div className="detect__reviewIcon">🔍</div>
+                      <div className="detect__reviewIcon detect__reviewIcon--pending" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      </div>
                       <div className="detect__reviewContent">
-                        <h3 className="detect__reviewTitle">This result is under review</h3>
+                        <div className="detect__reviewHeading">
+                          <h3 className="detect__reviewTitle">This result is under review</h3>
+                          <span className="detect__reviewBadge">Pending admin review</span>
+                        </div>
                         <p className="detect__reviewText">
                           {getReviewExplanation(detectionResult.review_reason)} We&apos;ve flagged it for human review to ensure accuracy.
                         </p>
                         {detectionResult.review_reason && (
-                          <p className="detect__reviewReason">Reason: {detectionResult.review_reason}</p>
+                          <p className="detect__reviewReason detect__reviewReason--chip">{detectionResult.review_reason}</p>
                         )}
                         <p className="detect__reviewNote">
                           Verif-AI is constantly learning and improving. Your patience helps us achieve even more accurate scam detection for everyone.

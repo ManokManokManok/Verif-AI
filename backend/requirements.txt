@@ -15,21 +15,21 @@ redis>=7.1.0
 sendgrid>=6.10.0
 google-genai>=1.0.0
 
-# OCR / document processing
+# Image handling
 Pillow>=10.0.0
-paddleocr>=2.8.0
 numpy>=2.0.0
 
-# AI / model runtime
+# AI / model runtime (local BERT classifier; unused when LITE_MODE=true)
 huggingface_hub>=0.36.0
 safetensors>=0.7.0
 transformers>=4.57.6
 torch>=2.9.1
-llama-cpp-python>=0.3.16
 
 # Monitoring / runtime utilities
 psutil>=5.9.0
 
-# Optional extras kept separate if you want lighter installs for local-only work:
-# - For a minimal non-AI backend, remove: paddleocr, numpy, huggingface_hub, safetensors, transformers, torch, llama-cpp-python
-# - For a minimal local-only auth + API install, keep only the Django/auth/database packages above
+# Production server
+gunicorn>=23.0.0
+
+# Removed: paddleocr (image text now uses Gemini vision) and llama-cpp-python
+# (local Gemma fallback). Install llama-cpp-python manually only if you want that fallback.

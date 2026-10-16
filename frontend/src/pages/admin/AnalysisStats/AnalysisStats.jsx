@@ -211,7 +211,7 @@ export default function AnalysisStats({ onNotify }) {
           title="Platform Users"
           value={(stats.total_users || 0).toLocaleString()}
           subtitle="Total accounts"
-          variant="primary"
+          variant="info"
         />
         <StatCard
           title="Total Analyses"

@@ -19,8 +19,10 @@ def _safe_error_detail(error: Exception) -> str:
 
 def _is_retryable_gemini_error(error: Exception) -> bool:
     """Identify transient capacity and quota failures that may work on another model."""
-    status_code = getattr(error, "status_code", None)
+    status_code = getattr(error, "status_code", None) or getattr(error, "code", None)
     if status_code in (429, 500, 502, 503, 504):
+        return True
+    if "resource_exhausted" in str(error)[:200].lower():
         return True
     error_name = type(error).__name__.lower()
     return any(marker in error_name for marker in ("ratelimit", "resourceexhausted", "servererror", "unavailable"))
@@ -221,7 +223,10 @@ class GenAIProvider:
 
         if last_error is None:
             logger.info("[GEMINI] No configured fallback model was available; using Gemma")
-        gemma = self.gemma_loader()
+        try:
+            gemma = self.gemma_loader()
+        except ImportError as exc:
+            raise RuntimeError("No AI provider is available (Gemini failed and local Gemma is not installed)") from exc
         response = gemma.create_chat_completion(messages=messages, **options)
         logger.warning("[GENAI] Provider used: GEMMA_FALLBACK")
         return response

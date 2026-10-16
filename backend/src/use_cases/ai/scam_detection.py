@@ -1,8 +1,6 @@
 """
 Use case for scam detection using the multi-head BERT model.
 """
-import torch
-import torch.nn.functional as F
 import re
 import os
 from typing import Dict, Any
@@ -47,6 +45,10 @@ class ScamDetectionUseCase:
                 - scam_type: The most likely type of scam (if is_scam)
                 - type_confidence: Confidence in the scam type classification (0-100)
         """
+        # Imported lazily so the app starts without loading torch (e.g. LITE_MODE).
+        import torch
+        import torch.nn.functional as F
+
         logger.info(f"Analyzing message: {message[:100]}...")
         
         # Tokenize input
