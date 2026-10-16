@@ -6,6 +6,7 @@ Captures visit data without impacting performance using async processing.
 """
 
 import logging
+import os
 import hashlib
 import re
 from datetime import datetime
@@ -25,14 +26,19 @@ _worker_thread: Optional[threading.Thread] = None
 _shutdown_event = threading.Event()
 
 
+def _sync_mode() -> bool:
+    """ANALYTICS_SYNC=true writes visits inline (default on Lambda)."""
+    default = 'true' if os.getenv('AWS_LAMBDA_FUNCTION_NAME') else 'false'
+    return os.getenv('ANALYTICS_SYNC', default).lower() in ('1', 'true', 'yes', 'on')
+
+
 def _get_client_ip(request: HttpRequest) -> str:
     """Extract client IP from request, handling proxies."""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0].strip()
-    else:
-        ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
-    return ip
+    from src.infrastructure.rate_limiter import get_client_ip
+    try:
+        return get_client_ip(request)
+    except Exception:
+        return request.META.get('REMOTE_ADDR', '0.0.0.0')
 
 
 def _anonymize_ip(ip: str) -> str:
@@ -227,8 +233,9 @@ class AnalyticsMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         self.enabled = getattr(settings, 'ANALYTICS_ENABLED', True)
-        _ensure_worker_running()
-    
+        if not _sync_mode():
+            _ensure_worker_running()
+
     def __call__(self, request: HttpRequest) -> HttpResponse:
         if not self.enabled:
             return self.get_response(request)
@@ -268,11 +275,20 @@ class AnalyticsMiddleware:
                 session_id=request.session.session_key if hasattr(request, 'session') else None,
             )
             
-            # Queue for async processing
-            try:
-                _visit_queue.put_nowait(visit_data)
-            except queue.Full:
-                logger.warning("Visit queue full, dropping visit data")
+            # Lambda freezes background threads between requests, so write inline there.
+            if _sync_mode():
+                try:
+                    from .analytics_repository import get_analytics_repository
+                    repo = get_analytics_repository()
+                    if repo:
+                        repo.bulk_insert_visits([visit_data.to_dict()])
+                except Exception as e:
+                    logger.error(f"Failed to write visit: {e}")
+            else:
+                try:
+                    _visit_queue.put_nowait(visit_data)
+                except queue.Full:
+                    logger.warning("Visit queue full, dropping visit data")
                 
         except Exception as e:
             logger.error(f"Error creating visit data: {e}")

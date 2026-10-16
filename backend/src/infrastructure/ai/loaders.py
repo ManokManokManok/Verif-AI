@@ -28,6 +28,11 @@ _gemma_cache: Optional[object] = None
 
 
 
+def lite_mode() -> bool:
+    """True when classification should be handled entirely by the hosted LLM (LITE_MODE)."""
+    return os.getenv('LITE_MODE', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 def load_multihead_model() -> Tuple[object, object, dict]:
     """Load tokenizer + MultiHeadBERT model + scam_types mapping from repo root only."""
     global _multihead_cache

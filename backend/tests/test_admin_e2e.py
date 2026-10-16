@@ -325,16 +325,22 @@ class TestUserReportLifecycleE2E:
     @patch('src.interfaces.rest.admin_views.get_admin_repository')
     @patch('src.interfaces.rest.admin_views.UpdateReportStatusUseCase')
     @patch('src.interfaces.rest.admin_views.extract_user_from_request')
+    @patch('src.interfaces.rest.admin_views.get_analysis_repository')
     def test_admin_resolves_report(
-        self, mock_extract_user, mock_use_case_class, mock_get_repo, mock_require_admin,
+        self, mock_get_analysis_repo, mock_extract_user, mock_use_case_class, mock_get_repo, mock_require_admin,
         api_factory, admin_user
     ):
         """E2E: Admin resolves the report."""
         mock_require_admin.return_value = None
+        mock_get_analysis_repo.return_value.get_by_ref_id.return_value = None
+        mock_get_analysis_repo.return_value.get_by_id.return_value = None
+        mock_get_repo.return_value.users_collection.find_one.return_value = None
         mock_extract_user.return_value = (admin_user['user_id'], admin_user['email'], admin_user['roles'])
         
         report_id = str(uuid.uuid4())
         mock_report = Mock()
+        mock_report.analysis_ref_id = None
+        mock_report.analysis_id = None
         mock_report.to_dict.return_value = {
             'id': report_id,
             'status': 'resolved',
@@ -833,7 +839,9 @@ class TestCrossFeatureIntegrationE2E:
         
         assert response.status_code == 200
         data = response.data
-        assert data['data']['reports'][0]['reported_by'] is None
+        assert data['data']['reports'][0]['reported_by'] == {
+            'user_id': None, 'email': None, 'username': None,
+        }
     
     @patch('src.interfaces.rest.admin_views.require_admin')
     @patch('src.interfaces.rest.admin_views.get_admin_repository')

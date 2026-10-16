@@ -8,6 +8,7 @@ import {
   hasRole as checkHasRole,
   isTokenExpired
 } from '../api/client';
+import LogoutOverlay from '../components/auth/LogoutOverlay';
 
 // Create context
 const AuthContext = createContext(null);
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const sessionExpiredHandled = useRef(false);
 
   // Check if logged in (also verify token is not expired client-side)
@@ -57,6 +59,7 @@ export function AuthProvider({ children }) {
   // Logout function
   const logout = useCallback(async () => {
     setIsLoading(true);
+    setIsLoggingOut(true);
     setError(null);
     
     try {
@@ -67,6 +70,7 @@ export function AuthProvider({ children }) {
     } finally {
       setUser(null);
       setIsLoading(false);
+      setIsLoggingOut(false);
     }
   }, []);
 
@@ -152,6 +156,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
+      {isLoggingOut && <LogoutOverlay />}
     </AuthContext.Provider>
   );
 }
