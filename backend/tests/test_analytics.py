@@ -208,8 +208,10 @@ class TestHelperFunctions:
         assert _is_bot(ua) == False
     
     def test_should_track_path_api(self):
-        """Test that API paths are tracked."""
-        assert _should_track_path('/api/analysis') == True
+        """Test that detection and chat API paths are tracked."""
+        assert _should_track_path('/api/detect/') == True
+        assert _should_track_path('/api/chat/message/') == True
+        assert _should_track_path('/api/analysis') == False
     
     def test_should_track_path_skip_static(self):
         """Test that static paths are skipped."""
@@ -758,10 +760,13 @@ class TestAnalyticsAPI:
             'user_deleted': {'$ne': True},
         })
 
-    def test_user_data_export_is_limited_to_one_every_three_hours(self, api_factory, reset_data_export_limiter):
+    def test_user_data_export_is_limited_to_one_every_three_hours(self, api_factory, reset_data_export_limiter, monkeypatch):
         from src.infrastructure.rate_limiter import get_rate_limiter
         from src.interfaces.rest.analytics_views import export_user_data
 
+        monkeypatch.setenv('RATE_LIMIT_ENABLED', 'true')
+        monkeypatch.setenv('RATE_LIMIT_DATA_EXPORT_REQUESTS', '1')
+        monkeypatch.setenv('RATE_LIMIT_DATA_EXPORT_WINDOW', '10800')
         limiter = get_rate_limiter()
         limiter.reset()
         collection = Mock()
@@ -802,7 +807,7 @@ class TestAnalyticsAPI:
             mock_jwt = Mock()
             mock_jwt.verify_access_token.return_value = {
                 'user_id': 'user123',
-                'role': 'user'
+                'roles': ['user']
             }
             mock_get_jwt.return_value = mock_jwt
             
@@ -833,7 +838,7 @@ class TestAnalyticsAPI:
             mock_jwt = Mock()
             mock_jwt.verify_access_token.return_value = {
                 'user_id': 'admin123',
-                'role': 'admin'
+                'roles': ['admin']
             }
             mock_get_jwt.return_value = mock_jwt
             
@@ -864,7 +869,7 @@ class TestAnalyticsAPI:
             mock_jwt = Mock()
             mock_jwt.verify_access_token.return_value = {
                 'user_id': 'admin123',
-                'role': 'admin'
+                'roles': ['admin']
             }
             mock_get_jwt.return_value = mock_jwt
             
@@ -893,7 +898,7 @@ class TestAnalyticsAPI:
             mock_jwt = Mock()
             mock_jwt.verify_access_token.return_value = {
                 'user_id': 'admin123',
-                'role': 'admin'
+                'roles': ['admin']
             }
             mock_get_jwt.return_value = mock_jwt
             
@@ -930,7 +935,7 @@ class TestAnalyticsAPI:
             mock_jwt = Mock()
             mock_jwt.verify_access_token.return_value = {
                 'user_id': 'admin123',
-                'role': 'admin'
+                'roles': ['admin']
             }
             mock_get_jwt.return_value = mock_jwt
             
@@ -957,7 +962,7 @@ class TestAnalyticsAPI:
                 mock_jwt = Mock()
                 mock_jwt.verify_access_token.return_value = {
                     'user_id': 'admin123',
-                    'role': 'admin'
+                    'roles': ['admin']
                 }
                 mock_get_jwt.return_value = mock_jwt
                 
@@ -1034,7 +1039,7 @@ class TestErrorHandling:
             mock_jwt = Mock()
             mock_jwt.verify_access_token.return_value = {
                 'user_id': 'admin123',
-                'role': 'admin'
+                'roles': ['admin']
             }
             mock_get_jwt.return_value = mock_jwt
             

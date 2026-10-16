@@ -253,7 +253,7 @@ export default function UserStats({ onNotify }) {
         <StatCard
           title="Engaged Users"
           value={(userStats.engaged_users_count || 0).toLocaleString()}
-          variant="primary"
+          variant="info"
           subtitle={`Analyzed this ${period}`}
         />
         <StatCard

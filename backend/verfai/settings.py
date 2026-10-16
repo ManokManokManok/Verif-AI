@@ -61,6 +61,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'src.interfaces.rest.middleware.AuthenticationMiddleware',
     'src.infrastructure.middleware.analytics_middleware.AnalyticsMiddleware',
+    'src.infrastructure.middleware.request_log_middleware.RequestLogMiddleware',
 ]
 
 # Analytics settings
@@ -100,7 +101,8 @@ WSGI_APPLICATION = 'verfai.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # Lambda's filesystem is read-only except /tmp (ephemeral; Django internals only).
+        'NAME': '/tmp/db.sqlite3' if os.getenv('AWS_LAMBDA_FUNCTION_NAME') else BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -162,6 +164,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [],
     'UNAUTHENTICATED_USER': None,
     'UNAUTHENTICATED_TOKEN': None,
+    # Disable DRF's ?format= renderer override; admin exports use ?format=csv|excel
+    'URL_FORMAT_OVERRIDE': None,
     # SECURITY: Limit request body size to prevent DoS
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
@@ -243,5 +247,19 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'verfai.access': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
+
+# On Lambda (or LOG_TO_FILE=false) log to stdout/CloudWatch only; the filesystem is read-only.
+_LOG_TO_FILE = os.getenv(
+    'LOG_TO_FILE', 'false' if os.getenv('AWS_LAMBDA_FUNCTION_NAME') else 'true'
+).lower() in ('1', 'true', 'yes', 'on')
+if not _LOG_TO_FILE:
+    del LOGGING['handlers']['security_file']
+    for _logger_cfg in LOGGING['loggers'].values():
+        _logger_cfg['handlers'] = ['console']

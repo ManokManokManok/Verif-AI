@@ -1,0 +1,78 @@
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from src.infrastructure.ai.loaders import lite_mode
+from src.use_cases.ai.gemini_classification import GeminiClassificationUseCase
+
+
+@pytest.mark.parametrize('value,expected', [
+    ('true', True), ('1', True), ('YES', True), ('on', True),
+    ('false', False), ('', False), ('nope', False),
+])
+def test_lite_mode_env(monkeypatch, value, expected):
+    monkeypatch.setenv('LITE_MODE', value)
+    assert lite_mode() is expected
+
+
+def test_lite_mode_default_off(monkeypatch):
+    monkeypatch.delenv('LITE_MODE', raising=False)
+    assert lite_mode() is False
+
+
+def test_parse_scam_over_threshold():
+    raw = json.dumps({
+        'scam_score': 85, 'scam_type': 'Not A Real Type', 'type_confidence': 120,
+        'summary': 'Looks fake.', 'key_markers': ['a', ' ', 'b'],
+    })
+    result = GeminiClassificationUseCase.parse_response(raw, 50)
+    assert result['is_scam'] is True
+    assert result['label'] == 'Scam'
+    assert result['scam_type'] == 'Mobile and Digital'
+    assert result['type_confidence'] == 100.0
+    assert result['key_markers'] == ['a', 'b']
+    assert result['legit_score'] == 15.0
+
+
+def test_parse_clamps_and_legit():
+    result = GeminiClassificationUseCase.parse_response(json.dumps({'scam_score': -20}), 50)
+    assert result['scam_score'] == 0.0
+    assert result['is_scam'] is False
+    assert result['scam_type'] is None
+    assert result['summary']
+
+
+def test_parse_rejects_non_object():
+    with pytest.raises(ValueError):
+        GeminiClassificationUseCase.parse_response('[1]')
+
+
+def test_detect_uses_provider(monkeypatch):
+    provider = MagicMock()
+    provider.create_structured_completion.return_value = json.dumps({'scam_score': 10})
+    result = GeminiClassificationUseCase(provider).detect('hello, 20% off today')
+    assert result['is_scam'] is False
+    assert provider.create_structured_completion.called
+
+
+def test_xff_trusted_hops(monkeypatch):
+    from src.infrastructure.rate_limiter import get_client_ip
+    request = MagicMock()
+    request.META = {'HTTP_X_FORWARDED_FOR': '6.6.6.6, 1.2.3.4, 10.0.0.1', 'REMOTE_ADDR': '10.0.0.1'}
+    monkeypatch.setenv('TRUSTED_PROXY_HOPS', '0')
+    assert get_client_ip(request) == '6.6.6.6'
+    monkeypatch.setenv('TRUSTED_PROXY_HOPS', '1')
+    assert get_client_ip(request) == '10.0.0.1'
+    monkeypatch.setenv('TRUSTED_PROXY_HOPS', '2')
+    assert get_client_ip(request) == '1.2.3.4'
+
+
+def test_guest_limit_memory(monkeypatch):
+    from src.apps.chatbot import guest_limits
+    monkeypatch.setenv('RATE_LIMIT_BACKEND', 'memory')
+    assert guest_limits.claim_guest_use('sess-lite-test', 'f') is True
+    assert guest_limits.claim_guest_use('sess-lite-test', 'f') is False
+    guest_limits.release_guest_use('sess-lite-test', 'f')
+    assert guest_limits.claim_guest_use('sess-lite-test', 'f') is True
+    guest_limits.release_guest_use('sess-lite-test', 'f')

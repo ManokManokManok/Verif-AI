@@ -720,7 +720,7 @@ class TestDeleteUserUseCase:
         )
         
         assert result.success is True
-        assert "deactivated" in result.message
+        assert "archived" in result.message
         mock_user_repository.delete_user.assert_called_once_with("user123", hard_delete=False)
     
     def test_execute_hard_deletes_user_successfully(self, mock_user_repository, mock_admin_repository):
@@ -892,7 +892,7 @@ class TestUpdateUserStatusUseCase:
         )
         
         assert result.success is False
-        assert "Cannot deactivate your own account" in result.error_message
+        assert "Cannot deactivate or suspend your own account" in result.error_message
     
     def test_execute_prevents_super_admin_deactivation(self, mock_user_repository):
         """Test prevention of super admin deactivation."""

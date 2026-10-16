@@ -55,8 +55,8 @@ describe('StatCard', () => {
       <StatCard title="Test" value={0} loading />
     );
     
-    expect(container.querySelector('.admin-stat-card--loading')).toBeInTheDocument();
-    expect(container.querySelector('.admin-stat-card__skeleton')).toBeInTheDocument();
+    expect(container.querySelector('.stat-card--loading')).toBeInTheDocument();
+    expect(container.querySelector('.stat-card__skeleton')).toBeInTheDocument();
   });
 
   it('applies variant class correctly', () => {
@@ -64,7 +64,7 @@ describe('StatCard', () => {
       <StatCard title="Errors" value={50} variant="danger" />
     );
     
-    expect(container.querySelector('.admin-stat-card--danger')).toBeInTheDocument();
+    expect(container.querySelector('.stat-card--danger')).toBeInTheDocument();
   });
 
   it('renders icon when provided', () => {
@@ -91,7 +91,7 @@ describe('MetricGauge', () => {
       />
     );
     
-    expect(container.querySelector('.admin-gauge--warning')).toBeInTheDocument();
+    expect(container.querySelector('.metric-gauge--warning')).toBeInTheDocument();
   });
 
   it('applies danger threshold class', () => {
@@ -103,7 +103,7 @@ describe('MetricGauge', () => {
       />
     );
     
-    expect(container.querySelector('.admin-gauge--danger')).toBeInTheDocument();
+    expect(container.querySelector('.metric-gauge--danger')).toBeInTheDocument();
   });
 
   it('renders custom unit', () => {
@@ -117,7 +117,7 @@ describe('MetricGauge', () => {
       <MetricGauge label="Test" value={50} size="large" />
     );
     
-    expect(container.querySelector('.admin-gauge--large')).toBeInTheDocument();
+    expect(container.querySelector('.metric-gauge--large')).toBeInTheDocument();
   });
 });
 
@@ -166,7 +166,7 @@ describe('DataTable', () => {
       <DataTable columns={columns} data={[]} loading />
     );
     
-    expect(container.querySelector('.admin-table--loading')).toBeInTheDocument();
+    expect(container.querySelector('.data-table--loading')).toBeInTheDocument();
   });
 
   it('renders custom cell content via render function', () => {
@@ -232,7 +232,7 @@ describe('StatusBadge', () => {
   it('applies correct variant class for known status', () => {
     const { container } = render(<StatusBadge status="resolved" />);
     
-    expect(container.querySelector('.admin-badge--success')).toBeInTheDocument();
+    expect(container.querySelector('.status-badge--success')).toBeInTheDocument();
   });
 
   it('uses custom variant when provided', () => {
@@ -240,7 +240,7 @@ describe('StatusBadge', () => {
       <StatusBadge status="custom" variant="warning" />
     );
     
-    expect(container.querySelector('.admin-badge--warning')).toBeInTheDocument();
+    expect(container.querySelector('.status-badge--warning')).toBeInTheDocument();
   });
 });
 
@@ -466,7 +466,7 @@ describe('ConfirmModal', () => {
       />
     );
     
-    await userEvent.click(container.querySelector('.admin-modal__overlay'));
+    await userEvent.click(container.querySelector('.confirm-modal__overlay'));
     expect(onCancel).toHaveBeenCalled();
   });
 });
@@ -483,7 +483,7 @@ describe('Alert', () => {
       <Alert message="Error occurred" type="error" />
     );
     
-    expect(container.querySelector('.admin-alert--error')).toBeInTheDocument();
+    expect(container.querySelector('.alert--error')).toBeInTheDocument();
   });
 
   it('shows close button when onClose provided', () => {
@@ -581,13 +581,13 @@ describe('LoadingSpinner', () => {
   it('renders with default size', () => {
     const { container } = render(<LoadingSpinner />);
     
-    expect(container.querySelector('.admin-spinner--medium')).toBeInTheDocument();
+    expect(container.querySelector('.loading-spinner--medium')).toBeInTheDocument();
   });
 
   it('renders with custom size', () => {
     const { container } = render(<LoadingSpinner size="large" />);
     
-    expect(container.querySelector('.admin-spinner--large')).toBeInTheDocument();
+    expect(container.querySelector('.loading-spinner--large')).toBeInTheDocument();
   });
 });
 

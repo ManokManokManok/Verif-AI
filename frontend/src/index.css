@@ -6724,10 +6724,10 @@ button {
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
   border: 1px solid rgba(251, 191, 36, 0.35);
   border-left: 4px solid #fbbf24;
-  padding: 16px 24px;
+  padding: 18px 24px;
   margin-bottom: 4px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .detect__resultCard--humanReviewed {
@@ -6760,11 +6760,70 @@ button {
 
 .detect__reviewContent {
   flex: 1;
-  text-align: center;
+  text-align: left;
 }
 
 .detect__reviewBanner {
+  justify-content: flex-start;
+  align-items: flex-start;
+  max-width: none;
+}
+
+.detect__reviewIcon--pending {
+  display: flex;
+  align-items: center;
   justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.detect__reviewHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 6px;
+}
+
+.detect__reviewHeading .detect__reviewTitle {
+  margin: 0;
+}
+
+.detect__reviewBadge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.detect__reviewReason--chip {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #fde68a;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+[data-theme="light"] .detect__reviewIcon--pending,
+[data-theme="light"] .detect__reviewBadge {
+  color: #92400e;
+}
+
+[data-theme="light"] .detect__reviewReason--chip {
+  color: #78350f;
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .detect__reviewTitle {

@@ -161,6 +161,7 @@ const setupDefaultMocks = () => {
 
 describe('Admin Dashboard E2E Workflows', () => {
   beforeEach(() => {
+    window.history.pushState({}, '', '/');
     vi.clearAllMocks();
     setupDefaultMocks();
   });
@@ -175,14 +176,14 @@ describe('Admin Dashboard E2E Workflows', () => {
     it('renders admin dashboard with tab navigation', async () => {
       renderWithRouter(<AdminDashboard />);
 
-      // Dashboard title should be visible
-      expect(screen.getByText(/Admin Dashboard/i)).toBeInTheDocument();
+      // Active section title should be visible
+      expect(screen.getByRole('heading', { level: 1, name: /Model Health/i })).toBeInTheDocument();
       
       // Tab navigation should be present - use getAllByText since tabs and content may have same text
-      expect(screen.getAllByText(/Model Health/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/Analysis Statistics/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/User Statistics/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/User Management/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole('link', { name: /Model Health/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole('link', { name: /Analysis Stats/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole('link', { name: /User Stats/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole('link', { name: /User Management/i }).length).toBeGreaterThan(0);
     });
 
     it('switches tabs when clicking on different tab', async () => {
@@ -190,7 +191,7 @@ describe('Admin Dashboard E2E Workflows', () => {
       renderWithRouter(<AdminDashboard />);
 
       // Default tab should be Model Health, click on Analysis Statistics
-      const analysisTab = screen.getByText(/Analysis Statistics/i);
+      const analysisTab = screen.getAllByRole('link', { name: /Analysis Stats/i })[0];
       await user.click(analysisTab);
 
       // API should be called for analysis stats
@@ -352,11 +353,9 @@ describe('Admin Dashboard E2E Workflows', () => {
         const user = userEvent.setup();
         await user.click(deleteButtons[0]);
         
-        // May need to confirm deletion
-        const confirmButton = screen.queryByRole('button', { name: /confirm|yes/i });
-        if (confirmButton) {
-          await user.click(confirmButton);
-        }
+        // Confirm in the modal (last action button)
+        const modalButtons = document.querySelectorAll('.confirm-modal__actions button');
+        await user.click(modalButtons[modalButtons.length - 1]);
 
         await waitFor(() => {
           expect(adminApi.deleteUser).toHaveBeenCalled();
@@ -391,7 +390,8 @@ describe('Admin Dashboard E2E Workflows', () => {
 
       // Verify no script tags or event handlers in the DOM
       expect(container.innerHTML).not.toContain('<script>');
-      expect(container.innerHTML).not.toContain('onerror=');
+      // Text is escaped by React; no real element may be injected
+      expect(container.querySelector('img, script')).toBeNull();
     });
 
     it('handles API errors gracefully', async () => {
@@ -471,8 +471,7 @@ describe('Admin Dashboard E2E Workflows', () => {
     it('StatusBadge renders with correct variant', () => {
       const { container } = render(<StatusBadge status="active" />);
 
-      // StatusBadge uses admin-badge class, not admin-status-badge
-      expect(container.querySelector('.admin-badge')).toBeInTheDocument();
+      expect(container.querySelector('.status-badge')).toBeInTheDocument();
     });
 
     it('SearchInput triggers onChange callback after debounce', async () => {
@@ -574,17 +573,17 @@ describe('Admin Dashboard E2E Workflows', () => {
       });
 
       // Switch to Analysis Stats
-      await user.click(screen.getByText(/Analysis Statistics/i));
+      await user.click(screen.getAllByRole('link', { name: /Analysis Stats/i })[0]);
 
       await waitFor(() => {
         expect(adminApi.getAnalysisStats).toHaveBeenCalled();
       });
 
       // Switch back to Model Health
-      await user.click(screen.getByText(/Model Health/i));
+      await user.click(screen.getAllByRole('link', { name: /Model Health/i })[0]);
 
       // Should still work
-      expect(screen.getByText(/Model Health/i)).toBeInTheDocument();
+      expect(screen.getAllByRole('link', { name: /Model Health/i }).length).toBeGreaterThan(0);
     });
   });
 

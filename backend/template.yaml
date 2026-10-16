@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Verif-AI backend (Lambda container + function URL) with cost failsafes
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI of the backend image
+  MemoryMb:
+    Type: Number
+    Default: 512
+    Description: New AWS accounts are capped at 512 MB; use 2048 with LiteMode=false once the cap is lifted
+  LiteMode:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+  FrontendOrigin:
+    Type: String
+    Description: Vercel URL, e.g. https://verfai.vercel.app
+  BudgetEmail:
+    Type: String
+    Description: Where budget alerts are sent
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 5
+  DjangoSecretKey:
+    Type: String
+    NoEcho: true
+  JwtSecretKey:
+    Type: String
+    NoEcho: true
+  MongoUri:
+    Type: String
+    NoEcho: true
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+  EmailUser:
+    Type: String
+  EmailAppPassword:
+    Type: String
+    NoEcho: true
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageUri: !Ref ImageUri
+      MemorySize: !Ref MemoryMb
+      Timeout: 120
+      FunctionUrlConfig:
+        AuthType: NONE
+      Environment:
+        Variables:
+          DJANGO_DEBUG: 'False'
+          DJANGO_SECRET_KEY: !Ref DjangoSecretKey
+          JWT_SECRET_KEY: !Ref JwtSecretKey
+          DJANGO_ALLOWED_HOSTS: '.lambda-url.us-east-1.on.aws'
+          DJANGO_TRUST_PROXY_SSL: 'true'
+          TRUSTED_PROXY_HOPS: '1'
+          CORS_ALLOWED_ORIGINS: !Ref FrontendOrigin
+          FRONTEND_URL: !Ref FrontendOrigin
+          RATE_LIMIT_ENABLED: 'true'
+          MFA_ENABLED: 'true'
+          RATE_LIMIT_BACKEND: mongo
+          LITE_MODE: !Ref LiteMode
+          GEMINI_ENABLED: 'true'
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          MONGODB_URI: !Ref MongoUri
+          EMAIL_BACKEND: smtp
+          EMAIL_HOST: smtp.gmail.com
+          EMAIL_PORT: '587'
+          EMAIL_USE_TLS: 'true'
+          EMAIL_HOST_USER: !Ref EmailUser
+          EMAIL_FROM_ADDRESS: !Ref EmailUser
+          EMAIL_HOST_PASSWORD: !Ref EmailAppPassword
+
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: verfai-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+
+Outputs:
+  ApiUrl:
+    Description: Put this in Vercel as VITE_API_BASE_URL (without trailing slash)
+    Value: !GetAtt ApiFunctionUrl.FunctionUrl

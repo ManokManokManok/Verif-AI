@@ -17,6 +17,7 @@ Security Features:
 """
 
 import os
+import re
 import time
 import logging
 import functools
@@ -32,15 +33,22 @@ logger = logging.getLogger(__name__)
 security_logger = logging.getLogger('security')
 
 
+def _use_mongo_backend() -> bool:
+    """RATE_LIMIT_BACKEND=mongo shares counters across instances (needed on AWS Lambda)."""
+    return os.getenv('RATE_LIMIT_BACKEND', 'memory').strip().lower() == 'mongo'
+
+
 class RateLimiter:
     """
-    Simple in-memory rate limiter using sliding window algorithm.
-    
-    Thread-safe implementation suitable for single-instance deployments.
-    For multi-instance deployments, use Redis-backed implementation.
+    Sliding window rate limiter.
+
+    Counters live in memory by default (single instance). Set
+    RATE_LIMIT_BACKEND=mongo to store them in MongoDB for multi-instance
+    deployments such as AWS Lambda.
     """
     
     def __init__(self):
+        self._mongo_collection = None
         # Store: {identifier: [(timestamp, count), ...]}
         self._requests: Dict[str, list] = defaultdict(list)
         self._blocked: Dict[str, float] = {}  # identifier -> blocked_until timestamp
@@ -134,6 +142,14 @@ class RateLimiter:
         
         key = f"{category}:{identifier}"
         now = time.time()
+
+        if _use_mongo_backend():
+            try:
+                return self._is_rate_limited_mongo(key, max_requests, window_seconds, block_seconds, now)
+            except Exception as exc:
+                # Fail open: a database hiccup must not lock every user out.
+                security_logger.error(f"Mongo rate limiter unavailable, allowing request: {type(exc).__name__}")
+                return False, None, {}
         
         with self._lock:
             # Check if currently blocked
@@ -186,9 +202,76 @@ class RateLimiter:
             }
             
             return False, None, headers
+
+    def _get_mongo_collection(self):
+        """Shared collection for all instances; a TTL index removes stale counters."""
+        if self._mongo_collection is None:
+            from .mongodb.connection import get_mongo_client, get_database_name
+            collection = get_mongo_client()[get_database_name()]['rate_limits']
+            collection.create_index('expires_at', expireAfterSeconds=0)
+            self._mongo_collection = collection
+        return self._mongo_collection
+
+    def _is_rate_limited_mongo(
+        self, key: str, max_requests: int, window_seconds: int, block_seconds: int, now: float
+    ) -> Tuple[bool, Optional[int], Optional[Dict[str, str]]]:
+        """Sliding window + progressive block, stored in MongoDB so every instance shares it."""
+        from datetime import datetime, timezone
+        from pymongo import ReturnDocument
+
+        collection = self._get_mongo_collection()
+        doc = collection.find_one_and_update(
+            {'_id': key},
+            {'$pull': {'ts': {'$lte': now - window_seconds}}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+
+        blocked_until = doc.get('blocked_until') or 0
+        if now < blocked_until:
+            retry_after = int(blocked_until - now)
+            return True, retry_after, {
+                'Retry-After': str(retry_after),
+                'X-RateLimit-Limit': str(max_requests),
+                'X-RateLimit-Remaining': '0',
+                'X-RateLimit-Reset': str(int(blocked_until)),
+            }
+
+        timestamps = doc.get('ts', [])
+        if len(timestamps) >= max_requests:
+            blocked_until = now + block_seconds
+            collection.update_one({'_id': key}, {'$set': {
+                'blocked_until': blocked_until,
+                'expires_at': datetime.fromtimestamp(blocked_until + window_seconds, tz=timezone.utc),
+            }})
+            return True, block_seconds, {
+                'Retry-After': str(block_seconds),
+                'X-RateLimit-Limit': str(max_requests),
+                'X-RateLimit-Remaining': '0',
+                'X-RateLimit-Reset': str(int(blocked_until)),
+            }
+
+        collection.update_one({'_id': key}, {
+            '$push': {'ts': now},
+            '$set': {'expires_at': datetime.fromtimestamp(now + max(window_seconds, block_seconds), tz=timezone.utc)},
+        })
+        return False, None, {
+            'X-RateLimit-Limit': str(max_requests),
+            'X-RateLimit-Remaining': str(max_requests - len(timestamps) - 1),
+            'X-RateLimit-Reset': str(int(now + window_seconds)),
+        }
     
     def reset(self, identifier: str = None, category: str = None):
         """Reset rate limits for testing purposes."""
+        if _use_mongo_backend():
+            collection = self._get_mongo_collection()
+            if identifier and category:
+                collection.delete_one({'_id': f"{category}:{identifier}"})
+            elif identifier:
+                collection.delete_many({'_id': {'$regex': f":{re.escape(identifier)}$"}})
+            else:
+                collection.delete_many({})
+            return
         with self._lock:
             if identifier and category:
                 key = f"{category}:{identifier}"
@@ -220,6 +303,14 @@ def get_rate_limiter() -> RateLimiter:
     return _rate_limiter
 
 
+def _trusted_proxy_hops() -> int:
+    """Number of trusted proxies in front of the app (TRUSTED_PROXY_HOPS; 0 = legacy first-entry)."""
+    try:
+        return max(int(os.getenv('TRUSTED_PROXY_HOPS', '0')), 0)
+    except ValueError:
+        return 0
+
+
 def get_client_ip(request: Request) -> str:
     """
     Extract client IP from request, handling proxies.
@@ -240,8 +331,14 @@ def get_client_ip(request: Request) -> str:
     
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
-        # Take the first IP in the chain (original client)
-        ip = x_forwarded_for.split(',')[0].strip()
+        hops = _trusted_proxy_hops()
+        chain = [part.strip() for part in x_forwarded_for.split(',') if part.strip()]
+        if hops > 0 and chain:
+            # Each trusted proxy appends the address it saw, so count from the right;
+            # anything further left is client-supplied and can be spoofed.
+            ip = chain[max(len(chain) - hops, 0)]
+        else:
+            ip = chain[0] if chain else request.META.get('REMOTE_ADDR', '0.0.0.0')
     else:
         ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
     

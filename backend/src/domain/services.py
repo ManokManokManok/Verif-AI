@@ -71,7 +71,7 @@ class PasswordValidator:
         if not re.search(r'\d', password):
             errors.append("Password must contain at least one digit")
         
-        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>\[\]\\;\'`~_+=/-]', password):
             errors.append("Password must contain at least one special character")
         
         # Check against common password blacklist
