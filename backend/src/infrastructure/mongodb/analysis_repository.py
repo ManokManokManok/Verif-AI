@@ -6,6 +6,7 @@ Follows the repository pattern for clean architecture separation.
 """
 
 from typing import Optional, List, Dict, Any
+import logging
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -15,6 +16,8 @@ from bson import ObjectId
 from ...domain.analysis_entities import (
     AnalysisResult, AnalysisNotFoundError
 )
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisResultRepository:
@@ -73,7 +76,13 @@ class AnalysisResultRepository:
             query.update(self._active_user_visibility_query())
 
         docs = self.collection.find(query).sort("created_at", -1).limit(limit)
-        return [self._document_to_entity(doc) for doc in docs]
+        entities = []
+        for doc in docs:
+            try:
+                entities.append(self._document_to_entity(doc))
+            except Exception as exc:
+                logger.warning("Skipping malformed analysis document %s: %s", doc.get("_id"), exc)
+        return entities
 
     def get_by_id_for_user(self, analysis_id: str, user_id: str, include_deleted: bool = False) -> Optional[AnalysisResult]:
         """Get analysis by id or ref_id with ownership and visibility checks."""

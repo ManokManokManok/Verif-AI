@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail, deleteAnalysisHistoryItem } from '../api/analysis';
 import {
@@ -116,29 +116,58 @@ function Detection() {
   const [cropImageElement, setCropImageElement] = useState(null);
   const fileInputRef = useRef(null);
 
-  const refreshHistory = useCallback(async () => {
+  const historyInFlightRef = useRef(null);
+
+  const refreshHistory = useCallback((force = false) => {
     if (!isLoggedIn) {
       setChatHistory([]);
       setHistoryError(null);
       setIsHistoryLoading(false);
-      return;
+      return Promise.resolve();
+    }
+    // Share one request between overlapping triggers (focus, pageshow, retry button)
+    if (historyInFlightRef.current) {
+      // force: wait for the running request, then fetch again so newly saved items show up
+      return force === true
+        ? historyInFlightRef.current.then(() => refreshHistory())
+        : historyInFlightRef.current;
     }
 
-    setIsHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const res = await getChatHistory();
-      if (Array.isArray(res?.history)) {
-        setChatHistory(res.history);
-        return;
+    const run = async () => {
+      setIsHistoryLoading(true);
+      const delays = [0, 800, 2000, 4000];
+      let lastError = null;
+      for (let attempt = 0; attempt < delays.length; attempt += 1) {
+        if (delays[attempt]) await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+        try {
+          const res = await getChatHistory();
+          if (!Array.isArray(res?.history)) {
+            throw new Error('The history response did not contain an analysis list.');
+          }
+          setChatHistory(res.history);
+          setHistoryError(null);
+          return;
+        } catch (err) {
+          lastError = err;
+          // Retrying can't fix an expired session; rate limits need a longer pause than we wait here
+          if (err?.isSessionExpired || err?.status === 401 || err?.isRateLimited) break;
+        }
       }
-      throw new Error('The history response did not contain an analysis list.');
-    } catch (err) {
-      console.error('[HISTORY] Failed to load analysis history:', err);
-      setHistoryError('Failed to load analysis history. Please try again.');
-    } finally {
+      console.error('[HISTORY] Failed to load analysis history:', lastError);
+      // Keep any previously loaded list visible; only flag the error
+      setHistoryError(
+        lastError?.isRateLimited
+          ? 'Too many requests. Please wait a moment and retry.'
+          : 'Failed to load analysis history. Please try again.'
+      );
+    };
+
+    const promise = run().finally(() => {
+      historyInFlightRef.current = null;
       setIsHistoryLoading(false);
-    }
+    });
+    historyInFlightRef.current = promise;
+    return promise;
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -241,9 +270,14 @@ function Detection() {
   // Handle click on a chat history item
   const handleChatClick = async (chat) => {
     try {
-      const detail = await getAnalysisDetail(chat.id);
-      console.log('[HISTORY DETAIL]', detail);
-      console.log('[HISTORY DETAIL needs_review]', detail.needs_review);
+      let detail;
+      try {
+        detail = await getAnalysisDetail(chat.id);
+      } catch (firstError) {
+        if (firstError?.status === 401 || firstError?.status === 404) throw firstError;
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        detail = await getAnalysisDetail(chat.id);
+      }
       setDetectionResult(detail);
       setSidebarOpen(false);
     } catch (err) {
@@ -260,7 +294,7 @@ function Detection() {
       if (detectionResult?.id === analysisId) {
         setDetectionResult(null);
       }
-      await refreshHistory();
+      await refreshHistory(true);
     } catch (err) {
       alert('Failed to delete history item. Please try again.');
     } finally {
@@ -343,7 +377,7 @@ function Detection() {
       setDetectionResult(result);
       
       // Refresh history list to include the new detection
-      await refreshHistory();
+      await refreshHistory(true);
     } catch (error) {
       console.error('[DETECTION ERROR]', error);
 
@@ -661,7 +695,9 @@ function Detection() {
                 {historyError && (
                   <div className="chatbot__history-empty" role="alert">
                     <p>{historyError}</p>
-                    <button type="button" onClick={refreshHistory}>Retry</button>
+                    <button type="button" className="detect__historyRetry" onClick={() => refreshHistory()} disabled={isHistoryLoading}>
+                      {isHistoryLoading ? 'Retrying…' : 'Retry'}
+                    </button>
                   </div>
                 )}
                 <ChatHistoryList
@@ -1041,6 +1077,9 @@ function Detection() {
                   {detectionResult.route === 'limited' ? 'Preliminary assessment' : "Couldn't analyze this"}
                 </span>
                 <h2 className="detect__gateTitle">{detectionResult.headline}</h2>
+                {detectionResult.source === 'image' && imagePreview && (
+                  <img src={imagePreview} alt="Your submitted image" className="detect__gateImage" />
+                )}
                 <p className="detect__gateText">{detectionResult.explanation}</p>
                 {detectionResult.observed_signs?.length > 0 && (
                   <div className="detect__gateSection">
@@ -1063,7 +1102,26 @@ function Detection() {
                   </p>
                 )}
                 <div className="detect__gateTips">
-                  <h3>How to get the best result</h3>
+                  <h3>{detectionResult.source === 'image' ? 'What images work best' : 'How to get the best result'}</h3>
+                  {detectionResult.source === 'image' ? (
+                    <ul>
+                      <li>
+                        <strong>Screenshots of the suspicious content.</strong> Text messages, chats, emails, social media posts, ads, payment requests or website pages.
+                      </li>
+                      <li>
+                        <strong>Keep the key details visible.</strong> Sender name or number, links, amounts, deadlines and logos should all be in frame.
+                      </li>
+                      <li>
+                        <strong>Use a clear, uncropped image.</strong> Blurry, dark or heavily cropped images leave too little to analyze. Crop out only unrelated parts.
+                      </li>
+                      <li>
+                        <strong>Split messages fit in one screenshot.</strong> Capture the whole conversation so the context stays together.
+                      </li>
+                      <li>
+                        <strong>Not ideal:</strong> photos of people, places or objects, memes, and AI-generated art have nothing to check for scams.
+                      </li>
+                    </ul>
+                  ) : (
                   <ul>
                     <li>
                       <strong>Paste the full message.</strong> Promo or scam texts work best when complete, e.g.
@@ -1079,6 +1137,7 @@ function Detection() {
                       <strong>One message at a time.</strong> Questions, commands or unrelated text can&apos;t be classified.
                     </li>
                   </ul>
+                  )}
                 </div>
                 <button type="button" className="detect__gateBtn" onClick={handleNewAnalysis}>
                   Try again
