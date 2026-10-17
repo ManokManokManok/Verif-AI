@@ -85,6 +85,7 @@ class AnalysisResult:
     details: Optional[str] = None
     image_attachment: Optional[dict] = None
     key_markers: Optional[list] = None
+    guidance: Optional[Dict[str, Any]] = None
 
     # Low confidence review fields
     needs_review: bool = False
@@ -114,6 +115,7 @@ class AnalysisResult:
         details: Optional[str] = None,
         image_attachment: Optional[dict] = None,
         key_markers: Optional[list] = None,
+        guidance: Optional[Dict[str, Any]] = None,
         needs_review: bool = False,
         review_reason: Optional[str] = None
     ) -> 'AnalysisResult':
@@ -140,6 +142,7 @@ class AnalysisResult:
             details=details,
             image_attachment=image_attachment,
             key_markers=key_markers,
+            guidance=guidance,
             needs_review=needs_review,
             review_reason=review_reason,
             created_at=datetime.utcnow()
@@ -166,6 +169,7 @@ class AnalysisResult:
             "details": self.details,
             "image_attachment": self.image_attachment,
             "key_markers": self.key_markers,
+            "guidance": self.guidance,
             "needs_review": self.needs_review,
             "review_reason": self.review_reason,
             "reviewed_result": self.reviewed_result,

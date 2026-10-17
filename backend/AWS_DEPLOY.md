@@ -19,16 +19,13 @@ docker push <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/verfai-backend:latest
 ```
 If the Hugging Face model repo is private, build with
 `docker build --secret id=hf_token,src=hf_token.txt -t verfai-backend .`.
-To skip the model entirely (LITE_MODE only): `--build-arg BAKE_MODEL=false` (a much smaller image).
 
 ## Deploy
 ```
 sam deploy --stack-name verfai --region us-east-1 --capabilities CAPABILITY_IAM --resolve-s3 --guided
 ```
 Answer the prompts: ImageUri, FrontendOrigin (your Vercel URL), BudgetEmail, the secrets
-(DjangoSecretKey, JwtSecretKey, MongoUri, GeminiApiKey, EmailUser, EmailAppPassword), and LiteMode
-(`true` = Gemini does everything, the BERT model is never loaded; `false` = BERT is used, slower cold starts).
-The output `ApiUrl` goes into Vercel as `VITE_API_BASE_URL`, then redeploy the frontend.
+(DjangoSecretKey, JwtSecretKey, MongoUri, GeminiApiKey, EmailUser, EmailAppPassword).The output `ApiUrl` goes into Vercel as `VITE_API_BASE_URL`, then redeploy the frontend.
 If you use a region other than us-east-1, edit `DJANGO_ALLOWED_HOSTS` in `template.yaml`.
 
 ## Failsafes built in
@@ -46,12 +43,10 @@ If you use a region other than us-east-1, edit `DJANGO_ALLOWED_HOSTS` in `templa
 Find the function name with `aws lambda list-functions --query "Functions[].FunctionName"`.
 
 ## Notes
-- New accounts cap Lambda memory at 512 MB, so the deployment uses `LiteMode=true` (about 150 MB used).
-  BERT needs about 1.65 GB: once AWS lifts the cap (it happens automatically with usage, or via a Service
-  Quotas request), redeploy with `MemoryMb=2048` and `LiteMode=false`.
+- New accounts cap Lambda memory at 512 MB. The ONNX model needs about 1 GB: once AWS lifts the cap
+  (automatically with usage, or via a Service Quotas request), redeploy with `MemoryMb=1024`.
 - Gemini free tier is only ~20 requests/day per model; the app falls back through the other configured models.
   Enable billing on the Gemini key if you expect real traffic.
-- With LiteMode=false the first request after idle takes ~10-30 s (model load). Later requests are fast.
-- The first request after idle in lite mode takes ~10-20 s (cold start).
+- The first request after idle takes ~10-20 s (cold start). Later requests are fast.
 - Anonymous (guest) chatbot history is kept in instance memory and can reset between Lambda instances.
 - Redeploy after pushing a new image: `sam deploy` with the new ImageUri (use a new tag).
