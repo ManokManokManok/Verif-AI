@@ -30,6 +30,44 @@ class ScamDetectionUseCase:
         # That can suppress obvious text-only scams, so default is now disabled.
         self.bias_penalty = float(os.getenv("SCAM_NO_LINK_BIAS_PENALTY", "0.0"))
     
+    def _detect_onnx(self, message: str) -> Dict[str, Any]:
+        """Same scoring as the torch path, computed with numpy on ONNX logits."""
+        import numpy as np
+
+        scam_logits, type_logits = self.model.predict(message)
+        scam_logits = scam_logits.astype(np.float64)
+        type_logits = type_logits.astype(np.float64)
+
+        link_patterns = r'https?://|www\.|bit\.ly|t\.co|goo\.gl|tinyurl\.com'
+        if self.bias_penalty > 0 and not re.search(link_patterns, message, re.IGNORECASE):
+            scam_logits[:, 1] -= self.bias_penalty
+
+        def softmax(values):
+            shifted = values - values.max(axis=1, keepdims=True)
+            exp = np.exp(shifted)
+            return (exp / exp.sum(axis=1, keepdims=True))[0]
+
+        scam_probs = softmax(scam_logits / self.temperature)
+        type_probs = softmax(type_logits / self.temperature)
+
+        scam_score = float(scam_probs[1]) * 100
+        legit_score = float(scam_probs[0]) * 100
+        is_scam = scam_score > legit_score
+        top_type_idx = int(np.argmax(type_probs))
+        scam_type = self.scam_types.get(top_type_idx, "Unknown")
+        type_confidence = float(type_probs[top_type_idx]) * 100
+
+        result = {
+            "scam_score": round(scam_score, 2),
+            "legit_score": round(legit_score, 2),
+            "is_scam": is_scam,
+            "label": "Scam" if is_scam else "Not Scam",
+            "scam_type": scam_type if is_scam else None,
+            "type_confidence": round(type_confidence, 2) if is_scam else None,
+        }
+        logger.info(f"Detection result: {result['label']} (Scam: {result['scam_score']:.1f}%, Legit: {result['legit_score']:.1f}%)")
+        return result
+
     def detect(self, message: str) -> Dict[str, Any]:
         """
         Analyze a message for scam indicators.
@@ -45,11 +83,14 @@ class ScamDetectionUseCase:
                 - scam_type: The most likely type of scam (if is_scam)
                 - type_confidence: Confidence in the scam type classification (0-100)
         """
+        logger.info(f"Analyzing message: {message[:100]}...")
+
+        if getattr(self.model, "is_onnx", False):
+            return self._detect_onnx(message)
+
         # Imported lazily so the app starts without loading torch (e.g. LITE_MODE).
         import torch
         import torch.nn.functional as F
-
-        logger.info(f"Analyzing message: {message[:100]}...")
         
         # Tokenize input
         inputs = self.tokenizer(message, return_tensors="pt", truncation=True)

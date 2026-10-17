@@ -58,6 +58,17 @@ def _user_analysis_title(result, reviewed_result):
     return "Admin-reviewed: Legitimate"
 
 
+def _guidance_fields(result):
+    """Flatten the saved AI guidance; older records have none."""
+    guidance = getattr(result, "guidance", None) or {}
+    return {
+        "score_explanation": guidance.get("score_explanation", ""),
+        "missing_context": guidance.get("missing_context", []),
+        "suggested_action": guidance.get("suggested_action", ""),
+        "avoid": guidance.get("avoid", []),
+    }
+
+
 def _public_analysis_result_fields(result, reviewed_result):
     """Use the published admin decision for all user-facing classification fields."""
     if not reviewed_result:
@@ -71,6 +82,7 @@ def _public_analysis_result_fields(result, reviewed_result):
             "summary": result.summary or "",
             "details": result.details or "",
             "key_markers": result.key_markers or [],
+            **_guidance_fields(result),
             "risk_score": None,
             "risk_level": None,
             "needs_review": result.needs_review,
@@ -1812,6 +1824,10 @@ def detect_scam(request: Request) -> Response:
             llm_result = {
                 'summary': gemini_result.pop('summary'),
                 'key_markers': gemini_result.pop('key_markers'),
+                'score_explanation': gemini_result.pop('score_explanation', ''),
+                'missing_context': gemini_result.pop('missing_context', []),
+                'suggested_action': gemini_result.pop('suggested_action', ''),
+                'avoid': gemini_result.pop('avoid', []),
             }
             bert_result = gemini_result
 
@@ -1902,6 +1918,12 @@ def detect_scam(request: Request) -> Response:
                 summary=llm_result.get('summary'),
                 details=llm_result.get('details'),
                 key_markers=llm_result.get('key_markers'),
+                guidance={
+                    'score_explanation': llm_result.get('score_explanation', ''),
+                    'missing_context': llm_result.get('missing_context', []),
+                    'suggested_action': llm_result.get('suggested_action', ''),
+                    'avoid': llm_result.get('avoid', []),
+                },
                 needs_review=preliminary_check.needs_review,
                 review_reason=preliminary_check.review_reason,
             )
