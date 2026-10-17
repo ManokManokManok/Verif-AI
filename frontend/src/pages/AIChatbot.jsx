@@ -18,6 +18,7 @@ import AppNavLinks from '../components/AppNavLinks';
 import { useTheme } from '../context/ThemeContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 import ChatHistoryList from '../components/ChatHistoryList';
+import SafetyNotice from '../components/SafetyNotice';
 
 function AIChatbot() {
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -224,6 +225,17 @@ function AIChatbot() {
   useEffect(() => {
     if (location.state) {
       const { conversationId, conversationType: navType, analysisContext: navContext, initialMessages } = location.state;
+
+      if (location.state.prefillMessage) {
+        setConversationType('general');
+        setCurrentConversationId(null);
+        setCurrentTitle('Message guidance');
+        setAnalysisContext(null);
+        setMessages([]);
+        setText(`I received this message. Can you explain what is going on, and what should I do or keep in mind legally?\n\n"${String(location.state.prefillMessage).slice(0, 1500)}"`);
+        window.history.replaceState({}, document.title);
+        return;
+      }
 
       if (location.state.guidanceCategory) {
         const category = String(location.state.guidanceCategory).slice(0, 100);
@@ -1020,6 +1032,7 @@ function AIChatbot() {
                 {text.length} / 2000
               </div>
             )}
+            <SafetyNotice className="safetyNotice--chat" />
           </div>
         </main>
 

@@ -43,6 +43,12 @@ def test_parse_clamps_and_legit():
     assert result['summary']
 
 
+@pytest.mark.parametrize('score,expected', [(39, 39.0), (40, 60.0), (50, 65.0), (59, 65.0), (60, 60.0)])
+def test_parse_avoids_fence_sitting(score, expected):
+    result = GeminiClassificationUseCase.parse_response(json.dumps({'scam_score': score}), 50)
+    assert result['scam_score'] == expected
+
+
 def test_parse_rejects_non_object():
     with pytest.raises(ValueError):
         GeminiClassificationUseCase.parse_response('[1]')

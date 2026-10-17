@@ -40,5 +40,8 @@ coverage/
 logs/
 *.log
 
+# 680 MB ONNX model: exceeds GitHub's file limit; it is bundled into the Docker image from disk
+/models/onnx/*.onnx
+
 /frontend/node_modules/
 /frontend/dist/
