@@ -9,7 +9,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.infrastructure.ai import loaders
 from huggingface_hub import hf_hub_download
 
-def test_multihead_model_source():
+def test_multihead_model_source(monkeypatch):
+    # This test checks the HF/safetensors source, so force the torch backend
+    monkeypatch.setenv('MODEL_BACKEND', 'torch')
     # Load the model using the loader
     tokenizer, model, scam_types = loaders.load_multihead_model()
 

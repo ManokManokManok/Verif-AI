@@ -12,6 +12,5 @@ tests
 scripts
 .git
 *.gguf
-models
 template.yaml
 samconfig.toml

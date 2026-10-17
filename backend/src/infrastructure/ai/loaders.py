@@ -39,6 +39,20 @@ def load_multihead_model() -> Tuple[object, object, dict]:
     if _multihead_cache is not None:
         return _multihead_cache
 
+    # Prefer the bundled ONNX export (no torch, no download); MODEL_BACKEND=torch skips it.
+    if os.getenv('MODEL_BACKEND', 'auto').strip().lower() != 'torch':
+        from src.infrastructure.ai.onnx_model import find_onnx_assets, OnnxMultiHead
+        from src.domain.scam_types import scam_types
+
+        assets = find_onnx_assets()
+        if assets:
+            try:
+                onnx_model = OnnxMultiHead(*assets)
+                _multihead_cache = (onnx_model.tokenizer, onnx_model, scam_types)
+                return _multihead_cache
+            except Exception as exc:
+                logger.error('ONNX model failed to load, falling back to torch: %s', exc)
+
     # Local imports to keep dependencies optional until used
     from transformers import AutoTokenizer, AutoModel  # type: ignore
     from safetensors.torch import load_file  # type: ignore

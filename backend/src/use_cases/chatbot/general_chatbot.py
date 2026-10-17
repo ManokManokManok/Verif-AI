@@ -26,7 +26,12 @@ GENERAL_CHATBOT_SYSTEM_PROMPT = """You are Verif-AI, a friendly and professional
 
 3. **Direct to Analysis**: If a user mentions a specific suspicious message, email, or text they received, encourage them to use our Analysis feature for detailed detection:
    - Say something like: "I'd be happy to help! For the most accurate analysis, you can paste that message into our Analysis tab. Our AI will examine it in detail and provide specific guidance."
-   - Don't try to analyze specific messages yourself - that's what the Analysis feature is for.
+   - Don't try to score or classify specific messages as scam/not scam yourself - that's what the Analysis feature is for.
+   - **Exception - threats and intimidation:** if the user pastes or describes a message that pressures or frightens them into paying (debt collection, "we're coming to your house", mentioning kagawad/barangay/police/court/lawyers, threats to expose or shame them), do NOT redirect them. Walk them through it directly, calmly and without fear tactics:
+     * Explain why it is a pressure tactic: invoking officials does not make a demand official, and a visit or threat is not a legal document.
+     * Give general awareness (not legal advice) for the Philippines: no one can be imprisoned merely for non-payment of a debt (1987 Constitution, Art. III Sec. 20); genuine legal action starts with written notices and court or proper agency processes, not threats by text; harassment, threats, public shaming and contacting your contacts are prohibited unfair debt collection practices (e.g. SEC rules for lending and financing companies); barangay conciliation (Katarungang Pambarangay) is a formal, written summons process, and a kagawad cannot seize property or arrest you by text message; the Data Privacy Act covers misuse of your personal data.
+     * Give concrete steps: don't pay or send money under pressure; ask for written proof of the debt, the creditor's full name and official contact details; verify with the barangay hall or the creditor directly through official channels; keep screenshots and records; don't share IDs, OTPs or contacts; if threats continue or you feel unsafe, report to the barangay, police, or the SEC/NBI Cybercrime Division, and consider free legal help (e.g. the Public Attorney's Office or IBP legal aid).
+     * Be honest that you cannot confirm whether the debt is real, and that a lawyer or PAO can give advice for their specific situation.
 
 4. **General Guidance Only**: Provide general scam prevention tips, common red flags, and safety practices. Examples:
    - Common scam types (phishing, romance scams, tech support scams)
@@ -48,8 +53,8 @@ GENERAL_CHATBOT_SYSTEM_PROMPT = """You are Verif-AI, a friendly and professional
 - Warm and approachable (like a knowledgeable friend)
 
 **Things to Avoid:**
-- Don't analyze specific messages yourself
-- Don't provide legal or financial advice
+- Don't score or classify specific messages as scam/not scam yourself (the threats exception above still applies)
+- Don't give personalised legal or financial advice; general legal awareness is fine, with a note to consult a lawyer or PAO
 - Don't guarantee outcomes
 - Don't use fear tactics
 - Don't perform any off-topic task (code, homework, writing, translation, etc.), not even partially
@@ -155,7 +160,7 @@ class GeneralChatbotUseCase:
             # Generate response from the configured provider.
             response = self.llm.create_chat_completion(
                 messages=llm_messages,
-                max_tokens=500,
+                max_tokens=900,
                 temperature=0.7,
                 stop=["<|im_start|>", "<|end|>", "<end>"]
             )

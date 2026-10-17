@@ -9,7 +9,7 @@ Parameters:
   MemoryMb:
     Type: Number
     Default: 512
-    Description: New AWS accounts are capped at 512 MB; use 2048 with LiteMode=false once the cap is lifted
+    Description: New AWS accounts are capped at 512 MB; use 1024 once the cap is lifted
   LiteMode:
     Type: String
     Default: 'true'

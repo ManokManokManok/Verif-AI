@@ -15,6 +15,7 @@ import ChatHistoryList from '../components/ChatHistoryList';
 import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 import { ReportModal, MyReportModal } from '../components/reports';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
+import SafetyNotice from '../components/SafetyNotice';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
@@ -44,6 +45,19 @@ function getReviewExplanation(reviewReason) {
 
 function formatReviewRiskLevel(riskLevel) {
   return riskLevel?.replaceAll('_', ' ') || '';
+}
+
+const RISK_BANDS = [
+  { label: 'Very low', range: '0–20%', max: 20 },
+  { label: 'Low', range: '21–40%', max: 40 },
+  { label: 'Moderate', range: '41–60%', max: 60 },
+  { label: 'High', range: '61–80%', max: 80 },
+  { label: 'Very high', range: '81–100%', max: 100 },
+];
+
+function getRiskBandIndex(score) {
+  const index = RISK_BANDS.findIndex((band) => score <= band.max);
+  return index === -1 ? RISK_BANDS.length - 1 : index;
 }
 
 function Detection() {
@@ -1081,7 +1095,9 @@ function Detection() {
             <div className="detect__results" role="region" aria-label="Gatekeeper result">
               <div className={`detect__gate detect__gate--${detectionResult.route} detect__gate--${detectionResult.caution_level || 'none'}`}>
                 <span className="detect__gateBadge">
-                  {detectionResult.route === 'limited' ? 'Preliminary assessment' : "Couldn't analyze this"}
+                  {detectionResult.route === 'limited'
+                    ? (detectionResult.reason_code === 'threat' ? 'Possible intimidation' : 'Preliminary assessment')
+                    : "Couldn't analyze this"}
                 </span>
                 <h2 className="detect__gateTitle">{detectionResult.headline}</h2>
                 {detectionResult.source === 'image' && imagePreview && (
@@ -1103,11 +1119,17 @@ function Detection() {
                 {detectionResult.suggested_action && (
                   <p className="detect__gateAction">{detectionResult.suggested_action}</p>
                 )}
-                {detectionResult.route === 'limited' && (
+                {detectionResult.route === 'limited' && detectionResult.reason_code !== 'threat' && (
                   <p className="detect__gateNote">
                     This is not a full analysis and has no risk score. Paste the complete message for a full result.
                   </p>
                 )}
+                {detectionResult.reason_code === 'threat' && (
+                  <p className="detect__gateNote">
+                    This is not a scam score. Verif-AI can&apos;t confirm whether the debt is real, but the pressure tactics are a warning sign.
+                  </p>
+                )}
+                {detectionResult.reason_code !== 'threat' && (
                 <div className="detect__gateTips">
                   <h3>{detectionResult.source === 'image' ? 'What images work best' : 'How to get the best result'}</h3>
                   {detectionResult.source === 'image' ? (
@@ -1146,9 +1168,20 @@ function Detection() {
                   </ul>
                   )}
                 </div>
+                )}
+                {detectionResult.reason_code === 'threat' && (
+                  <button
+                    type="button"
+                    className="detect__gateBtn"
+                    onClick={() => navigate('/chatbot', { state: { prefillMessage: detectionResult.message } })}
+                  >
+                    Open guidance chat
+                  </button>
+                )}
                 <button type="button" className="detect__gateBtn" onClick={handleNewAnalysis}>
                   Try again
                 </button>
+                <SafetyNotice />
               </div>
             </div>
           ) : (
@@ -1280,6 +1313,38 @@ function Detection() {
                       {detectionResult.message}
                     </div>
                   )}
+                  {!reviewedResult && (detectionResult.score_explanation || detectionResult.suggested_action || detectionResult.avoid?.length > 0) && (
+                    <div className="detect__scoreAdvice">
+                      <h4 className="detect__cardSubtitle">Likelihood Explanation</h4>
+                      <p className="detect__summary">
+                        <strong>{(detectionResult.scam_score ?? 0).toFixed(0)}%</strong> was the detected risk, which is{' '}
+                        <strong>{RISK_BANDS[getRiskBandIndex(detectionResult.scam_score ?? 0)].label.toLowerCase()}</strong>.{' '}
+                        {getRiskBandIndex(detectionResult.scam_score ?? 0) >= 3
+                          ? 'We suggest using Ask AI for Guidance for this result, and being cautious in the meantime.'
+                          : getRiskBandIndex(detectionResult.scam_score ?? 0) === 2
+                            ? 'The signs are mixed, so double-check before acting on it.'
+                            : 'Few scam signs were found, but stay alert.'}
+                      </p>
+                      {detectionResult.score_explanation && (
+                        <p className="detect__summary"><strong>Why this score:</strong> {detectionResult.score_explanation}</p>
+                      )}
+                      {detectionResult.avoid?.length > 0 && (
+                        <>
+                          <h4 className="detect__cardSubtitle">Don&apos;t</h4>
+                          <ul>{detectionResult.avoid.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                        </>
+                      )}
+                      {detectionResult.suggested_action && (
+                        <p className="detect__summary"><strong>Instead:</strong> {detectionResult.suggested_action}</p>
+                      )}
+                      {detectionResult.missing_context?.length > 0 && (
+                        <>
+                          <h4 className="detect__cardSubtitle">What could change this</h4>
+                          <ul>{detectionResult.missing_context.map((m, i) => <li key={i}>{m}</li>)}</ul>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Likelihood Graph */}
@@ -1327,9 +1392,31 @@ function Detection() {
                         : (displayedIsScam ? 'Likely to be a scam' : 'Likely to be legit')}
                     </span>
                   </div>
+                  {!reviewedResult && (
+                    <div className="detect__scoreInfo">
+                      <p className="detect__scoreNote">
+                        AI-estimated scam risk. Higher scores mean stronger scam indicators. This is an estimate, not proof.
+                      </p>
+                      <div className="detect__legend" role="list" aria-label="Risk score guide">
+                        {RISK_BANDS.map((band, i) => (
+                          <div
+                            key={band.label}
+                            role="listitem"
+                            className={`detect__legendBand detect__legendBand--${i}${i === getRiskBandIndex(detectionResult.scam_score ?? 0) ? ' detect__legendBand--active' : ''}`}
+                          >
+                            <strong>{band.label}</strong>
+                            <span>{band.range}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="detect__scoreNote">
+                        This score is{' '}
+                        <strong>{RISK_BANDS[getRiskBandIndex(detectionResult.scam_score ?? 0)].label.toLowerCase()}</strong>.
+                        The ranges are an equal-width guide to help you read the score, not a measured probability.
+                      </p>
+                    </div>
+                  )}
                 </div>
-
-                {/* Details & Markers */}
                 <div className="detect__resultCard detect__resultCard--details detect__resultCard--animate">
                   <h3 className="detect__cardTitle">
                     {reviewedResult ? 'Admin-verified details' : 'Details'}
