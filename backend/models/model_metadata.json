@@ -1,0 +1,16 @@
+{
+  "accuracy": 95.6,
+  "correct": 956,
+  "n": 1000,
+  "confidence_level": 0.95,
+  "ci_low": 94.14,
+  "ci_high": 96.71,
+  "margin_of_error": 1.28,
+  "method": "Wilson score interval",
+  "split": {
+    "test_fraction": 0.2,
+    "seed": 42,
+    "dataset_size": 5002
+  },
+  "evaluated_at": "2026-10-18T15:35:20+00:00"
+}

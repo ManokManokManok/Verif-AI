@@ -12,6 +12,7 @@ from src.interfaces.rest.views import (
 urlpatterns = [
     path('health/', views.health, name='health'),
     path('models/status/', views.models_status, name='models_status'),
+    path('model-info/', views.model_info, name='model_info'),
     path('detect/', views.detect_scam, name='detect_scam'),
     path('extract-text/', extract_text_from_image, name='extract_text'),
     path('history/', history, name='history'),

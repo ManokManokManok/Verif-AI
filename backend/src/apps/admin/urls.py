@@ -13,6 +13,7 @@ urlpatterns = [
     # Model Health - Tab 1
     path('model-health/', views.model_health, name='model_health'),
     path('model-health/summary/', views.model_health_summary, name='model_health_summary'),
+    path('model-info/', views.admin_model_info, name='admin_model_info'),
     
     # Analysis Statistics - Tab 2
     path('analysis-stats/', views.analysis_stats, name='analysis_stats'),

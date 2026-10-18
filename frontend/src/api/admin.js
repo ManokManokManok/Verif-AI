@@ -165,6 +165,30 @@ export async function getModelHealthSummary() {
   });
 }
 
+// ==================== Model Info ====================
+
+/**
+ * Get model accuracy info and the admin-set dataset update month
+ * @returns {Promise<Object>} Model info
+ */
+export async function getAdminModelInfo() {
+  return authApiRequest('/admin/model-info/', {
+    method: 'GET',
+  });
+}
+
+/**
+ * Set the month/year the dataset was last updated (shown to all users)
+ * @param {string} datasetUpdated - Month in YYYY-MM format
+ * @returns {Promise<Object>} Updated model info
+ */
+export async function updateDatasetUpdated(datasetUpdated) {
+  return authApiRequest('/admin/model-info/', {
+    method: 'PUT',
+    body: JSON.stringify({ dataset_updated: datasetUpdated }),
+  });
+}
+
 // ==================== Analysis Statistics ====================
 
 /**

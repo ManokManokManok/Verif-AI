@@ -16,6 +16,7 @@ import { validateMessage, escapeHtml, CONSTRAINTS } from '../utils/validation';
 import { ReportModal, MyReportModal } from '../components/reports';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 import SafetyNotice from '../components/SafetyNotice';
+import ModelAccuracyNote from '../components/ModelAccuracyNote';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
@@ -1469,6 +1470,7 @@ function Detection() {
                       </ul>
                     </div>
                   )}
+                  <ModelAccuracyNote />
                 </div>
               </div>
             </div>
