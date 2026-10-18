@@ -26,6 +26,7 @@ from ...infrastructure.mongodb.admin_repository import AdminRepository
 from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
 from ...infrastructure.mongodb.repositories import MongoDBUserRepository
 from ...infrastructure.system.metrics_collector import get_metrics_collector
+from ...infrastructure.model_info import build_model_info, parse_month, set_dataset_updated
 from ...infrastructure.jwt_service import JWTService
 from ...use_cases.admin.model_health import GetModelHealthUseCase
 from ...use_cases.admin.analysis_stats import (
@@ -444,6 +445,44 @@ def model_health_summary(request: Request) -> Response:
                 'message': 'Failed to retrieve health summary'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ==================== Model Info (dataset recency) ====================
+
+@api_view(['GET', 'PUT'])
+@rate_limit('api_write')
+def admin_model_info(request: Request) -> Response:
+    """
+    GET: current model info. PUT: set the 'dataset last updated' month.
+
+    Body (PUT): {"dataset_updated": "YYYY-MM"}
+    Requires: admin role
+    """
+    auth_error = require_admin(request)
+    if auth_error:
+        return auth_error
+
+    if request.method == 'PUT':
+        month = parse_month(request.data.get('dataset_updated'))
+        if not month:
+            return Response({
+                'success': False,
+                'error': {
+                    'code': 'INVALID_INPUT',
+                    'message': 'dataset_updated must be a month in YYYY-MM format'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            admin_id, _, _ = extract_user_from_request(request)
+            set_dataset_updated(month, admin_id)
+        except Exception as e:
+            logger.error(f"Model info update error: {e}", exc_info=True)
+            return Response({
+                'success': False,
+                'error': {'code': 'INTERNAL_ERROR', 'message': 'Failed to update model info'}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({'success': True, 'data': build_model_info()}, status=status.HTTP_200_OK)
 
 
 # ==================== Analysis Statistics Endpoints ====================

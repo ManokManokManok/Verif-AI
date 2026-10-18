@@ -1,0 +1,113 @@
+.modelNote {
+  margin-top: 20px;
+}
+
+.modelNote__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.6);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.modelNote__toggle:hover,
+.modelNote__toggle:focus-visible {
+  color: #e2e8f0;
+}
+
+.modelNote__chevron {
+  transition: transform 0.3s ease;
+}
+
+.modelNote--open .modelNote__chevron {
+  transform: rotate(180deg);
+}
+
+/* Animates height without measuring: 0fr -> 1fr */
+.modelNote__panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.3s ease, opacity 0.3s ease;
+}
+
+.modelNote--open .modelNote__panel {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.modelNote__panelInner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.modelNote__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.modelNote__text {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.modelNote__info {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(226, 232, 240, 0.45);
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.7);
+  font: italic 700 12px/1 Georgia, serif;
+  cursor: pointer;
+}
+
+.modelNote__info:hover,
+.modelNote__info:focus-visible {
+  border-color: #e2e8f0;
+  color: #e2e8f0;
+}
+
+.modelNote__popover {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.modelNote__popover p {
+  margin: 0 0 8px;
+}
+
+.modelNote__popover p:last-child {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modelNote__panel,
+  .modelNote__chevron {
+    transition: none;
+  }
+}
