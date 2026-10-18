@@ -606,6 +606,10 @@ export async function logoutRequest() {
   }
 }
 
+export async function getModelInfoRequest() {
+  return apiRequest('/model-info/', { method: 'GET' });
+}
+
 export async function detectScamRequest(message) {
   // Client-side validation
   const validation = validateDetectionForm({ message });

@@ -6,6 +6,7 @@ from ...interfaces.rest.admin_views import (
     # Model Health
     model_health,
     model_health_summary,
+    admin_model_info,
     # Analysis Statistics
     analysis_stats,
     top_scam_categories,
@@ -28,7 +29,7 @@ from ...interfaces.rest.admin_views import (
 __all__ = [
     'model_health',
     'model_health_summary',
-    'analysis_stats',
+    'admin_model_info',
     'top_scam_categories',
     'export_analysis_stats',
     'user_stats',

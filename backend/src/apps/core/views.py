@@ -1,6 +1,7 @@
 from django.http import JsonResponse
 from src.infrastructure.ai.loaders import models_status as get_models_status
 from src.infrastructure.ai.genai_provider import genai_status
+from src.infrastructure.model_info import build_model_info
 from src.interfaces.rest.views import detect_scam
 
 def health(_request):
@@ -8,6 +9,11 @@ def health(_request):
         'status': 'ok',
         'service': 'verfai-api',
     })
+
+
+def model_info(_request):
+    """Public: model accuracy / margin of error and when the dataset was last updated."""
+    return JsonResponse({'success': True, 'data': build_model_info()})
 
 
 def models_status(_request):

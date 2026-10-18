@@ -14,6 +14,7 @@ import {
 import { useModelHealth } from '../../../hooks/useAdminData';
 import SystemGaugeCard from './components/SystemGaugeCard';
 import SystemInfoCard from './components/SystemInfoCard';
+import DatasetUpdatedCard from './components/DatasetUpdatedCard';
 import { formatBytes, formatUptime } from './utils';
 import './ModelHealth.css';
 
@@ -247,6 +248,11 @@ export default function ModelHealth({ onNotify }) {
           subtitle={`Hit rate (${formatBytes(metrics.cache_size)} cached)`}
           variant={metrics.cache_hit_rate > 80 ? 'success' : metrics.cache_hit_rate > 50 ? 'default' : 'warning'}
         />
+      </div>
+
+      {/* Dataset recency (shown to all users) */}
+      <div className="admin-mt-4">
+        <DatasetUpdatedCard onNotify={onNotify} />
       </div>
 
       {/* System Info Card */}
