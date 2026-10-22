@@ -49,6 +49,43 @@ def test_parse_avoids_fence_sitting(score, expected):
     assert result['scam_score'] == expected
 
 
+def test_low_scores_default_to_zero():
+    for score, expected in [(1.4, 0.0), (15, 0.0), (20, 0.0), (20.5, 20.5)]:
+        result = GeminiClassificationUseCase.parse_response(json.dumps({'scam_score': score}), 50)
+        assert result['scam_score'] == expected
+        assert result['legit_score'] == 100.0 - expected
+        assert result['is_scam'] is False
+
+
+def test_percentages_follow_the_displayed_low_score():
+    raw = json.dumps({'scam_score': 12.4, 'summary': 'Only 12% risk.', 'score_explanation': 'About 88% legit.'})
+    result = GeminiClassificationUseCase.parse_response(raw, 50)
+    assert result['summary'] == 'Only 0% risk.'
+    assert result['score_explanation'] == 'About 100% legit.'
+
+
+def test_bare_and_unit_forms_of_the_raw_score_are_rewritten():
+    raw = json.dumps({
+        'scam_score': 1.25,
+        'summary': 'It scored 1.25 out of 100 here.',
+        'score_explanation': 'A score of 1.25 reflects minimal risk; the risk is 1.25%, or 1.25/100. It has 1 pickup point and 2 steps.',
+        'key_markers': ['Risk score 1.25'],
+    })
+    result = GeminiClassificationUseCase.parse_response(raw, 50)
+    assert '1.25' not in json.dumps(result)
+    assert result['summary'] == 'It scored 0 out of 100 here.'
+    assert result['score_explanation'].startswith('A score of 0 reflects minimal risk; the risk is 0%, or 0/100.')
+    assert '1 pickup point and 2 steps' in result['score_explanation']
+
+
+def test_percentages_in_prose_match_exact_score():
+    raw = json.dumps({'scam_score': 85.5, 'summary': 'Likelihood is 86% scam.',
+                      'score_explanation': 'About 86% risk, and 14% legit, 40% unrelated.'})
+    result = GeminiClassificationUseCase.parse_response(raw, 50)
+    assert result['summary'] == 'Likelihood is 85.5% scam.'
+    assert result['score_explanation'] == 'About 85.5% risk, and 14.5% legit, 40% unrelated.'
+
+
 def test_parse_rejects_non_object():
     with pytest.raises(ValueError):
         GeminiClassificationUseCase.parse_response('[1]')

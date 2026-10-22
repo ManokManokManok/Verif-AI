@@ -4,7 +4,8 @@
 param(
     [string]$LiteMode = 'true',
     [string]$MemoryMb = '512',
-    [string]$FrontendOrigin = 'https://verif-ai-frontend.vercel.app',
+    [string]$FrontendOrigin = 'https://verif-ai-site.vercel.app',
+    [string]$LegacyFrontendOrigin = 'https://verif-ai-frontend.vercel.app',
     [string]$BudgetEmail = 'kenchitomeldan@gmail.com',
     [string]$Region = 'us-east-1'
 )
@@ -38,7 +39,7 @@ $emailUser = Get-EnvVal 'EMAIL_HOST_USER'
 if (-not $emailUser) { $emailUser = Get-EnvVal 'NODEMAILER_USER' }
 
 $params = @(
-    "ImageUri=$image", "FrontendOrigin=$FrontendOrigin", "BudgetEmail=$BudgetEmail",
+    "ImageUri=$image", "FrontendOrigin=$FrontendOrigin", "LegacyFrontendOrigin=$LegacyFrontendOrigin", "BudgetEmail=$BudgetEmail",
     "LiteMode=$LiteMode", "MemoryMb=$MemoryMb",
     "DjangoSecretKey=$(Get-EnvVal 'DJANGO_SECRET_KEY')", "JwtSecretKey=$(Get-EnvVal 'JWT_SECRET_KEY')",
     "MongoUri=$(Get-EnvVal 'MONGODB_URI')", "GeminiApiKey=$(Get-EnvVal 'GEMINI_API_KEY')",

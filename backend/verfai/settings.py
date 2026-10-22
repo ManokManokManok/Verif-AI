@@ -136,6 +136,7 @@ else:
 # Allow preview deployments belonging to this Vercel project, without allowing
 # arbitrary Vercel-hosted sites to make cross-origin requests.
 CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^https://verif-ai-site-[a-z0-9-]+-manokmanokmanok\.vercel\.app$',
     r'^https://verif-ai-frontend-[a-z0-9-]+-manokmanokmanok\.vercel\.app$',
 ]
 

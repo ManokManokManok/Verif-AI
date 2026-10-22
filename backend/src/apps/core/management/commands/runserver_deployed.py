@@ -14,7 +14,8 @@ REPOSITORY_DIR = BACKEND_DIR.parent
 SERVER_ADDRESS = '127.0.0.1'
 SERVER_PORT = 8000
 TUNNEL_HOST = 'http://127.0.0.1:8000'
-VERCEL_ORIGIN = 'https://verif-ai-frontend.vercel.app'
+VERCEL_ORIGIN = 'https://verif-ai-site.vercel.app'
+LEGACY_VERCEL_ORIGIN = 'https://verif-ai-frontend.vercel.app'
 
 
 def _powershell_literal(value: str) -> str:
@@ -71,7 +72,7 @@ class Command(BaseCommand):
             'DJANGO_SECRET_KEY': get_random_secret_key(),
             'DJANGO_DEBUG': 'False',
             'DJANGO_ALLOWED_HOSTS': 'localhost,127.0.0.1,.trycloudflare.com',
-            'CORS_ALLOWED_ORIGINS': VERCEL_ORIGIN,
+            'CORS_ALLOWED_ORIGINS': f'{VERCEL_ORIGIN},{LEGACY_VERCEL_ORIGIN}',
             'FRONTEND_URL': VERCEL_ORIGIN,
             'DJANGO_TRUST_PROXY_SSL': 'True',
             'MFA_ENABLED': 'True',

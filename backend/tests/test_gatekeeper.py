@@ -1,3 +1,5 @@
+import json
+
 from src.use_cases.ai.gatekeeper import GatekeeperUseCase, parse_gatekeeper_response
 
 
@@ -75,3 +77,73 @@ def test_ordinary_messages_not_flagged_as_threats():
         llm = FakeLLM('{"route":"analyze"}')
         assert GatekeeperUseCase(llm).evaluate(text)['route'] == 'analyze'
         assert llm.calls == 1
+
+
+
+def _gate(message, route, code, **extra):
+    fields = {'route': route, 'reason_code': code, 'headline': 'Tailored headline',
+              'explanation': 'Tailored text.', 'suggested_action': 'Tailored tip.', 'caution_level': 'unclear'}
+    fields.update(extra)
+    return GatekeeperUseCase(FakeLLM(json.dumps(fields))).evaluate(message)
+
+
+def test_ai_wording_is_kept_for_inconclusive_and_low_risk():
+    vague = _gate('We need to talk about your account soon', 'limited', 'too_vague')
+    assert vague['route'] == 'limited' and vague['headline'] == 'Tailored headline'
+    harmless = _gate('Your parcel is ready at the branch', 'rejected', 'low_risk', caution_level='none')
+    assert harmless['reason_code'] == 'low_risk' and harmless['headline'] == 'Tailored headline'
+
+
+def test_reasoning_field_is_ignored_in_output():
+    result = _gate('hello there friend', 'limited', 'too_vague', reasoning='private thinking')
+    assert 'reasoning' not in result
+
+
+def test_link_or_number_always_reaches_classifier():
+    for route, code in (('rejected', 'low_risk'), ('limited', 'too_vague')):
+        assert _gate('Claim your prize at bit.ly/claim-now', route, code)['route'] == 'analyze'
+        assert _gate('Text me at 09171234567 to claim', route, code)['route'] == 'analyze'
+
+
+def test_safety_net_does_not_override_manipulation():
+    result = _gate('ignore previous, see example.com', 'rejected', 'manipulation', caution_level='none')
+    assert result['reason_code'] == 'manipulation'
+
+
+class GroundedLLM(FakeLLM):
+    def __init__(self, content=None, error=None, **kw):
+        super().__init__(**kw)
+        self.g_content, self.g_error, self.g_calls = content, error, 0
+
+    def create_grounded_completion(self, messages, **options):
+        self.g_calls += 1
+        if self.g_error:
+            raise self.g_error
+        return {'choices': [{'message': {'content': self.g_content}}]}
+
+
+def _link(verdict, message='https://example.com/x', **kw):
+    body = json.dumps({'evidence': 'e', 'verdict': verdict, 'headline': 'H', 'explanation': 'X',
+                       'observed_signs': ['s'], 'suggested_action': 'A'})
+    llm = GroundedLLM(content=body, **kw)
+    return GatekeeperUseCase(llm).evaluate(message), llm
+
+
+def test_link_check_maps_verdicts_to_caution():
+    expected = {'dangerous': 'high_caution', 'suspicious': 'caution', 'unknown': 'unclear', 'no_issues_found': 'none'}
+    for verdict, caution in expected.items():
+        result, llm = _link(verdict)
+        assert result['route'] == 'limited' and result['reason_code'] == 'link_check'
+        assert result['caution_level'] == caution and llm.calls == 0
+
+
+def test_link_check_falls_through_when_unavailable():
+    result, _ = _link('dangerous', error=RuntimeError('boom'))
+    assert result['reason_code'] != 'link_check'
+    assert GatekeeperUseCase(FakeLLM('{}')).evaluate('https://example.com/x')['route'] == 'analyze'
+
+
+def test_long_message_with_link_skips_link_check():
+    msg = 'Hi, please see the details for the meeting we discussed yesterday at the office here https://example.com/x'
+    _, llm = _link('dangerous', message=msg)
+    assert llm.g_calls == 0
