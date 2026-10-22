@@ -28,6 +28,16 @@ def _is_retryable_gemini_error(error: Exception) -> bool:
     return any(marker in error_name for marker in ("ratelimit", "resourceexhausted", "servererror", "unavailable"))
 
 
+def _thinking_config(types):
+    """Minimal thinking; older google-genai SDKs reject thinking_level, so fall back instead of failing every call."""
+    for kwargs in ({"thinking_level": "MINIMAL"}, {"thinking_budget": 0}):
+        try:
+            return types.ThinkingConfig(**kwargs)
+        except Exception:
+            continue
+    return None
+
+
 class GeminiProvider:
     """Adapt Google's Gemini API to the existing chat-completion contract."""
 
@@ -58,7 +68,7 @@ class GeminiProvider:
             temperature=options.get("temperature"),
             top_p=options.get("top_p"),
             stop_sequences=self._stop_sequences(options.get("stop")),
-            thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"),
+            thinking_config=_thinking_config(types),
         )
         response = self.client.models.generate_content(
             model=self.model_name,
@@ -93,7 +103,7 @@ class GeminiProvider:
                 system_instruction=system_prompt,
                 max_output_tokens=options.get("max_tokens"),
                 temperature=options.get("temperature"),
-                thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"),
+                thinking_config=_thinking_config(types),
             ),
         )
         text = getattr(response, "text", None)
@@ -141,6 +151,28 @@ class GeminiProvider:
         if not text or not text.strip():
             raise RuntimeError("Gemini returned an empty structured response")
         return text
+
+    def create_grounded_completion(self, messages: List[Dict[str, Any]], **options: Any) -> Dict[str, Any]:
+        """Plain-text completion where Gemini can open URLs and search Google (tools can't combine with JSON mode)."""
+        from google.genai import types  # type: ignore
+
+        system_parts = [item["content"] for item in messages if item.get("role") == "system"]
+        contents = [
+            {"role": "model" if item.get("role") == "assistant" else "user",
+             "parts": [{"text": item.get("content", "")}]}
+            for item in messages if item.get("role") != "system"
+        ]
+        config = types.GenerateContentConfig(
+            system_instruction="\n\n".join(system_parts) or None,
+            max_output_tokens=options.get("max_tokens"),
+            temperature=options.get("temperature"),
+            tools=[types.Tool(url_context=types.UrlContext()), types.Tool(google_search=types.GoogleSearch())],
+        )
+        response = self.client.models.generate_content(model=self.model_name, contents=contents, config=config)
+        text = getattr(response, "text", None)
+        if not text or not text.strip():
+            raise RuntimeError("Gemini returned an empty grounded response")
+        return {"choices": [{"message": {"content": text}}]}
 
     @staticmethod
     def _stop_sequences(value: Any) -> Optional[List[str]]:
@@ -351,6 +383,41 @@ class GenAIProvider:
                         _safe_error_detail(fallback_exc),
                     )
             raise last_error
+
+    def create_grounded_completion(self, messages: List[Dict[str, Any]], **options: Any) -> Dict[str, Any]:
+        """Gemini with URL context + Google Search, trying the configured fallback models.
+        No Gemma fallback: a local model cannot browse, so callers must handle failure."""
+        if self.gemini is None:
+            raise RuntimeError("Gemini is unavailable; grounded completion has no local fallback")
+        primary_model = getattr(self.gemini, "model_name", None)
+        last_error: Optional[Exception] = None
+        try:
+            response = self.gemini.create_grounded_completion(messages=messages, **options)
+            logger.warning("[GENAI] Provider used: GEMINI (grounded; model=%s)", primary_model)
+            return response
+        except Exception as exc:
+            last_error = exc
+            logger.warning("[GEMINI] Grounded request failed on %s: %s", primary_model, _safe_error_detail(exc))
+
+        for fallback_model in self.gemini_fallback_models:
+            if fallback_model == primary_model:
+                continue
+            try:
+                if fallback_model not in self.gemini_fallbacks:
+                    self.gemini_fallbacks[fallback_model] = GeminiProvider(
+                        api_key=os.environ["GEMINI_API_KEY"], model_name=fallback_model
+                    )
+                response = self.gemini_fallbacks[fallback_model].create_grounded_completion(
+                    messages=messages, **options
+                )
+                logger.warning("[GENAI] Provider used: GEMINI (grounded; model=%s)", fallback_model)
+                return response
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "[GEMINI] Grounded fallback model %s failed: %s", fallback_model, _safe_error_detail(exc)
+                )
+        raise last_error
 
     @staticmethod
     def _gemini_enabled() -> bool:

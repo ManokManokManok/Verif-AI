@@ -1097,7 +1097,8 @@ function Detection() {
               <div className={`detect__gate detect__gate--${detectionResult.route} detect__gate--${detectionResult.caution_level || 'none'}`}>
                 <span className="detect__gateBadge">
                   {detectionResult.route === 'limited'
-                    ? (detectionResult.reason_code === 'threat' ? 'Possible intimidation' : 'Preliminary assessment')
+                    ? (detectionResult.reason_code === 'threat' ? 'Possible intimidation'
+                      : detectionResult.reason_code === 'link_check' ? 'Link check' : 'Preliminary assessment')
                     : "Couldn't analyze this"}
                 </span>
                 <h2 className="detect__gateTitle">{detectionResult.headline}</h2>
@@ -1120,9 +1121,14 @@ function Detection() {
                 {detectionResult.suggested_action && (
                   <p className="detect__gateAction">{detectionResult.suggested_action}</p>
                 )}
-                {detectionResult.route === 'limited' && detectionResult.reason_code !== 'threat' && (
+                {detectionResult.route === 'limited' && !['threat', 'link_check'].includes(detectionResult.reason_code) && (
                   <p className="detect__gateNote">
                     This is not a full analysis and has no risk score. Paste the complete message for a full result.
+                  </p>
+                )}
+                {detectionResult.reason_code === 'link_check' && (
+                  <p className="detect__gateNote">
+                    This is an AI check of the link itself, not a scam score. It can&apos;t guarantee a link is safe, so only open links from people you trust. To check the message around it, paste the full text or use the Image feature.
                   </p>
                 )}
                 {detectionResult.reason_code === 'threat' && (
@@ -1130,7 +1136,7 @@ function Detection() {
                     This is not a scam score. Verif-AI can&apos;t confirm whether the debt is real, but the pressure tactics are a warning sign.
                   </p>
                 )}
-                {detectionResult.reason_code !== 'threat' && (
+                {!['threat', 'link_check'].includes(detectionResult.reason_code) && (
                 <div className="detect__gateTips">
                   <h3>{detectionResult.source === 'image' ? 'What images work best' : 'How to get the best result'}</h3>
                   {detectionResult.source === 'image' ? (

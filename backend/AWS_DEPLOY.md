@@ -24,8 +24,11 @@ If the Hugging Face model repo is private, build with
 ```
 sam deploy --stack-name verfai --region us-east-1 --capabilities CAPABILITY_IAM --resolve-s3 --guided
 ```
-Answer the prompts: ImageUri, FrontendOrigin (your Vercel URL), BudgetEmail, the secrets
-(DjangoSecretKey, JwtSecretKey, MongoUri, GeminiApiKey, EmailUser, EmailAppPassword).The output `ApiUrl` goes into Vercel as `VITE_API_BASE_URL`, then redeploy the frontend.
+Answer the prompts: ImageUri, FrontendOrigin (the canonical Vercel URL), BudgetEmail, and the secrets
+(DjangoSecretKey, JwtSecretKey, MongoUri, GeminiApiKey, EmailUser, EmailAppPassword). The template
+also allows the previous `https://verif-ai-frontend.vercel.app` origin for compatibility, while
+frontend links use the canonical URL. The output `ApiUrl` goes into Vercel as `VITE_API_BASE_URL`,
+then redeploy the frontend.
 If you use a region other than us-east-1, edit `DJANGO_ALLOWED_HOSTS` in `template.yaml`.
 
 ## Failsafes built in

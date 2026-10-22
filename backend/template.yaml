@@ -16,7 +16,11 @@ Parameters:
     AllowedValues: ['true', 'false']
   FrontendOrigin:
     Type: String
-    Description: Vercel URL, e.g. https://verfai.vercel.app
+    Description: Canonical Vercel frontend URL, e.g. https://verfai.vercel.app
+  LegacyFrontendOrigin:
+    Type: String
+    Default: https://verif-ai-frontend.vercel.app
+    Description: Additional frontend origin retained for compatibility
   BudgetEmail:
     Type: String
     Description: Where budget alerts are sent
@@ -59,7 +63,7 @@ Resources:
           DJANGO_ALLOWED_HOSTS: '.lambda-url.us-east-1.on.aws'
           DJANGO_TRUST_PROXY_SSL: 'true'
           TRUSTED_PROXY_HOPS: '1'
-          CORS_ALLOWED_ORIGINS: !Ref FrontendOrigin
+          CORS_ALLOWED_ORIGINS: !Join [",", [!Ref FrontendOrigin, !Ref LegacyFrontendOrigin]]
           FRONTEND_URL: !Ref FrontendOrigin
           RATE_LIMIT_ENABLED: 'true'
           MFA_ENABLED: 'true'

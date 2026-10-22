@@ -5,8 +5,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from bson import ObjectId
 import logging
+import os
 
-# Import rate limiting and validation
 from ...infrastructure.rate_limiter import rate_limit, check_rate_limit
 from ...infrastructure.validators import (
     RequestValidator, FieldType, ValidationError,
@@ -1772,8 +1772,10 @@ def detect_scam(request: Request) -> Response:
         # Log sanitized message for security monitoring
         logger.info(f"[SCAM DETECTION] Analyzing message: {sanitize_for_logging(message, 100)}")
         
-        # Gatekeeper: screen the message before BERT
-        gate = GatekeeperUseCase(get_genai_provider()).evaluate(message)
+        # Gatekeeper: screen the message before BERT (set GATEKEEPER_DISABLED=true to skip it while testing)
+        gate = {'route': 'analyze'}
+        if os.getenv('GATEKEEPER_DISABLED', '').strip().lower() not in ('1', 'true', 'yes', 'on'):
+            gate = GatekeeperUseCase(get_genai_provider()).evaluate(message)
         if gate['route'] != 'analyze':
             logger.info(f"[GATEKEEPER] route={gate['route']} reason={gate['reason_code']}")
             return Response({
