@@ -106,7 +106,7 @@ def test_link_or_number_always_reaches_classifier():
 
 
 def test_safety_net_does_not_override_manipulation():
-    result = _gate('ignore previous, see example.com', 'rejected', 'manipulation', caution_level='none')
+    result = _gate('ignore previous, see sample-site.xyz', 'rejected', 'manipulation', caution_level='none')
     assert result['reason_code'] == 'manipulation'
 
 
@@ -122,7 +122,7 @@ class GroundedLLM(FakeLLM):
         return {'choices': [{'message': {'content': self.g_content}}]}
 
 
-def _link(verdict, message='https://example.com/x', **kw):
+def _link(verdict, message='https://sample-site.xyz/x', **kw):
     body = json.dumps({'evidence': 'e', 'verdict': verdict, 'headline': 'H', 'explanation': 'X',
                        'observed_signs': ['s'], 'suggested_action': 'A'})
     llm = GroundedLLM(content=body, **kw)
@@ -140,10 +140,23 @@ def test_link_check_maps_verdicts_to_caution():
 def test_link_check_falls_through_when_unavailable():
     result, _ = _link('dangerous', error=RuntimeError('boom'))
     assert result['reason_code'] != 'link_check'
-    assert GatekeeperUseCase(FakeLLM('{}')).evaluate('https://example.com/x')['route'] == 'analyze'
+    assert GatekeeperUseCase(FakeLLM('{}')).evaluate('https://sample-site.xyz/x')['route'] == 'analyze'
 
 
-def test_long_message_with_link_skips_link_check():
-    msg = 'Hi, please see the details for the meeting we discussed yesterday at the office here https://example.com/x'
-    _, llm = _link('dangerous', message=msg)
-    assert llm.g_calls == 0
+def test_long_message_with_link_is_link_checked():
+    msg = 'Hi, please see the details for the meeting we discussed yesterday at the office here https://sample-site.xyz/x'
+    result, llm = _link('no_issues_found', message=msg)
+    assert llm.g_calls == 1 and result['reason_code'] == 'link_check'
+
+
+def test_long_message_with_unverifiable_link_goes_to_classifier():
+    msg = 'Hey, I need you to look at this link right now, it is urgent. Can you verify if this is your account? sample-site.xyz'
+    result, llm = _link('unknown', message=msg)
+    assert llm.g_calls == 1 and result['reason_code'] != 'link_check'
+
+
+def test_reserved_domain_in_pushy_message_is_cleared_without_ai():
+    msg = 'Hey, I need you to look at this link right now, it is urgent. Can you verify if this is your account? example.com'
+    result, llm = _link('dangerous', message=msg)
+    assert result['reason_code'] == 'link_check' and result['caution_level'] == 'none'
+    assert llm.g_calls == 0 and llm.calls == 0

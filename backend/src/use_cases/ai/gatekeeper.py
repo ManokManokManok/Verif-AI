@@ -12,7 +12,7 @@ import re
 from typing import Any, Dict, Optional
 
 from src.infrastructure.prompt_sanitizer import PromptSanitizer
-from src.use_cases.ai.link_check import check_links, link_check_enabled, link_only_urls
+from src.use_cases.ai.link_check import check_links, extract_urls, is_reserved_domain, link_check_enabled, link_only_urls
 
 logger = logging.getLogger(__name__)
 
@@ -259,14 +259,31 @@ class GatekeeperUseCase:
         self.sanitizer = PromptSanitizer(max_length=2000, log_threats=True)
 
     def _link_result(self, message: str) -> Optional[Dict[str, Any]]:
-        """A bare link (or one with a few words) is too thin for the classifier: check the link itself."""
-        if not link_check_enabled() or not link_only_urls(message):
+        """Any message containing a link gets the link itself checked. A link we couldn't verify only
+        decides the result when the message is a bare link; otherwise the classifier handles the text."""
+        urls = extract_urls(message)
+        if not link_check_enabled() or not urls:
             return None
-        safe = self.sanitizer.sanitize(message, context='link_check').sanitized_text
-        checked = check_links(self.llm, safe)
+        bare = bool(link_only_urls(message))
+        if all(is_reserved_domain(u) for u in urls):
+            checked = {'verdict': 'no_issues_found', 'headline': '', 'explanation': '',
+                       'observed_signs': [], 'suggested_action': ''}
+        else:
+            safe = self.sanitizer.sanitize(message, context='link_check').sanitized_text
+            checked = check_links(self.llm, safe)
         if not checked:
             return None
         verdict = checked['verdict']
+        if verdict == 'unknown' and not bare:
+            return None
+        if verdict == 'no_issues_found' and not bare:
+            return _result(
+                'limited', 'link_check', 'The link checked out, but stay careful',
+                "We checked the link in this message and found nothing harmful about it, so the message "
+                "itself doesn't look dangerous. Still, it pushes you to act on a link, so don't open links "
+                "you weren't expecting or enter account details through them.",
+                [], [], 'none',
+                "If you're unsure who sent it, confirm through the official app or website instead of the link.")
         fallback_headline, fallback_action = LINK_FALLBACKS[verdict]
         return _result(
             'limited', 'link_check',
