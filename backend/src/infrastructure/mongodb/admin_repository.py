@@ -11,6 +11,7 @@ from pymongo import MongoClient, DESCENDING, ASCENDING
 from pymongo.errors import DuplicateKeyError
 from pymongo.collection import Collection
 from pymongo.database import Database
+from .index_cache import ensure_once
 from bson import ObjectId
 import logging
 
@@ -45,7 +46,7 @@ class AdminRepository:
         self.reports_collection: Collection = self.db.user_reports
         self.activity_logs_collection: Collection = self.db.admin_activity_logs
         self.visits_collection: Collection = self.db.website_visits
-        self._ensure_indexes()
+        ensure_once(client, database_name, "admin", self._ensure_indexes)
     
     def _ensure_indexes(self) -> None:
         """Create indexes for efficient queries."""

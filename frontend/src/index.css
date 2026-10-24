@@ -9204,6 +9204,9 @@ button {
 .detect__chat-item-meta .detect__chat-item-preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
 .detect__chat-item-meta .detect__chat-item-time { margin: 0; margin-left: auto; white-space: nowrap; }
 .chat-history__badge { background: rgba(99,102,241,.2); color: #a5b4fc; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 600; }
+.detect__chat-item--opening { opacity: .75; cursor: progress; }
+.chat-history__opening { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: #a5b4fc; white-space: nowrap; }
+.chat-history__spinner { width: 12px; height: 12px; border: 2px solid rgba(165,180,252,.3); border-top-color: #a5b4fc; border-radius: 50%; animation: spin 0.8s linear infinite; }
 .chat-history__confirm { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: #e5e7eb; }
 .chat-history__confirm button { border: 1px solid #374151; background: transparent; color: inherit; border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
 .chat-history__confirm-yes { border-color: #ef4444 !important; color: #f87171 !important; }

@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { getChatHistory, detectScamRequest } from '../api/client';
 import { getAnalysisDetail, deleteAnalysisHistoryItem } from '../api/analysis';
+import { getCached, setCached, removeCached, isSameData } from '../utils/historyCache';
 import {
   getAnalysisConversation,
   analyzeImage,
@@ -77,6 +78,7 @@ function Detection() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
   const [isDeletingHistoryId, setIsDeletingHistoryId] = useState(null);
+  const [openingHistoryId, setOpeningHistoryId] = useState(null);
   const [validationError, setValidationError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
   const [guestImageUsed, setGuestImageUsed] = useState(() => hasGuestFeatureBeenUsed('image_analysis'));
@@ -149,7 +151,13 @@ function Detection() {
     }
 
     const run = async () => {
-      setIsHistoryLoading(true);
+      // Paint the cached list immediately (e.g. after a page refresh); revalidate quietly below
+      const cachedList = getCached('analysis:list', { persisted: true });
+      if (Array.isArray(cachedList)) {
+        setChatHistory((prev) => (prev.length ? prev : cachedList));
+      } else {
+        setIsHistoryLoading(true);
+      }
       const delays = [0, 800, 2000, 4000];
       let lastError = null;
       for (let attempt = 0; attempt < delays.length; attempt += 1) {
@@ -159,7 +167,9 @@ function Detection() {
           if (!Array.isArray(res?.history)) {
             throw new Error('The history response did not contain an analysis list.');
           }
-          setChatHistory(res.history);
+          setCached('analysis:list', res.history, { persisted: true });
+          // Keep the same reference when nothing changed so the list doesn't re-render
+          setChatHistory((prev) => (isSameData(prev, res.history) ? prev : res.history));
           setHistoryError(null);
           return;
         } catch (err) {
@@ -197,7 +207,10 @@ function Detection() {
 
     try {
       const detail = await getAnalysisDetail(activeAnalysisId);
-      if (detail) setDetectionResult(detail);
+      if (detail) {
+        setCached(`analysis:${activeAnalysisId}`, detail);
+        setDetectionResult(detail);
+      }
     } catch (err) {
       console.warn('[DETECTION] Failed to refresh the active analysis:', err);
     }
@@ -284,6 +297,27 @@ function Detection() {
 
   // Handle click on a chat history item
   const handleChatClick = async (chat) => {
+    if (openingHistoryId) return;
+    const cacheKey = `analysis:${chat.id}`;
+    const cachedDetail = getCached(cacheKey);
+    if (cachedDetail) {
+      // Open instantly, then quietly pick up any change (e.g. an admin-published review)
+      setDetectionResult(cachedDetail);
+      setSidebarOpen(false);
+      getAnalysisDetail(chat.id)
+        .then((fresh) => {
+          if (!fresh) return;
+          setCached(cacheKey, fresh);
+          if (!isSameData(fresh, cachedDetail)) {
+            setDetectionResult((current) => (current?.id === chat.id ? fresh : current));
+          }
+        })
+        .catch((err) => {
+          if (err?.status === 404) removeCached(cacheKey);
+        });
+      return;
+    }
+    setOpeningHistoryId(chat.id);
     try {
       let detail;
       try {
@@ -293,10 +327,13 @@ function Detection() {
         await new Promise((resolve) => setTimeout(resolve, 700));
         detail = await getAnalysisDetail(chat.id);
       }
+      setCached(cacheKey, detail);
       setDetectionResult(detail);
       setSidebarOpen(false);
     } catch (err) {
       alert('Failed to load analysis details.');
+    } finally {
+      setOpeningHistoryId(null);
     }
   };
 
@@ -306,6 +343,7 @@ function Detection() {
     setIsDeletingHistoryId(analysisId);
     try {
       await deleteAnalysisHistoryItem(analysisId);
+      removeCached(`analysis:${analysisId}`);
       if (detectionResult?.id === analysisId) {
         setDetectionResult(null);
       }
@@ -724,6 +762,7 @@ function Detection() {
                     badge: chat.reviewed_result?.is_published ? 'Admin verified' : null,
                     active: !!detectionResult?.id && detectionResult.id === chat.id,
                     deleting: isDeletingHistoryId === chat.id,
+                    opening: openingHistoryId === chat.id,
                     onSelect: () => handleChatClick(chat),
                     onDelete: chat.id ? () => handleDeleteHistoryItem(chat.id) : null,
                   }))}

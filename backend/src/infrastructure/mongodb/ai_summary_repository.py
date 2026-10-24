@@ -25,6 +25,7 @@ from datetime import datetime
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
+from .index_cache import ensure_once
 
 from ...domain.ai_summary_entities import AIAnalyticsSummary
 
@@ -37,7 +38,7 @@ class AIAnalyticsSummaryRepository:
     def __init__(self, client: MongoClient, database_name: str):
         self.db: Database = client[database_name]
         self.collection: Collection = self.db[self.COLLECTION_NAME]
-        self._ensure_indexes()
+        ensure_once(client, database_name, "ai_summary", self._ensure_indexes)
 
     def _ensure_indexes(self) -> None:
         """Create indexes for efficient queries (idempotent)."""

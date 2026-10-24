@@ -15,6 +15,7 @@ import {
   handleRateLimitError,
   sanitizeInput 
 } from '../utils/validation';
+import { clearHistoryCache } from '../utils/historyCache';
 
 export async function getChatHistory() {
   return authApiRequest('/history/', {
@@ -583,6 +584,7 @@ export async function deleteAccountRequest({ password }) {
   });
 
   // Clear all local auth state
+  clearHistoryCache();
   window.localStorage.removeItem('access_token');
   window.localStorage.removeItem('refresh_token');
   window.localStorage.removeItem('user');
@@ -600,6 +602,7 @@ export async function logoutRequest() {
     });
   } finally {
     // Always clear local storage, even if request fails
+    clearHistoryCache();
     window.localStorage.removeItem('access_token');
     window.localStorage.removeItem('refresh_token');
     window.localStorage.removeItem('user');

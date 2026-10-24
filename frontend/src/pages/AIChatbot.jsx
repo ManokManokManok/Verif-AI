@@ -19,6 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import LogoutConfirmModal from '../components/auth/LogoutConfirmModal';
 import ChatHistoryList from '../components/ChatHistoryList';
 import SafetyNotice from '../components/SafetyNotice';
+import { getCached, setCached, removeCached, isSameData } from '../utils/historyCache';
 
 function AIChatbot() {
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -91,6 +92,7 @@ function AIChatbot() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [openingConversationId, setOpeningConversationId] = useState(null);
   const [disclaimer, setDisclaimer] = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -99,6 +101,8 @@ function AIChatbot() {
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [composerHeight, setComposerHeight] = useState(150);
   const messagesEndRef = useRef(null);
+  const sendingRef = useRef(false);
+  const openedConversationRef = useRef(null);
   const composerDockRef = useRef(null);
   const chatTextareaRef = useRef(null);
 
@@ -287,6 +291,16 @@ function AIChatbot() {
 
   // Fetch conversations list when logged in
   useEffect(() => {
+    openedConversationRef.current = currentConversationId;
+  }, [currentConversationId]);
+
+  const invalidateConversationCache = (conversationId) => {
+    if (!conversationId) return;
+    removeCached(`chat:general:${conversationId}`);
+    removeCached(`chat:guided:${conversationId}`);
+  };
+
+  useEffect(() => {
     if (isLoggedIn && accessToken) {
       fetchConversations();
     } else {
@@ -296,11 +310,19 @@ function AIChatbot() {
 
   const fetchConversations = async () => {
     if (!accessToken) return;
-    
-    setIsLoadingConversations(true);
+
+    // Show the cached list right away (e.g. after a refresh) and revalidate quietly
+    const cachedList = getCached('chat:list', { persisted: true });
+    if (Array.isArray(cachedList)) {
+      setConversations((prev) => (prev.length ? prev : cachedList));
+    } else {
+      setIsLoadingConversations(true);
+    }
     try {
       const response = await getConversations(accessToken);
-      setConversations(response.conversations || []);
+      const fresh = response.conversations || [];
+      setCached('chat:list', fresh, { persisted: true });
+      setConversations((prev) => (isSameData(prev, fresh) ? prev : fresh));
     } catch (error) {
       console.error('Failed to fetch conversations:', error);
     } finally {
@@ -308,45 +330,60 @@ function AIChatbot() {
     }
   };
 
-  // Load a specific conversation
-  const loadConversation = async (conversationId) => {
-    if (!accessToken) return;
-    
+  const applyConversation = (conversationId, response, guided) => {
+    setMessages(response.messages || []);
+    setCurrentConversationId(conversationId);
+    setCurrentTitle(response.title || (guided ? 'Analysis Guidance' : 'Conversation'));
+    setConversationType(guided ? 'analysis_guided' : 'general');
+    setAnalysisContext(guided ? response.analysis_context : null);
+  };
+
+  // Shared loader: open from cache instantly (then revalidate), otherwise fetch with a loading state
+  const openConversation = async (conversationId, guided) => {
+    if (!accessToken || openingConversationId) return;
+    const cacheKey = `chat:${guided ? 'guided' : 'general'}:${conversationId}`;
+    const fetchConversation = () => (
+      guided
+        ? getAnalysisGuidedHistory(conversationId, accessToken)
+        : getChatHistory(accessToken, conversationId)
+    );
+
+    const cached = getCached(cacheKey);
+    if (cached) {
+      applyConversation(conversationId, cached, guided);
+      setSidebarOpen(false);
+      fetchConversation()
+        .then((fresh) => {
+          if (!fresh) return;
+          setCached(cacheKey, fresh);
+          if (!isSameData(fresh, cached) && !sendingRef.current && openedConversationRef.current === conversationId) {
+            applyConversation(conversationId, fresh, guided);
+          }
+        })
+        .catch((error) => {
+          console.warn('Background conversation refresh failed:', error);
+        });
+      return;
+    }
+
     setIsLoading(true);
+    setOpeningConversationId(conversationId);
     try {
-      const response = await getChatHistory(accessToken, conversationId);
-      setMessages(response.messages || []);
-      setCurrentConversationId(conversationId);
-      setCurrentTitle(response.title || 'Conversation');
-      setConversationType('general');
-      setAnalysisContext(null);
+      const response = await fetchConversation();
+      setCached(cacheKey, response);
+      applyConversation(conversationId, response, guided);
       setSidebarOpen(false);
     } catch (error) {
       console.error('Failed to load conversation:', error);
+      alert('Failed to load this conversation. Please try again.');
     } finally {
       setIsLoading(false);
+      setOpeningConversationId(null);
     }
   };
 
-  // Load analysis-guided conversation
-  const loadAnalysisGuidedConversation = async (conversationId) => {
-    if (!accessToken) return;
-    
-    setIsLoading(true);
-    try {
-      const response = await getAnalysisGuidedHistory(conversationId, accessToken);
-      setMessages(response.messages || []);
-      setCurrentConversationId(conversationId);
-      setCurrentTitle(response.title || 'Analysis Guidance');
-      setConversationType('analysis_guided');
-      setAnalysisContext(response.analysis_context);
-      setSidebarOpen(false);
-    } catch (error) {
-      console.error('Failed to load analysis-guided conversation:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const loadConversation = (conversationId) => openConversation(conversationId, false);
+  const loadAnalysisGuidedConversation = (conversationId) => openConversation(conversationId, true);
 
   // Start a new conversation
   const startNewConversation = () => {
@@ -376,6 +413,8 @@ function AIChatbot() {
     
     try {
       await deleteConversation(conversationId, accessToken);
+      invalidateConversationCache(conversationId);
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
       await fetchConversations();
       
       // If we deleted the current conversation, start fresh
@@ -420,6 +459,8 @@ function AIChatbot() {
     };
     setMessages(prev => [...prev, newUserMessage]);
     setIsLoading(true);
+    sendingRef.current = true;
+    invalidateConversationCache(currentConversationId);
 
     try {
       let response;
@@ -468,6 +509,8 @@ function AIChatbot() {
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
+      sendingRef.current = false;
+      invalidateConversationCache(currentConversationId);
       setIsLoading(false);
     }
   };
@@ -480,6 +523,8 @@ function AIChatbot() {
     }
 
     setIsLoading(true);
+    sendingRef.current = true;
+    invalidateConversationCache(currentConversationId);
     try {
       const response = await sendStaticChatMessage(topic, accessToken, currentConversationId);
       if (!isLoggedIn) setGuestTextUsed(true);
@@ -508,6 +553,8 @@ function AIChatbot() {
         isError: true,
       }]);
     } finally {
+      sendingRef.current = false;
+      invalidateConversationCache(currentConversationId);
       setIsLoading(false);
     }
   };
@@ -610,6 +657,7 @@ function AIChatbot() {
                     badge: guided ? 'Guidance' : null,
                     date: conv.updated_at,
                     active: conv.id === currentConversationId,
+                    opening: openingConversationId === conv.id,
                     onSelect: () => (guided ? loadAnalysisGuidedConversation(conv.id) : loadConversation(conv.id)),
                     onDelete: () => handleDeleteConversation(conv.id),
                   };

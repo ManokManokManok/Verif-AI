@@ -33,7 +33,7 @@ const formatTime = (date) => {
 };
 
 /**
- * items: [{ id, title, subtitle, date, badge, active, deleting, onSelect, onDelete }]
+ * items: [{ id, title, subtitle, date, badge, active, deleting, opening, onSelect, onDelete }]
  */
 export default function ChatHistoryList({ items, loading = false, emptyText = 'No conversations yet' }) {
   const [query, setQuery] = useState('');
@@ -79,13 +79,20 @@ export default function ChatHistoryList({ items, loading = false, emptyText = 'N
                 return (
                   <div
                     key={item.id}
-                    className={`detect__chat-item${item.active ? ' detect__chat-item--active' : ''}`}
-                    onClick={item.onSelect}
+                    className={`detect__chat-item${item.active ? ' detect__chat-item--active' : ''}${item.opening ? ' detect__chat-item--opening' : ''}`}
+                    aria-busy={item.opening ? 'true' : undefined}
+                    onClick={item.opening ? undefined : item.onSelect}
                   >
                     <div className="detect__chat-item-header">
                       <div className="detect__chat-item-title" title={item.title}>
                         {item.title}
                       </div>
+                      {item.opening && (
+                        <span className="chat-history__opening" role="status">
+                          <span className="chat-history__spinner" aria-hidden="true" />
+                          Opening…
+                        </span>
+                      )}
                       {item.onDelete && !confirming && (
                         <button
                           type="button"

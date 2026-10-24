@@ -9,6 +9,7 @@ from typing import Optional, List
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
+from .index_cache import ensure_once
 from datetime import datetime
 from bson import ObjectId
 
@@ -45,7 +46,7 @@ class ConversationRepository:
         self.db: Database = client[database_name]
         self.collection: Collection = self.db[self.COLLECTION_NAME]
         self.archive_collection: Collection = self.db[self.ARCHIVE_COLLECTION_NAME]
-        self._ensure_indexes()
+        ensure_once(client, database_name, "conversations", self._ensure_indexes)
     
     def _ensure_indexes(self) -> None:
         """Create indexes for efficient queries."""

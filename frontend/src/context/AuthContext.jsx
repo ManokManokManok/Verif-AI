@@ -9,6 +9,7 @@ import {
   isTokenExpired
 } from '../api/client';
 import LogoutOverlay from '../components/auth/LogoutOverlay';
+import { clearHistoryCache } from '../utils/historyCache';
 
 // Create context
 const AuthContext = createContext(null);
@@ -103,6 +104,7 @@ export function AuthProvider({ children }) {
       sessionExpiredHandled.current = true;
       setSessionExpired(true);
       // Clear auth state
+      clearHistoryCache();
       window.localStorage.removeItem('access_token');
       window.localStorage.removeItem('refresh_token');
       window.localStorage.removeItem('user');
