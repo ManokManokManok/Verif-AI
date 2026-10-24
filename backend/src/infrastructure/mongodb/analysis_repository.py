@@ -48,9 +48,11 @@ class AnalysisResultRepository:
         if key not in self._indexed:
             self._ensure_indexes()
             self._indexed.add(key)
+            self._indexed_clients[id(client)] = client
 
     # Index creation is network round-trips; do it once per warm Lambda container.
     _indexed: set = set()
+    _indexed_clients: dict = {}  # keeps clients alive so id() is never reused
     
     def _ensure_indexes(self) -> None:
         """Create indexes for efficient queries."""

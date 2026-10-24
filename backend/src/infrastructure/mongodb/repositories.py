@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Any
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
+from .index_cache import ensure_once
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
@@ -31,12 +32,15 @@ class MongoDBTokenRepository:
         self.verification_tokens_collection: Collection = self.db.verification_tokens
         self.password_reset_tokens_collection: Collection = self.db.password_reset_tokens
         self.password_reset_codes_collection: Collection = self.db.password_reset_codes
-        self.password_reset_codes_collection.create_index(
-            "email_key", unique=True, name="password_reset_email_key"
-        )
-        self.password_reset_codes_collection.create_index(
-            "purge_after", expireAfterSeconds=0, name="password_reset_purge_after"
-        )
+        def _create_reset_indexes():
+            self.password_reset_codes_collection.create_index(
+                "email_key", unique=True, name="password_reset_email_key"
+            )
+            self.password_reset_codes_collection.create_index(
+                "purge_after", expireAfterSeconds=0, name="password_reset_purge_after"
+            )
+
+        ensure_once(client, database_name, "password_reset_codes", _create_reset_indexes)
 
     def issue_password_reset_code(
         self, email_key: str, user_id: Optional[str], code_digest: str, now: datetime

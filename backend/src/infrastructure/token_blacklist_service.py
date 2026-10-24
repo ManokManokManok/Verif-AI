@@ -22,7 +22,18 @@ class MongoDBTokenBlacklistService:
     def __init__(self, client, database_name: str):
         self.db = client[database_name]
         self.blacklisted_tokens_collection = self.db.blacklisted_tokens
-    
+
+        def _create_indexes():
+            self.blacklisted_tokens_collection.create_index("token", name="blacklist_token")
+            self.blacklisted_tokens_collection.create_index(
+                "expires_at", expireAfterSeconds=0, name="blacklist_expires_at_ttl"
+            )
+
+        try:
+            from .mongodb.index_cache import ensure_once
+            ensure_once(client, database_name, "token_blacklist", _create_indexes)
+        except Exception:
+            pass
     def blacklist_token(self, token: str, expires_at: datetime) -> bool:
         """
         Add a token to the blacklist.

@@ -20,6 +20,7 @@ from typing import Optional, Tuple, Dict, Any
 from datetime import datetime
 from pymongo import MongoClient, ASCENDING
 from pymongo.collection import Collection
+from .index_cache import ensure_once
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class MFACodeRepository:
     def __init__(self, client: MongoClient, database_name: str):
         self.db = client[database_name]
         self.mfa_codes: Collection = self.db.mfa_codes
-        self._ensure_indexes()
+        ensure_once(client, database_name, "mfa", self._ensure_indexes)
 
     # ------------------------------------------------------------------
     # Index management
