@@ -57,6 +57,7 @@ Resources:
         AuthType: NONE
       Environment:
         Variables:
+          HOME: /tmp
           DJANGO_DEBUG: 'False'
           DJANGO_SECRET_KEY: !Ref DjangoSecretKey
           JWT_SECRET_KEY: !Ref JwtSecretKey

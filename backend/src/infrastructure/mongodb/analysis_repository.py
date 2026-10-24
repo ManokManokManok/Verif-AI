@@ -44,7 +44,13 @@ class AnalysisResultRepository:
     def __init__(self, client: MongoClient, database_name: str):
         self.db: Database = client[database_name]
         self.collection: Collection = self.db[self.COLLECTION_NAME]
-        self._ensure_indexes()
+        key = (id(client), database_name)
+        if key not in self._indexed:
+            self._ensure_indexes()
+            self._indexed.add(key)
+
+    # Index creation is network round-trips; do it once per warm Lambda container.
+    _indexed: set = set()
     
     def _ensure_indexes(self) -> None:
         """Create indexes for efficient queries."""
@@ -69,13 +75,45 @@ class AnalysisResultRepository:
             ]
         }
 
-    def get_by_user_id(self, user_id: str, limit: int = 50, include_deleted: bool = False):
-        """Fetch analysis results for a user, most recent first."""
+    def get_by_user_id(
+        self,
+        user_id: str,
+        limit: int = 50,
+        include_deleted: bool = False,
+        light_attachments: bool = False,
+    ):
+        """Fetch analysis results for a user, most recent first.
+
+        light_attachments=True strips image_attachment.data_url server-side and
+        sets image_attachment.has_preview instead, avoiding large base64 transfers.
+        """
         query: Dict[str, Any] = {"user_id": str(user_id)}
         if not include_deleted:
             query.update(self._active_user_visibility_query())
 
-        docs = self.collection.find(query).sort("created_at", -1).limit(limit)
+        docs = None
+        if light_attachments:
+            try:
+                docs = list(self.collection.aggregate([
+                    {"$match": query},
+                    {"$sort": {"created_at": -1}},
+                    {"$limit": limit},
+                    {"$addFields": {"image_attachment": {"$cond": [
+                        {"$eq": [{"$type": "$image_attachment"}, "object"]},
+                        {"$mergeObjects": [
+                            "$image_attachment",
+                            {"has_preview": {"$gt": [{"$strLenCP": {"$ifNull": [
+                                {"$convert": {"input": "$image_attachment.data_url", "to": "string", "onError": "", "onNull": ""}}, ""]}}, 0]}},
+                        ]},
+                        "$image_attachment",
+                    ]}}},
+                    {"$unset": "image_attachment.data_url"},
+                ]))
+            except Exception as exc:
+                logger.warning("Light history aggregation failed, falling back: %s", exc)
+                docs = None
+        if docs is None:
+            docs = self.collection.find(query).sort("created_at", -1).limit(limit)
         entities = []
         for doc in docs:
             try:

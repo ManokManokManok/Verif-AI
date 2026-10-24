@@ -257,7 +257,7 @@ def history(request: Request) -> Response:
 
         # Query analysis results for this user using repository method
         repository = get_analysis_repository()
-        analysis_results = repository.get_by_user_id(user_id, limit=50)
+        analysis_results = repository.get_by_user_id(user_id, limit=50, light_attachments=True)
         try:
             user_reports = _user_reports_for(user_id, analysis_results)
         except Exception as report_error:
