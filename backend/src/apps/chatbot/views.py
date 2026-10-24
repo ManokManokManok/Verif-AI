@@ -17,6 +17,7 @@ import logging
 from PIL import Image
 
 from ...use_cases.chatbot import GeneralChatbotUseCase
+from ...use_cases.ai.gemini_classification import LOW_RISK_FLOOR, align_percentages
 from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
 from ...infrastructure.mongodb.conversation_repository import ConversationRepository
 from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
@@ -50,7 +51,7 @@ If the image has nothing to do with messages, offers, payments, accounts, websit
 
 Return ONLY valid JSON with this exact shape:
 {"verdict":"Scam|Likely scam|Suspicious|Likely legitimate|Inconclusive|Unrelated","confidence":0,"scam_type":"one allowed type or null","summary":"2-4 sentences","details":"specific visible evidence","key_markers":["3-5 short markers"],"suggestion":"only for Unrelated: what to upload instead, otherwise empty"}
-Confidence must be an integer from 0 to 100. Use one of the predetermined scam types when appropriate, or null for legitimate and inconclusive results."""
+Confidence must be a number from 0 to 100 (decimals allowed, e.g. 87.5). Use one of the predetermined scam types when appropriate, or null for legitimate and inconclusive results."""
 
 
 def _image_attachment(image_bytes: bytes, content_type: str) -> dict:
@@ -87,11 +88,21 @@ def _parse_image_report(raw_text: str) -> dict:
 
     verdict = str(report.get('verdict', 'Inconclusive'))
     try:
-        confidence = max(0, min(100, int(report.get('confidence', 50))))
+        confidence = round(max(0.0, min(100.0, float(report.get('confidence', 50)))), 2)
     except (TypeError, ValueError):
-        confidence = 50
+        confidence = 50.0
     scam_verdict = verdict.lower() in {'scam', 'likely scam', 'suspicious'}
-    scam_score = 50 if verdict.lower() == 'inconclusive' else (confidence if scam_verdict else 100 - confidence)
+    inconclusive = verdict.lower() == 'inconclusive'
+    raw_scam = 50.0 if inconclusive else (confidence if scam_verdict else 100.0 - confidence)
+    scam_score = raw_scam
+    # Same rule as text classification: scores this low show a clean 0.
+    if not inconclusive and scam_score <= LOW_RISK_FLOOR:
+        scam_score = 0.0
+    legit_score = 100.0 - scam_score
+
+    def align(text: str) -> str:
+        return align_percentages(text, raw_scam, scam_score, legit_score)
+
     allowed_types = {
         'Banking Access & Payment', 'Financial and Investment', 'Health and Wellness',
         'Impersonation and Authority', 'International or Cross-Border',
@@ -107,15 +118,15 @@ def _parse_image_report(raw_text: str) -> dict:
         'verdict': verdict,
         'confidence': confidence,
         'scam_score': round(scam_score, 2),
-        'legit_score': round(100 - scam_score, 2),
+        'legit_score': round(legit_score, 2),
         'is_scam': scam_verdict,
         'label': 'Scam' if scam_verdict else 'Not Scam',
         'scam_type': scam_type,
         'type_confidence': confidence if scam_verdict else None,
-        'summary': str(report.get('summary', 'No summary was returned.')),
-        'details': str(report.get('details', '')),
-        'key_markers': report.get('key_markers') if isinstance(report.get('key_markers'), list) else [],
-        'suggestion': str(report.get('suggestion') or '').strip()[:300],
+        'summary': align(str(report.get('summary', 'No summary was returned.'))),
+        'details': align(str(report.get('details', ''))),
+        'key_markers': [align(str(m)) for m in report['key_markers']] if isinstance(report.get('key_markers'), list) else [],
+        'suggestion': align(str(report.get('suggestion') or '').strip()[:300]),
     }
 
 
