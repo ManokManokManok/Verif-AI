@@ -1,11 +1,11 @@
 # VerfAi Backend — Team Setup (Minimal)
 
-MGA NEED NYO I INSTALL (AS OF NOW)
-Jan 07, 2026
-
 ## Prerequisites
 - Python 3.10+ installed (Windows recommended)
 - A MongoDB Atlas connection string (ask owner)
+- A Gemini API key for generative features
+
+Run the commands below from the repository root.
 
 ## Install
 1. Create and activate a virtual environment:
@@ -34,6 +34,24 @@ Copy-Item backend\.env.example backend\.env
 - `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1`
 - `MONGODB_URI` — your Atlas URI
 - `MONGODB_DB_NAME=verfai`
+- `JWT_SECRET_KEY` — a secure, stable key
+- `GEMINI_API_KEY` — your Gemini API key
+- `GEMINI_ENABLED=true`
+- `EMAIL_BACKEND` — select and configure an email provider, or use `mock` for
+  local testing without sending email
+
+Keep the JWT secret stable so existing tokens and password-reset codes remain
+verifiable. See [the example environment file](.env.example) for email,
+MFA, and other settings. Never commit your `.env` file.
+
+## BERT model
+
+For the local ONNX backend, provide a matching `.onnx` model file and
+`tokenizer.json` in `backend\models\onnx`. The large model is Git-ignored and
+must be supplied separately for a fresh clone. If those assets are missing,
+the backend attempts to load the configured PyTorch model from Hugging Face.
+If neither model can load, text classification returns `MODEL_NOT_LOADED`
+with HTTP 503.
 
 ## Run
 - Basic checks:
@@ -44,22 +62,21 @@ python backend\manage.py check
 ```powershell
 python backend\manage.py runserver
 ```
-- Health endpoint: http://127.0.0.1:8000/api/health
+- Health endpoint: http://127.0.0.1:8000/api/health/
 
-### Optional: Start server and warm models
-This pre-downloads and loads the models before serving requests (heavy):
+### Optional: Check model loading
+
+This loads the classifier and reports its status:
+
 ```powershell
-python backend\manage.py runserver_llm 8000
-```
-Or warm first, then start:
-```powershell
-python backend\manage.py warm_models
-python backend\manage.py runserver
+python backend\manage.py warm_models --targets multihead
 ```
 
-Check model status:
+The command runs in its own process; the server loads the model separately when
+needed. To check model status in the running server:
+
 ```powershell
-Invoke-WebRequest http://127.0.0.1:8000/api/models/status | Select-Object -ExpandProperty Content
+Invoke-WebRequest http://127.0.0.1:8000/api/models/status/ | Select-Object -ExpandProperty Content
 ```
 
 ## Verify MongoDB
@@ -75,8 +92,10 @@ Expected output: `{ "ok": true, "ping": { "ok": 1 } }`
 - **Remote/Atlas connections**: TLS is enforced automatically by `connection.py`.
   No extra steps needed — if your `MONGODB_URI` points to a remote host or uses
   `mongodb+srv://`, the driver will add `tls=true` at connect time.
-- **Local development**: TLS is skipped for `localhost` / `127.0.0.1` connections.
-- To **force** TLS even locally, add to `.env`:
+- **Local development**: TLS is skipped for localhost unless forced.
+  The example environment file sets `MONGODB_REQUIRE_TLS=true`. For a local
+  MongoDB server without TLS, set it to `false` in your local `.env`.
+- To **force** TLS even locally, set:
   ```
   MONGODB_REQUIRE_TLS=true
   ```

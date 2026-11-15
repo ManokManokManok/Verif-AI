@@ -271,7 +271,6 @@ function AIChatbot() {
       }
       
       if (navType === 'analysis_guided' && conversationId) {
-        console.log('[CHATBOT] Opening analysis-guided conversation:', conversationId);
         setConversationType('analysis_guided');
         setAnalysisContext(navContext);
         setCurrentConversationId(conversationId);
@@ -282,7 +281,6 @@ function AIChatbot() {
         // Clear navigation state to prevent reloading on refresh
         window.history.replaceState({}, document.title);
       } else if (conversationId) {
-        console.log('[CHATBOT] Opening conversation:', conversationId);
         loadConversation(conversationId);
         window.history.replaceState({}, document.title);
       }

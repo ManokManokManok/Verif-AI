@@ -40,10 +40,11 @@ class Command(BaseCommand):
             start = time.time()
             try:
                 tokenizer, model, scam_types = load_multihead_model()
+                config = getattr(getattr(model, 'bert', None), 'config', None)
                 status['multihead'] = {
                     'ok': True,
                     'elapsed_s': round(time.time() - start, 2),
-                    'hidden_size': getattr(model.bert.config, 'hidden_size', None),
+                    'hidden_size': getattr(config, 'hidden_size', None),
                     'num_types': len(scam_types),
                 }
             except ImportError as ie:

@@ -565,25 +565,6 @@ LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
 
 ---
 
-### `LLM_MULTIHEAD_SUBFOLDER`
-**Required:** No  
-**Type:** String  
-**Default:** empty (auto-detect)
-
-Optional subfolder inside `LLM_MULTIHEAD_MODEL_ID` where model files are stored.
-
-**Behavior:**
-- Empty value: tries repo root, then `mk5`, then `mk4`
-- `mk5` or `mk4`: force loading from that subfolder
-- `root` or `.`: force loading from repository root
-
-**Example:**
-```env
-LLM_MULTIHEAD_SUBFOLDER=mk5
-```
-
----
-
 ### `LLM_GEMMA_MODEL_ID`
 **Required:** No  
 **Type:** Hugging Face repository ID  
@@ -662,7 +643,6 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # Models
 LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
-LLM_MULTIHEAD_SUBFOLDER=mk5
 LLM_WARMUP_ON_START=false
 ```
 
@@ -699,7 +679,6 @@ CORS_ALLOWED_ORIGINS=https://verif-ai.com,https://www.verif-ai.com
 
 # Models
 LLM_MULTIHEAD_MODEL_ID=ManokManokManok/bimBert_Scam-Detection
-LLM_MULTIHEAD_SUBFOLDER=mk5
 LLM_WARMUP_ON_START=true
 
 # Rate Limiting (tighten for production)

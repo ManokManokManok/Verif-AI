@@ -20,6 +20,7 @@ vi.mock('../src/context/AuthContext', () => ({
 vi.mock('../src/api/client', () => ({
   getChatHistory: vi.fn(),
   detectScamRequest: vi.fn(),
+  getModelInfoRequest: vi.fn().mockResolvedValue({ data: null }),
 }));
 
 vi.mock('../src/api/analysis', () => ({

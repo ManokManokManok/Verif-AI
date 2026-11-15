@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { render, renderHook, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import * as adminApi from '../src/api/admin';
@@ -17,6 +17,7 @@ import ModelHealth from '../src/pages/admin/ModelHealth';
 import AnalysisStats from '../src/pages/admin/AnalysisStats';
 import UserStats from '../src/pages/admin/UserStats';
 import UserManagement from '../src/pages/admin/UserManagement';
+import { useUserReports } from '../src/hooks/useAdminData';
 
 // Import UI components for direct testing
 import {
@@ -300,6 +301,81 @@ describe('Admin Dashboard E2E Workflows', () => {
       await waitFor(() => {
         expect(adminApi.getUserStats).toHaveBeenCalled();
       });
+    });
+
+    it('loads the selected report page and resets to page one when the filter changes', async () => {
+      adminApi.getUserReports.mockImplementation(async ({ status, page, limit }) => ({
+        success: true,
+        data: {
+          reports: [{ ...mockReports[0], id: `${status}-${page}`, status }],
+          page,
+          limit,
+          total: 51,
+          total_pages: 2,
+        },
+      }));
+
+      renderWithRouter(<UserStats onNotify={vi.fn()} />);
+
+      expect(await screen.findByText('Page 1 of 2')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      expect(await screen.findByText('Page 2 of 2')).toBeInTheDocument();
+      expect(adminApi.getUserReports).toHaveBeenCalledWith({ status: 'pending', page: 2, limit: 50 });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Resolved' }));
+      expect(await screen.findByText('Page 1 of 2')).toBeInTheDocument();
+      expect(adminApi.getUserReports).toHaveBeenCalledWith({ status: 'resolved', page: 1, limit: 50 });
+    });
+
+    it('returns to an existing page when refreshing after reports are removed', async () => {
+      let total = 51;
+      adminApi.getUserReports.mockImplementation(async ({ page, limit }) => ({
+        success: true,
+        data: {
+          reports: page <= Math.ceil(total / limit) ? [mockReports[0]] : [],
+          page,
+          limit,
+          total,
+          total_pages: Math.ceil(total / limit),
+        },
+      }));
+
+      const { result } = renderHook(() => useUserReports('pending'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      act(() => result.current.goToPage(2));
+      await waitFor(() => expect(result.current.pagination.page).toBe(2));
+      total = 50;
+      await act(async () => result.current.refresh());
+
+      expect(result.current.pagination.page).toBe(1);
+      expect(result.current.data.reports).toHaveLength(1);
+      expect(adminApi.getUserReports).toHaveBeenLastCalledWith({ status: 'pending', page: 1, limit: 50 });
+    });
+
+    it('does not replace a new filter with a late response from the previous page', async () => {
+      let finishPendingPage;
+      adminApi.getUserReports.mockImplementation(({ status, page, limit }) => {
+        const response = {
+          success: true,
+          data: { reports: [{ ...mockReports[0], status }], page, limit, total: 51, total_pages: 2 },
+        };
+        if (status === 'pending' && page === 2) {
+          return new Promise((resolve) => { finishPendingPage = () => resolve(response); });
+        }
+        return Promise.resolve(response);
+      });
+
+      const { result, rerender } = renderHook(({ status }) => useUserReports(status), {
+        initialProps: { status: 'pending' },
+      });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      act(() => result.current.goToPage(2));
+      rerender({ status: 'resolved' });
+      await waitFor(() => expect(result.current.data.reports[0].status).toBe('resolved'));
+      await act(async () => finishPendingPage());
+
+      expect(result.current.data.reports[0].status).toBe('resolved');
+      expect(result.current.pagination.page).toBe(1);
     });
   });
 

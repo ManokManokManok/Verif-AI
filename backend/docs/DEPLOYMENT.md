@@ -631,16 +631,13 @@ repo.create_user(user)
 
 ```bash
 # Health check
-curl https://yourdomain.com/api/health
+curl https://yourdomain.com/api/health/
 
 # Expected response:
-# {"status": "healthy", "database": "connected", ...}
-
-# MongoDB health
-curl https://yourdomain.com/api/health/mongodb
+# {"status": "ok", "service": "verfai-api"}
 
 # Test authentication
-curl -X POST https://yourdomain.com/api/auth/register \
+curl -X POST https://yourdomain.com/api/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","username":"testuser","password":"TestPass123!"}'
 ```
@@ -742,9 +739,6 @@ server {
 ```bash
 # System health
 GET /api/health/
-
-# Database health
-GET /api/health/mongodb/
 
 # Admin metrics (requires admin auth)
 GET /api/admin/model-health/

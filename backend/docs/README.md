@@ -6,8 +6,8 @@ Welcome to the Verif-AI backend documentation! This folder contains comprehensiv
 
 ### For Developers
 
-- **[API_REFERENCE.md](API_REFERENCE.md)** - Complete API endpoint documentation
-  - All authentication endpoints (login, MFA, registration, password reset)
+- **[API_REFERENCE.md](API_REFERENCE.md)** - Reference for commonly used endpoints
+  - Authentication endpoints (login, MFA, registration, password reset)
   - User management APIs
   - Admin endpoints
   - Scam detection API
@@ -82,12 +82,11 @@ Welcome to the Verif-AI backend documentation! This folder contains comprehensiv
 ```
 docs/
 ├── README.md (You are here)
-├── API_REFERENCE.md           - Complete API documentation
+├── API_REFERENCE.md           - Common API endpoints
 ├── DEPLOYMENT.md              - Production deployment guide
 ├── ENVIRONMENT_VARIABLES.md   - Environment configuration reference
 ├── SECURITY.md                - Security implementation overview
 ├── SECURITY_BEST_PRACTICES.md - Security guidelines & standards
-├── admin/                     - (Reserved for admin features)
 ```
 
 ## 🔍 Common Tasks
@@ -95,7 +94,7 @@ docs/
 ### How do I...
 
 #### ...test an API endpoint?
-→ See [API_REFERENCE.md](API_REFERENCE.md) for curl examples
+→ See [API_REFERENCE.md](API_REFERENCE.md) for request and response examples
 
 #### ...configure email service?
 → See [ENVIRONMENT_VARIABLES.md#email-configuration](ENVIRONMENT_VARIABLES.md#email-configuration)
@@ -131,7 +130,7 @@ All documentation follows these standards:
 
 ## 🆕 Recently Added (February 2026)
 
-- ✅ Complete API Reference documentation
+- ✅ API reference documentation
 - ✅ Comprehensive environment variables guide
 - ✅ Security best practices guide
 - ✅ Production deployment guide
@@ -145,7 +144,8 @@ All documentation follows these standards:
 - [ ] Data flow diagrams
 - [ ] API client libraries documentation
 - [ ] Performance tuning guide
-- [ ] Disaster recovery procedures
+- [ ] Further disaster recovery planning (see the backend README for MongoDB
+      backup and restore instructions)
 
 ## 🤝 Contributing to Documentation
 
@@ -169,4 +169,3 @@ When updating documentation:
 **Documentation Version:** 1.0  
 **Last Updated:** February 18, 2026  
 **Project:** Verif-AI Backend  
-**Status:** Production Ready

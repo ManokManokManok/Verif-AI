@@ -436,7 +436,7 @@ After completing setup, verify:
 - [MongoDB Atlas Documentation](https://docs.atlas.mongodb.com/)
 - [MongoDB Built-In Roles](https://www.mongodb.com/docs/manual/reference/built-in-roles/)
 - [MongoDB Security Checklist](https://www.mongodb.com/docs/manual/administration/security-checklist/)
-- [Verif-AI Security Best Practices](SECURITY_BEST_PRACTICES.md)
+- [Verif-AI Security Overview](../SECURITY.md)
 
 ---
 
@@ -444,5 +444,5 @@ After completing setup, verify:
 
 For security questions:
 - **Email:** security@verif-ai.example.com
-- **Documentation:** [SECURITY.md](SECURITY.md)
+- **Documentation:** [SECURITY.md](../SECURITY.md)
 - **Do NOT** open public GitHub issues for security vulnerabilities

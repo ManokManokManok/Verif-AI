@@ -1041,10 +1041,10 @@ export default function Settings() {
                     className="settings-input"
                     type="text"
                     inputMode="numeric"
-                    maxLength={5}
+                    maxLength={6}
                     value={passwordCode}
                     onChange={(e) => setPasswordCode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Enter the 5-digit code"
+                    placeholder="Enter the 6-digit code"
                   />
                   <button
                     className="settings-input-toggle"

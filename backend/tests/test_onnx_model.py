@@ -1,6 +1,10 @@
+import json
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
+from src.apps.core.management.commands.warm_models import Command
 from src.infrastructure.ai.onnx_model import find_onnx_assets
 from src.use_cases.ai.scam_detection import ScamDetectionUseCase
 
@@ -40,3 +44,20 @@ def test_onnx_detect_path():
     assert result['scam_type'] == 'B'
     assert result['scam_score'] > 90
     assert abs(result['scam_score'] + result['legit_score'] - 100) < 0.05
+
+
+@pytest.mark.parametrize(
+    ('model', 'hidden_size'),
+    [(_FakeOnnx(), None), (SimpleNamespace(bert=SimpleNamespace(config=SimpleNamespace(hidden_size=768))), 768)],
+)
+def test_warm_models_accepts_onnx_and_torch_models(monkeypatch, capsys, model, hidden_size):
+    monkeypatch.setattr(
+        'src.infrastructure.ai.loaders.load_multihead_model',
+        lambda: (None, model, {0: 'A'}),
+    )
+
+    Command().handle(targets='multihead')
+
+    status = json.loads(capsys.readouterr().out)['multihead']
+    assert status['ok'] is True
+    assert status['hidden_size'] == hidden_size

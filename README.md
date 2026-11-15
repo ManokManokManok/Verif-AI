@@ -1,13 +1,11 @@
 # Verif-AI — AI-Powered Scam Detection Platform
 
 > Leveraging machine learning and secure audit trails to protect users from scams
-> Last updated: February 18, 2026
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Django](https://img.shields.io/badge/Django-5.0+-green.svg)](https://www.djangoproject.com/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-green.svg)](https://www.mongodb.com/cloud/atlas)
 [![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
@@ -29,28 +27,28 @@
 
 ## Overview
 
-**Verif-AI** is an intelligent scam detection platform that combines advanced machine learning models with strong security controls to identify and verify potentially fraudulent messages, emails, and communications. The platform provides real-time analysis with reliable auditability.
+**Verif-AI** is a scam detection platform that analyzes potentially fraudulent messages, emails, and screenshots. It provides analysis results, user history, and administrative review tools. Results are estimates, not proof that a message is safe or fraudulent.
 
 ### Mission
 
-Protect users from increasingly sophisticated scam attempts by providing accessible, AI-powered detection tools with transparent, verifiable results.
+Help users assess suspicious communications with accessible, AI-powered tools.
 
 ---
 
 ## Key Features
 
 ### AI-Powered Detection
-- **Advanced NLP Models**: Multi-model ensemble for high-accuracy scam detection
-- **Pattern Recognition**: Identifies 15+ scam categories (phishing, urgency tactics, money requests, etc.)
-- **Confidence Scoring**: Transparent confidence metrics (0.0-1.0) for each analysis
-- **Real-time Analysis**: Sub-second response times for message classification
+- **Text Analysis**: A gatekeeper screens submissions before multi-head BERT classification and generative explanation
+- **Scam Categories**: Classifies scams into 15 supported categories
+- **Scores and Guidance**: Displays classification scores and explanatory guidance
+- **Image Analysis**: Uses Gemini to analyze uploaded screenshots and other images
 
 ### Enterprise-Grade Security
 - **BCrypt Password Hashing**: 12-round BCrypt for secure credential storage
 - **JWT Authentication**: Industry-standard token-based auth with refresh tokens
 - **Multi-Factor Authentication (MFA)**: Email-based 2FA for enhanced security
-- **Role-Based Access Control (RBAC)**: Granular permissions (user, moderator, admin)
-- **Comprehensive Audit Logging**: All security events logged to file + MongoDB
+- **Role-Based Access Control (RBAC)**: User roles and permissions
+- **Audit Logging**: Security events are logged to file and MongoDB
 - **Rate Limiting**: Intelligent rate limiting per endpoint category
 - **Input Validation**: Schema-based validation with XSS protection
 
@@ -69,20 +67,15 @@ Protect users from increasingly sophisticated scam attempts by providing accessi
 
 **Backend**
 - **Framework**: Django 5.0+ (Python 3.10+)
-- **Database**: MongoDB Atlas (NoSQL)
+- **Database**: MongoDB for application data; SQLite for Django internals
 - **Architecture**: Clean Architecture (domain/use_cases/infrastructure/interfaces)
-- **ML Models**: Transformers, scikit-learn, PyTorch
+- **AI**: Multi-head BERT via ONNX Runtime or PyTorch, plus Gemini for generative analysis
 
 **Frontend**
 - **Framework**: React 18+ with Vite
 - **State Management**: Context API + Custom Hooks
 - **Styling**: Modern CSS with responsive design
-- **API Client**: Axios with interceptors
-
-**Smart Contracts**
-- **Language**: Solidity 0.8+
-- **Framework**: Truffle Suite
-- **Network**: Ganache (dev), Ethereum-compatible chains (production)
+- **API Client**: Fetch-based API modules
 
 ### Clean Architecture Layers
 
@@ -112,7 +105,7 @@ Protect users from increasingly sophisticated scam attempts by providing accessi
 │                 Infrastructure Layer                         │
 │  (External services, database, email)                        │
 │  • backend/src/infrastructure/mongodb/                       │
-│  • backend/src/infrastructure/email/                         │
+│  • backend/src/infrastructure/email_service.py              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -145,7 +138,7 @@ pip install -r backend\requirements.txt
 
 # 4. Configure environment variables
 Copy-Item backend\.env.example backend\.env
-# Edit backend/.env with your MongoDB URI and secrets
+# Edit backend/.env with your MongoDB URI, secrets, Gemini key, and email settings
 
 # 5. Verify installation
 python backend\manage.py check
@@ -154,11 +147,35 @@ python backend\manage.py check_mongo
 # 6. Start development server
 python backend\manage.py runserver
 # Server: http://127.0.0.1:8000
-# Health check: http://127.0.0.1:8000/api/health
+# Health check: http://127.0.0.1:8000/api/health/
 
-# 7. (Optional) Start with model warm-up
-python backend\manage.py runserver_llm
 ```
+
+For the frontend, open a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open the address printed by Vite (normally `http://localhost:5173`). The
+frontend defaults to the local backend. For a different backend, set
+`VITE_API_BASE_URL` to its API URL (including `/api`) and `VITE_API_URL` to
+its origin (without `/api`); these settings are used by different API modules.
+Ensure the backend CORS configuration and frontend content security policy
+permit the selected origin.
+
+### BERT model setup
+
+The backend looks for an ONNX model and `tokenizer.json` in
+`backend/models/onnx/`. The tokenizer is included in the repository, but the
+large `.onnx` file is Git-ignored, so include it in a submitted project folder
+or supply it separately to a fresh clone. Alternatively, if the ONNX assets
+are unavailable, the loader attempts
+to download the configured PyTorch model from Hugging Face; this requires the
+model to be accessible and the required dependencies to be installed. If the
+model cannot be loaded, text classification returns `MODEL_NOT_LOADED` (503).
 
 ### Environment Configuration
 
@@ -172,7 +189,7 @@ python -c "from django.core.management.utils import get_random_secret_key; print
 python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
-Minimum required `.env` variables:
+Example local `.env` configuration:
 
 ```env
 # Core settings
@@ -188,7 +205,15 @@ MONGODB_DB_NAME=verfai
 JWT_SECRET_KEY=<your-jwt-secret>
 JWT_ACCESS_TOKEN_LIFETIME=900      # 15 minutes
 JWT_REFRESH_TOKEN_LIFETIME=604800  # 7 days
+
+# Gemini for explanations, image analysis, and other AI features
+GEMINI_ENABLED=true
+GEMINI_API_KEY=<your-gemini-api-key>
 ```
+
+Configure an email backend in `backend/.env` for verification, MFA, and
+password-reset emails. For local testing, `EMAIL_BACKEND=mock` writes emails to
+the console; use a configured email provider when delivery is needed.
 
 For complete environment variable reference, see [backend/docs/ENVIRONMENT_VARIABLES.md](backend/docs/ENVIRONMENT_VARIABLES.md).
 
@@ -206,29 +231,20 @@ verif-ai/
 │   │   ├── infrastructure/  # External services (MongoDB, email)
 │   │   ├── interfaces/      # REST API adapters
 │   │   └── apps/            # Django apps (core, auth, admin, etc.)
-│   ├── tests/               # Comprehensive test suite (84+ tests)
+│   ├── tests/               # Backend tests
 │   ├── docs/                # Detailed documentation
-│   ├── logs/                # Application and security logs
+│   ├── models/              # Local model assets
 │   └── manage.py            # Django management script
 │
-├── frontend/                # React frontend application
-│   ├── src/
-│   │   ├── components/      # Reusable React components
-│   │   ├── pages/           # Page-level components
-│   │   ├── context/         # React Context providers
-│   │   ├── hooks/           # Custom React hooks
-│   │   ├── api/             # API client modules
-│   │   └── utils/           # Utility functions
-│   └── tests/               # Frontend tests
-│
-├── contracts/               # Ethereum smart contracts
-│   ├── contracts/           # Solidity source files
-│   ├── migrations/          # Truffle deployment scripts
-│   ├── test/                # Smart contract tests (19 tests)
-│   └── build/               # Compiled contract artifacts
-│
-├── ias/                     # IAS (Implementation Assessment System)
-└── MODEL TEST/              # ML model testing utilities
+└── frontend/                # React frontend application
+    ├── src/
+    │   ├── components/      # Reusable React components
+    │   ├── pages/           # Page-level components
+    │   ├── context/         # React Context providers
+    │   ├── hooks/           # Custom React hooks
+    │   ├── api/             # API client modules
+    │   └── utils/           # Utility functions
+    └── tests/               # Frontend tests
 ```
 
 ---
@@ -244,8 +260,8 @@ verif-ai/
 - `POST /api/auth/mfa/verify/` - Verify MFA code and authenticate
 - `POST /api/auth/refresh/` - Refresh access token
 - `POST /api/auth/logout/` - Logout and blacklist tokens
-- `POST /api/auth/forgot-password/` - Request password reset
-- `POST /api/auth/reset-password/` - Reset password with token
+- `POST /api/auth/request-reset/` - Request a password reset code
+- `POST /api/auth/reset-password/` - Reset password with email and code
 
 **Features**:
 - Strong password policies (8+ chars, mixed case, digits, special characters)
@@ -266,40 +282,36 @@ verif-ai/
 }
 ```
 
-**Response**:
+**Example classification response** (selected fields):
 ```json
 {
   "is_scam": true,
-  "confidence": 0.95,
-  "analysis_id": "analysis_abc123",
-  "detected_patterns": [
-    "urgency_language",
-    "suspicious_links",
-    "money_request"
-  ],
-  "timestamp": "2026-02-18T10:00:00Z"
+  "label": "Scam",
+  "scam_score": 95.0,
+  "legit_score": 5.0,
+  "scam_type": "Prize, Raffle & Reward",
+  "type_confidence": 90.0,
+  "ref_id": "analysis-reference-id",
+  "summary": "The message contains a suspicious prize claim.",
+  "key_markers": ["Unexpected prize claim"]
 }
 ```
 
 **Capabilities**:
-- 15+ scam pattern categories
-- Real-time analysis (sub-second response)
-- Confidence scoring (0.0-1.0)
-- Pattern detection and explanation
-- Rate limits: 30/min (authenticated), 10/min (anonymous)
+- 15 scam categories
+- Scam and legitimate scores on a 0-100 scale
+- Explanation and safety guidance
+- Default rate limit: 30 requests per minute (`api_write`), configurable by environment
 
 **Workflow**:
-1. User performs scam analysis
-2. Results stored in MongoDB with unique analysis ID
-3. User reviews analysis history and reports
-4. Canonical payload created (hash + metadata, no PII)
-5. Smart contract called to store payload hash
-6. Transaction hash stored in MongoDB
-7. Verification compares on-chain vs off-chain data
+1. The gatekeeper screens the submitted text. It may return a limited or rejected
+   result with guidance instead of a classification.
+2. Messages routed for analysis are classified by BERT.
+3. Generative AI produces an explanation and guidance based on the classification.
+4. The backend attempts to save the result in MongoDB. Authenticated users can
+   review their saved history; `ref_id` is null if saving fails.
 
-**Privacy**:
-- Stored on-chain: Payload hash, classification, confidence, timestamp
-- Never on-chain: Message content, emails, phone numbers, PII
+Image analysis uses a separate Gemini-powered flow.
 
 ### Admin Dashboard
 
@@ -309,11 +321,11 @@ verif-ai/
 - `GET /api/admin/user-stats/` - User statistics
 - `GET /api/admin/users/` - List all users (paginated)
 - `GET /api/admin/users/<id>/` - Get user details
-- `PUT /api/admin/users/<id>/status/` - Activate/deactivate user
-- `PUT /api/admin/users/<id>/roles/` - Update user roles
-- `DELETE /api/admin/users/<id>/` - Delete user account
+- `PATCH /api/admin/users/<id>/status/` - Update user status
+- `PATCH /api/admin/users/<id>/roles/` - Update user roles
+- `DELETE /api/admin/users/<id>/delete/` - Delete user account
 - `GET /api/admin/reports/` - List user reports
-- `PUT /api/admin/reports/<id>/status/` - Update report status
+- `PATCH /api/admin/reports/<id>/` - Update a report or record a review
 
 **Capabilities**:
 - User lifecycle management
@@ -329,54 +341,33 @@ verif-ai/
 ### Useful Commands
 
 ```powershell
-# Backend
+# Backend, from the repository root
 python backend\manage.py check              # Run Django checks
 python backend\manage.py check_mongo        # Verify MongoDB connection
-python backend\manage.py warm_models        # Pre-load ML models
 python backend\manage.py runserver          # Start dev server
-python backend\manage.py runserver_llm      # Start with model warm-up
+```
 
-# Frontend
+```powershell
+# Frontend, from the repository root
 cd frontend
 npm install                                 # Install dependencies
 npm run dev                                 # Start dev server (port 5173)
 npm run build                               # Production build
 npm run preview                             # Preview production build
-
-# Smart Contracts
-cd contracts
-npm install                                 # Install dependencies
-npm run compile                             # Compile contracts
-npm run deploy                              # Deploy to Ganache
-npm test                                    # Run contract tests
-
-# Testing
-cd backend
-python -m pytest tests/                     # Run all tests
-python -m pytest tests/test_admin_*.py      # Run admin tests
 ```
 
 ### Branch Strategy
 
-**IMPORTANT**: Follow industry-standard Git workflow
+Suggested Git workflow:
 
-- **Default branch**: `main` (protected)
 - **Feature branches**: `feat/<topic>` (e.g., `feat/auth-signup`)
 - **Fix branches**: `fix/<topic>` (e.g., `fix/login-validation`)
-- **Pull Requests**: Target `main`, require review before merge
+- **Pull Requests**: Target the team's agreed base branch and request review
 
-**Rules**:
-1. **NEVER push directly to `main`**
-2. Create feature branch for all changes
-3. Test your code before pushing
-4. Ensure code is "mergeable" (no conflicts)
-5. Submit PR and request review
-6. Address review feedback promptly
-
-**Key Branches**:
-- `main` - Production-ready code
-- `LLM` - AI/ML model development
-- _(Add team-specific branches here)_
+**Steps**:
+1. Create a branch for your changes.
+2. Test your code before pushing and resolve conflicts.
+3. Submit a pull request and address review feedback.
 
 ### Development Guidelines
 
@@ -409,45 +400,34 @@ python -m pytest tests/test_admin_*.py      # Run admin tests
 
 ### Test Coverage
 
-**Backend**: 84+ comprehensive tests
+**Backend**: Python tests
 - Unit tests: Domain entities, use cases
 - Integration tests: Database and API
 - Security tests: Auth, authorization, input validation
-- Performance tests: Rate limiting, concurrent requests
-- E2E tests: Full user workflows
+- Tests for security, detection, reports, analytics, and admin workflows
 
-**Frontend**: Jest + React Testing Library
+**Frontend**: Vitest + React Testing Library
 - Component tests
 - Integration tests
-- E2E tests with Playwright
-
-**Smart Contracts**: 19 Truffle tests
-- Unit tests for all contract functions
-- Event emission verification
-- Access control tests
-- Gas optimization tests
 
 ### Running Tests
 
+Backend tests require `pytest`, which is not included in the backend runtime
+requirements. Install it in the active development environment if needed.
+
 ```powershell
-# Backend - All tests
+# Backend, from the repository root
 cd backend
-python -m pytest tests/ -v
+python -m pytest tests -v
+python -m pytest tests\test_detection_pipeline.py -v
+```
 
-# Backend - Specific test categories
-python tests/test_admin_api.py              # Admin API tests
-python tests/test_admin_security.py         # Admin security tests
-python tests/test_integration_verification.py  # Integration tests (14)
-python tests/test_api.py                    # API tests (10)
-
-# Frontend tests
+```powershell
+# Frontend, from the repository root
 cd frontend
-npm test                                    # Run all tests
-npm run test:coverage                       # With coverage report
-
-# Smart contract tests
-cd contracts
-npx truffle test                            # All contract tests (19)
+npm run test:run                            # Run tests once
+npm test                                    # Run tests (watch disabled by default)
+npm test -- --watch                         # Run tests in watch mode
 ```
 
 ---
@@ -466,6 +446,7 @@ npx truffle test                            # All contract tests (19)
 
 **Configuration**:
 - [ ] MongoDB Atlas cluster created
+- [ ] BERT model assets available and Gemini configured
 - [ ] Email service configured (SendGrid/SMTP)
 - [ ] CORS origins configured
 - [ ] Allowed hosts configured
@@ -478,11 +459,6 @@ npx truffle test                            # All contract tests (19)
 - [ ] API endpoints tested
 
 ### Deployment Platforms
-
-Supported platforms:
-- **Cloud**: AWS, Azure, Google Cloud Platform
-- **Containers**: Docker, Kubernetes
-- **PaaS**: Heroku, Railway, Render
 
 For detailed deployment instructions, see [backend/docs/DEPLOYMENT.md](backend/docs/DEPLOYMENT.md).
 
@@ -504,10 +480,14 @@ JWT_SECRET_KEY=<64-char-jwt-secret>
 JWT_ACCESS_TOKEN_LIFETIME=900      # 15 minutes
 JWT_REFRESH_TOKEN_LIFETIME=604800  # 7 days
 
+# Generative AI
+GEMINI_ENABLED=true
+GEMINI_API_KEY=<your-gemini-api-key>
+
 # Email
 EMAIL_BACKEND=sendgrid
 SENDGRID_API_KEY=SG.your-api-key
-SENDGRID_FROM_EMAIL=noreply@yourdomain.com
+EMAIL_FROM_ADDRESS=noreply@yourdomain.com
 
 # Or use Nodemailer bridge
 # EMAIL_BACKEND=nodemailer
@@ -530,10 +510,10 @@ CORS_ALLOWED_ORIGINS=https://yourdomain.com
 
 ### Complete Documentation
 
-All documentation is located in [backend/docs/](backend/docs/):
+Backend documentation is located in [backend/docs/](backend/docs/).
 
 **For Developers**:
-- [API_REFERENCE.md](backend/docs/API_REFERENCE.md) - Complete API documentation
+- [API_REFERENCE.md](backend/docs/API_REFERENCE.md) - Common API endpoints
 - [SECURITY_BEST_PRACTICES.md](backend/docs/SECURITY_BEST_PRACTICES.md) - Security guidelines
 - [SETUP_TEAM.md](backend/SETUP_TEAM.md) - Detailed team setup guide
 
@@ -547,7 +527,7 @@ All documentation is located in [backend/docs/](backend/docs/):
 
 ### Quick Links
 
-- [API Reference](backend/docs/API_REFERENCE.md) - All endpoints with examples
+- [API Reference](backend/docs/API_REFERENCE.md) - Selected endpoints with examples
 - [Security Guide](backend/docs/SECURITY.md) - Security features and best practices
 - [Deployment Guide](backend/docs/DEPLOYMENT.md) - Step-by-step deployment
 - [Environment Variables](backend/docs/ENVIRONMENT_VARIABLES.md) - Configuration reference
@@ -565,11 +545,11 @@ All documentation is located in [backend/docs/](backend/docs/):
 5. **Run tests**: Ensure all tests pass
 6. **Commit**: `git commit -m 'feat: add amazing feature'`
 7. **Push**: `git push origin feat/amazing-feature`
-8. **Open a Pull Request** targeting `main`
+8. **Open a Pull Request** targeting the agreed base branch
 
 ### Code Standards
 
-- Follow PEP 8 (Python) and ESLint configs (JavaScript)
+- Follow PEP 8 (Python) and existing JavaScript conventions
 - Write meaningful commit messages
 - Keep PRs focused and small
 - Include tests for new features
@@ -578,10 +558,9 @@ All documentation is located in [backend/docs/](backend/docs/):
 
 ### Review Process
 
-1. Automated tests must pass
-2. At least one code review approval required
-3. Security review for security-related changes
-4. Documentation review for API changes
+1. Run relevant automated tests.
+2. Request code review and address feedback.
+3. Review security implications and update documentation as appropriate.
 
 ---
 
@@ -589,7 +568,8 @@ All documentation is located in [backend/docs/](backend/docs/):
 
 - **Atlas SRV URIs**: Require `dnspython` package (included in requirements)
 - **TLS**: Automatically enforced for remote/Atlas connections
-- **Local Development**: TLS skipped for localhost by default
+- **Local Development**: TLS is skipped for localhost unless forced; the example
+  environment file sets `MONGODB_REQUIRE_TLS=true`
 - **Force TLS**: Set `MONGODB_REQUIRE_TLS=true` in `.env`
 - **Connection Errors**: Check IP whitelist and credentials in MongoDB Atlas
 
@@ -624,7 +604,7 @@ See [SECURITY.md](backend/docs/SECURITY.md) for full security documentation.
 
 ## License
 
-[MIT License](LICENSE) - See LICENSE file for details
+No license file is currently included in this repository.
 
 ---
 

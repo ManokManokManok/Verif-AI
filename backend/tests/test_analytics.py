@@ -400,25 +400,6 @@ class TestHelperFunctions:
         assert payment['current_distinct_users'] == 5
         assert payment['previous_distinct_users'] == 5
 
-    def test_community_demo_seed_produces_privacy_qualified_rise(self):
-        from scripts.manage_analytics_demo_data import BATCH_FIELD, _build_demo_documents
-        from zoneinfo import ZoneInfo
-
-        local_timezone = ZoneInfo('America/Los_Angeles')
-        now = datetime(2026, 9, 29, 12, tzinfo=local_timezone)
-        documents = _build_demo_documents('test-presentation', now)
-
-        community = _build_community_analytics(documents, 'America/Los_Angeles', now)
-        rising = next(item for item in community['rising_scams'] if item['type'] == 'Impersonation and Authority')
-
-        assert len(documents) == 397
-        assert all(document[BATCH_FIELD] == 'test-presentation' for document in documents)
-        assert community['has_demo_data'] is True
-        assert rising['previous_count'] == 15
-        assert rising['current_count'] == 22
-        assert rising['change_percent'] == 46.7
-
-
 # ==================== Analytics Repository Tests ====================
 
 class TestAnalyticsRepository:

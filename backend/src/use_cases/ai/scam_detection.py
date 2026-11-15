@@ -88,7 +88,7 @@ class ScamDetectionUseCase:
         if getattr(self.model, "is_onnx", False):
             return self._detect_onnx(message)
 
-        # Imported lazily so the app starts without loading torch (e.g. LITE_MODE).
+        # The ONNX backend does not need torch.
         import torch
         import torch.nn.functional as F
         
@@ -110,9 +110,6 @@ class ScamDetectionUseCase:
             calibrated_type_logits = type_logits / self.temperature
             
             # Calculate probabilities
-
-            # !!! Alter softmax calculation based on variable presence
-            # !!! Use bias calculations (maybe enforce scraping)
             scam_probs = F.softmax(calibrated_scam_logits, dim=1).squeeze()
             type_probs = F.softmax(calibrated_type_logits, dim=1).squeeze()
         

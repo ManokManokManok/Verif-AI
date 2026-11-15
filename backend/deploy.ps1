@@ -2,7 +2,6 @@
 # Run from the backend folder:  .\deploy.ps1
 # Secrets are read from .env (never printed). The Gmail app password is read from NODEMAILER_PASS / EMAIL_HOST_PASSWORD.
 param(
-    [string]$LiteMode = 'true',
     [string]$MemoryMb = '512',
     [string]$FrontendOrigin = 'https://verif-ai-site.vercel.app',
     [string]$LegacyFrontendOrigin = 'https://verif-ai-frontend.vercel.app',
@@ -40,7 +39,7 @@ if (-not $emailUser) { $emailUser = Get-EnvVal 'NODEMAILER_USER' }
 
 $params = @(
     "ImageUri=$image", "FrontendOrigin=$FrontendOrigin", "LegacyFrontendOrigin=$LegacyFrontendOrigin", "BudgetEmail=$BudgetEmail",
-    "LiteMode=$LiteMode", "MemoryMb=$MemoryMb",
+    "MemoryMb=$MemoryMb",
     "DjangoSecretKey=$(Get-EnvVal 'DJANGO_SECRET_KEY')", "JwtSecretKey=$(Get-EnvVal 'JWT_SECRET_KEY')",
     "MongoUri=$(Get-EnvVal 'MONGODB_URI')", "GeminiApiKey=$(Get-EnvVal 'GEMINI_API_KEY')",
     "EmailUser=$emailUser", "EmailAppPassword=$emailPass"

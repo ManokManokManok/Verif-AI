@@ -1,7 +1,6 @@
 # API Reference — Verif-AI Backend
 
-> Complete API endpoint documentation
-> Last updated: February 18, 2026
+> Reference for commonly used backend endpoints
 
 ---
 
@@ -20,11 +19,14 @@
 ## Base URL
 
 Development: `http://localhost:8000`  
-Production: `https://api.verif-ai.com` (configure in deployment)
+Production: use the configured backend origin for your deployment.
 
 ---
 
 ## Authentication Endpoints
+
+Response examples show selected fields; actual responses may include additional
+fields. Rate limits shown are defaults and may be configured.
 
 ### 1. User Registration
 
@@ -62,9 +64,13 @@ Production: `https://api.verif-ai.com` (configure in deployment)
     "is_verified": false,
     "created_at": "2026-02-18T10:00:00Z"
   },
-  "message": "User registered successfully. Please verify your email."
+  "message": "User registered successfully",
+  "requires_verification": true
 }
 ```
+
+If an unverified account already exists, the endpoint responds with 200 and
+requests a fresh verification code.
 
 #### Error Responses
 - `400 Bad Request`: Invalid input or validation failure
@@ -90,6 +96,7 @@ Production: `https://api.verif-ai.com` (configure in deployment)
 #### Success Response (200 OK)
 ```json
 {
+  "message": "Login successful",
   "user": {
     "id": "user_abc123",
     "email": "user@example.com",
@@ -101,7 +108,7 @@ Production: `https://api.verif-ai.com` (configure in deployment)
   "tokens": {
     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "token_type": "Bearer"
+    "token_type": "bearer"
   }
 }
 ```
@@ -132,8 +139,8 @@ Production: `https://api.verif-ai.com` (configure in deployment)
 #### Success Response (200 OK)
 ```json
 {
-  "message": "MFA code sent to your email",
-  "expires_in": 300
+  "message": "Verification code sent to your email",
+  "expires_in_seconds": 300
 }
 ```
 
@@ -161,6 +168,7 @@ Production: `https://api.verif-ai.com` (configure in deployment)
 #### Success Response (200 OK)
 ```json
 {
+  "message": "MFA verification successful",
   "user": {
     "id": "user_abc123",
     "email": "user@example.com",
@@ -170,14 +178,14 @@ Production: `https://api.verif-ai.com` (configure in deployment)
   "tokens": {
     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "token_type": "Bearer"
+    "token_type": "bearer"
   }
 }
 ```
 
 #### Error Responses
-- `400 Bad Request`: Invalid or expired code
-- `401 Unauthorized`: Too many failed attempts (max 3)
+- `400 Bad Request`: Invalid input
+- `401 Unauthorized`: Invalid or expired code
 - `429 Too Many Requests`: Rate limit exceeded
 
 ---
@@ -198,8 +206,13 @@ Production: `https://api.verif-ai.com` (configure in deployment)
 #### Success Response (200 OK)
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "Bearer"
+  "message": "Token refreshed successfully",
+  "user": { "id": "user_abc123", "email": "user@example.com" },
+  "tokens": {
+    "access_token": "<access_token>",
+    "refresh_token": "<refresh_token>",
+    "token_type": "bearer"
+  }
 }
 ```
 
@@ -235,7 +248,7 @@ Authorization: Bearer <access_token>
 ```
 
 #### Notes
-- Blacklists both access and refresh tokens
+- Blacklists the access token and, when supplied, the refresh token
 - Tokens remain blacklisted until expiry
 
 ---
@@ -258,7 +271,7 @@ Authorization: Bearer <access_token>
 #### Success Response (200 OK)
 ```json
 {
-  "message": "Verification email sent"
+  "message": "Verification email sent successfully"
 }
 ```
 
@@ -268,7 +281,7 @@ Authorization: Bearer <access_token>
 
 **Endpoint:** `POST /api/auth/verify-email/`  
 **Authentication:** Not required  
-**Rate Limit:** 10 requests / 1 hour
+**Rate Limit:** 5 requests / 1 hour
 
 #### Request Body
 ```json
@@ -286,6 +299,11 @@ Authorization: Bearer <access_token>
 
 #### Error Responses
 - `400 Bad Request`: Invalid or expired token
+
+The current code-based verification flow uses
+`POST /api/auth/verify-email/send-code/` and
+`POST /api/auth/verify-email/verify-code/`. The send request takes `email`;
+the verify request takes `email` and a six-digit `code`.
 
 ---
 
@@ -307,13 +325,15 @@ Authorization: Bearer <access_token>
 #### Success Response (200 OK)
 ```json
 {
-  "message": "Password reset email sent"
+  "message": "If an account exists for this email, a password reset code has been sent.",
+  "retry_after_seconds": 60,
+  "send_limit_reached": false
 }
 ```
 
 #### Notes
 - Always returns success even if email doesn't exist (security)
-- Reset token valid for 1 hour
+- Reset codes expire after 10 minutes; resending has a 60-second cooldown.
 
 ---
 
@@ -321,12 +341,13 @@ Authorization: Bearer <access_token>
 
 **Endpoint:** `POST /api/auth/reset-password/`  
 **Authentication:** Not required  
-**Rate Limit:** 5 requests / 1 hour
+**Rate Limit:** 3 requests / 1 hour
 
 #### Request Body
 ```json
 {
-  "token": "reset_token_abc123",
+  "email": "user@example.com",
+  "code": "123456",
   "new_password": "NewSecurePass123!"
 }
 ```
@@ -341,13 +362,15 @@ Authorization: Bearer <access_token>
 #### Error Responses
 - `400 Bad Request`: Invalid token or weak password
 
+Existing legacy reset links may also submit `token` and `new_password`.
+
 ---
 
 ## User Management
 
 ### 1. Get User Profile
 
-**Endpoint:** `GET /api/users/profile/`  
+**Endpoint:** `GET /api/auth/profile/`
 **Authentication:** Required (Bearer token)  
 **Rate Limit:** 100 requests / 1 minute
 
@@ -359,15 +382,16 @@ Authorization: Bearer <access_token>
 #### Success Response (200 OK)
 ```json
 {
-  "id": "user_abc123",
-  "email": "user@example.com",
-  "username": "johndoe",
-  "roles": ["user"],
-  "permissions": ["view_profile", "update_profile", "analyze_content", "view_history"],
-  "is_active": true,
-  "is_verified": true,
-  "created_at": "2026-01-01T00:00:00Z",
-  "last_login": "2026-02-18T10:00:00Z"
+  "user": {
+    "id": "user_abc123",
+    "email": "user@example.com",
+    "username": "johndoe",
+    "roles": ["user"],
+    "is_active": true,
+    "is_verified": true,
+    "created_at": "2026-01-01T00:00:00Z",
+    "last_login": "2026-02-18T10:00:00Z"
+  }
 }
 ```
 
@@ -375,7 +399,7 @@ Authorization: Bearer <access_token>
 
 ### 2. Check Permission
 
-**Endpoint:** `POST /api/users/check-permission/`  
+**Endpoint:** `POST /api/auth/check-permission/`
 **Authentication:** Required (Bearer token)  
 **Rate Limit:** 100 requests / 1 minute
 
@@ -391,8 +415,8 @@ Authorization: Bearer <access_token>
 ```json
 {
   "has_permission": false,
-  "user_id": "user_abc123",
-  "permission": "manage_users"
+  "permission": "manage_users",
+  "resource": "user:user_xyz789"
 }
 ```
 
@@ -406,17 +430,10 @@ Authorization: Bearer <access_token>
 
 **Endpoint:** `GET /api/admin/model-health/`  
 **Authentication:** Required (Admin)  
-**Rate Limit:** 50 requests / 1 minute
+**Rate Limit:** 100 requests / 1 minute (default `api_read`)
 
 #### Success Response (200 OK)
-```json
-{
-  "model_loaded": true,
-  "last_check": "2026-02-18T10:00:00Z",
-  "memory_usage": "2.5 GB",
-  "inference_count": 1234
-}
-```
+The response contains `success: true` and a `data` object with model health metrics.
 
 ---
 
@@ -424,25 +441,15 @@ Authorization: Bearer <access_token>
 
 **Endpoint:** `GET /api/admin/analysis-stats/`  
 **Authentication:** Required (Admin)  
-**Rate Limit:** 50 requests / 1 minute
+**Rate Limit:** 100 requests / 1 minute (default `api_read`)
 
 #### Query Parameters
 - `start_date` (optional): ISO 8601 date
 - `end_date` (optional): ISO 8601 date
+- `period` (optional): `day`, `week`, `month`, `year`, or `all_time`
 
 #### Success Response (200 OK)
-```json
-{
-  "total_analyses": 5678,
-  "scam_detected": 234,
-  "legitimate": 5444,
-  "avg_confidence": 0.87,
-  "period": {
-    "start": "2026-02-01T00:00:00Z",
-    "end": "2026-02-18T23:59:59Z"
-  }
-}
-```
+The response contains `success: true` and a `data` object with analysis statistics.
 
 ---
 
@@ -450,18 +457,11 @@ Authorization: Bearer <access_token>
 
 **Endpoint:** `GET /api/admin/user-stats/`  
 **Authentication:** Required (Admin)  
-**Rate Limit:** 50 requests / 1 minute
+**Rate Limit:** 100 requests / 1 minute (default `api_read`)
 
 #### Success Response (200 OK)
-```json
-{
-  "total_users": 1234,
-  "active_users": 890,
-  "verified_users": 750,
-  "admins": 5,
-  "new_users_this_month": 45
-}
-```
+The response contains `success: true` and a `data` object with user statistics.
+The same optional `start_date`, `end_date`, and `period` filters apply.
 
 ---
 
@@ -469,35 +469,27 @@ Authorization: Bearer <access_token>
 
 **Endpoint:** `GET /api/admin/users/`  
 **Authentication:** Required (Admin)  
-**Rate Limit:** 50 requests / 1 minute
+**Rate Limit:** 100 requests / 1 minute (default `api_read`)
 
 #### Query Parameters
 - `page` (default: 1): Page number
-- `limit` (default: 20, max: 100): Items per page
+- `limit` (default: 50, max: 100): Items per page
 - `search` (optional): Search by email or username
 - `role` (optional): Filter by role
 - `is_active` (optional): Filter by active status
+- `is_verified` (optional): Filter by verification status
+- `sort_by` and `sort_order` (optional): Sort field and `asc` or `desc`
 
 #### Success Response (200 OK)
 ```json
 {
-  "users": [
-    {
-      "id": "user_abc123",
-      "email": "user@example.com",
-      "username": "johndoe",
-      "roles": ["user"],
-      "is_active": true,
-      "is_verified": true,
-      "created_at": "2026-01-01T00:00:00Z",
-      "last_login": "2026-02-18T10:00:00Z"
-    }
-  ],
-  "pagination": {
-    "current_page": 1,
-    "total_pages": 62,
-    "total_count": 1234,
-    "limit": 20
+  "success": true,
+  "data": {
+    "users": [],
+    "total": 0,
+    "page": 1,
+    "limit": 50,
+    "total_pages": 0
   }
 }
 ```
@@ -508,71 +500,57 @@ Authorization: Bearer <access_token>
 
 **Endpoint:** `GET /api/admin/users/<user_id>/`  
 **Authentication:** Required (Admin)  
-**Rate Limit:** 50 requests / 1 minute
+**Rate Limit:** 100 requests / 1 minute (default `api_read`)
 
 #### Success Response (200 OK)
-```json
-{
-  "id": "user_abc123",
-  "email": "user@example.com",
-  "username": "johndoe",
-  "roles": ["user"],
-  "permissions": ["view_profile", "update_profile"],
-  "is_active": true,
-  "is_verified": true,
-  "created_at": "2026-01-01T00:00:00Z",
-  "last_login": "2026-02-18T10:00:00Z",
-  "verified_at": "2026-01-01T12:30:00Z"
-}
-```
+The response contains `success: true` and a `data` object with user details.
 
 ---
 
 ### 6. Update User Status
 
-**Endpoint:** `PUT /api/admin/users/<user_id>/status/`  
-**Authentication:** Required (Admin with `manage_users`)  
+**Endpoint:** `PATCH /api/admin/users/<user_id>/status/`
+**Authentication:** Required (Admin)
 **Rate Limit:** 30 requests / 1 minute
 
 #### Request Body
 ```json
 {
-  "is_active": false,
-  "reason": "Terms of service violation"
+  "status": "suspended"
 }
 ```
 
 #### Success Response (200 OK)
 ```json
 {
-  "message": "User status updated successfully",
-  "user_id": "user_abc123",
-  "is_active": false
+  "success": true,
+  "message": "User user@example.com status has been set to suspended"
 }
 ```
+
+Supported statuses are `active`, `inactive`, and `suspended`. The endpoint
+also accepts the legacy `is_active` boolean.
 
 ---
 
 ### 7. Update User Roles
 
-**Endpoint:** `PUT /api/admin/users/<user_id>/roles/`  
-**Authentication:** Required (Admin with `manage_roles`)  
+**Endpoint:** `PATCH /api/admin/users/<user_id>/roles/`
+**Authentication:** Required (Admin)
 **Rate Limit:** 30 requests / 1 minute
 
 #### Request Body
 ```json
 {
-  "roles": ["moderator"],
-  "reason": "Promoted to moderator"
+  "roles": ["user"]
 }
 ```
 
 #### Success Response (200 OK)
 ```json
 {
-  "message": "User roles updated successfully",
-  "user_id": "user_abc123",
-  "roles": ["moderator"]
+  "success": true,
+  "message": "Roles updated for user@example.com"
 }
 ```
 
@@ -580,15 +558,18 @@ Authorization: Bearer <access_token>
 
 ### 8. Delete User
 
-**Endpoint:** `DELETE /api/admin/users/<user_id>/`  
-**Authentication:** Required (Admin with `delete_users`)  
-**Rate Limit:** 10 requests / 1 minute
+**Endpoint:** `DELETE /api/admin/users/<user_id>/delete/`
+**Authentication:** Required (Admin)
+**Rate Limit:** 30 requests / 1 minute (default `api_write`)
+
+Use the optional query parameter `hard_delete=true` for permanent deletion;
+the default is a soft delete.
 
 #### Success Response (200 OK)
 ```json
 {
-  "message": "User deleted successfully",
-  "user_id": "user_abc123"
+  "success": true,
+  "message": "User user@example.com has been archived"
 }
 ```
 
@@ -598,7 +579,7 @@ Authorization: Bearer <access_token>
 
 **Endpoint:** `GET /api/admin/reports/`  
 **Authentication:** Required (Admin)  
-**Rate Limit:** 50 requests / 1 minute
+**Rate Limit:** 100 requests / 1 minute (default `api_read`)
 
 #### Query Parameters
 - `page` (default: 1)
@@ -668,8 +649,8 @@ Reporter-facing report submission and report-history responses expose only publi
 ### 1. Detect Scam
 
 **Endpoint:** `POST /api/detect/`  
-**Authentication:** Optional (rate limits differ)  
-**Rate Limit:** 30 requests / 1 minute (authenticated), 10 requests / 1 minute (anonymous)
+**Authentication:** Optional
+**Rate Limit:** 30 requests / 1 minute (default `api_write`)
 
 #### Request Body
 ```json
@@ -681,27 +662,31 @@ Reporter-facing report submission and report-history responses expose only publi
 #### Validation
 - **message**: 1-10,000 characters (10KB limit)
 
-#### Success Response (200 OK)
+#### Classification Response (200 OK)
+
+Example selected fields (additional explanation and review fields may be present):
 ```json
 {
+  "message": "Congratulations! You've won $1,000,000! Click here to claim your prize now!",
+  "ref_id": "analysis-reference-id",
   "is_scam": true,
-  "confidence": 0.95,
-  "analysis_id": "analysis_ghi012",
-  "detected_patterns": [
-    "urgency_language",
-    "suspicious_links",
-    "money_request"
-  ],
-  "timestamp": "2026-02-18T10:00:00Z"
+  "label": "Scam",
+  "scam_score": 95.0,
+  "legit_score": 5.0,
+  "scam_type": "Prize, Raffle & Reward",
+  "type_confidence": 90.0,
+  "summary": "The message contains a suspicious prize claim.",
+  "key_markers": ["Unexpected prize claim"]
 }
 ```
 
-#### Response Fields
-- `is_scam`: Boolean indicating if message is likely a scam
-- `confidence`: Float 0.0-1.0 indicating model confidence
-- `analysis_id`: Unique ID for this analysis (can be used for reporting)
-- `detected_patterns`: Array of pattern identifiers
-- `timestamp`: ISO 8601 timestamp of analysis
+- `scam_score`, `legit_score`, and `type_confidence` use a 0-100 scale.
+- `ref_id` is null if the result could not be saved.
+- The gatekeeper may instead return `result_type: "gatekeeper"` and
+  `route: "limited"` or `"rejected"`, together with guidance rather than
+  a BERT classification.
+- If the BERT model cannot load, the endpoint returns 503 with error code
+  `MODEL_NOT_LOADED`.
 
 ---
 
@@ -716,27 +701,8 @@ Reporter-facing report submission and report-history responses expose only publi
 #### Success Response (200 OK)
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2026-02-18T10:00:00Z",
-  "database": "connected",
-  "version": "1.0.0"
-}
-```
-
----
-
-### 2. MongoDB Health
-
-**Endpoint:** `GET /api/health/mongodb/`  
-**Authentication:** Not required  
-**Rate Limit:** 100 requests / 1 minute
-
-#### Success Response (200 OK)
-```json
-{
-  "status": "connected",
-  "latency_ms": 23,
-  "database": "verfai1"
+  "status": "ok",
+  "service": "verfai-api"
 }
 ```
 
@@ -744,7 +710,8 @@ Reporter-facing report submission and report-history responses expose only publi
 
 ## Error Responses
 
-All error responses follow this format:
+Many endpoints return errors in this format; details and additional fields
+vary by endpoint:
 
 ```json
 {
@@ -770,7 +737,7 @@ All error responses follow this format:
 | `EMAIL_ALREADY_EXISTS` | 409 | Email already registered |
 | `WEAK_PASSWORD` | 400 | Password doesn't meet requirements |
 | `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
-| `INTERNAL_SERVER_ERROR` | 500 | Server error |
+| `INTERNAL_ERROR` | 500 | Server error |
 
 ---
 
@@ -790,15 +757,16 @@ X-RateLimit-Reset: 1676721600
 {
   "error": {
     "code": "RATE_LIMIT_EXCEEDED",
-    "message": "Rate limit exceeded. Please try again later.",
-    "details": {
-      "retry_after": 60
-    }
+    "message": "Too many requests. Please slow down and try again later.",
+    "retry_after": 60,
+    "retry_after_human": "1 minute"
   }
 }
 ```
 
 ### Rate Limit Categories
+
+These are defaults and can be overridden by environment configuration.
 
 | Category | Limit | Window | Description |
 |----------|-------|--------|-------------|
@@ -827,11 +795,11 @@ X-RateLimit-Reset: 1676721600
 
 3. When access_token expires (15 min):
    POST /api/auth/refresh/
-   → Returns new access_token
+   → Returns a `tokens` object with access and refresh tokens
 
 4. Logout:
    POST /api/auth/logout/
-   → Blacklists both tokens
+   → Blacklists the access token and the refresh token if supplied
 ```
 
 ### MFA Login Flow
@@ -855,11 +823,9 @@ X-RateLimit-Reset: 1676721600
 ## Notes
 
 - All timestamps are in UTC and ISO 8601 format
-- All endpoints accept and return `application/json`
-- Token expiry: Access tokens (15 min), Refresh tokens (7 days)
-- Maximum request body size: 10MB
-- Email verification tokens expire after 24 hours
-- Password reset tokens expire after 1 hour
+- Most endpoints accept and return `application/json`; image uploads use multipart form data.
+- Default token expiry: access tokens (15 min), refresh tokens (7 days); both are configurable.
+- Password reset codes expire after 10 minutes.
 - MFA codes expire after 5 minutes (max 3 attempts)
 
 ---

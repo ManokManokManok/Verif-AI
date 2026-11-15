@@ -315,8 +315,8 @@ Configure MongoDB Atlas alerts for:
 - [AWS VPC Peering Guide](https://docs.aws.amazon.com/vpc/latest/peering/)
 - [Azure Private Link](https://docs.microsoft.com/en-us/azure/private-link/)
 - [GCP Private Service Connect](https://cloud.google.com/vpc/docs/private-service-connect)
-- [Verif-AI Security Best Practices](SECURITY_BEST_PRACTICES.md)
-- [Verif-AI Deployment Guide](DEPLOYMENT.md)
+- [Verif-AI Security Overview](../SECURITY.md)
+- [Verif-AI Deployment Guide](../DEPLOYMENT.md)
 
 ---
 

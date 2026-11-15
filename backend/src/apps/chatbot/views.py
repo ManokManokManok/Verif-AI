@@ -17,7 +17,7 @@ import logging
 from PIL import Image
 
 from ...use_cases.chatbot import GeneralChatbotUseCase
-from ...use_cases.ai.gemini_classification import LOW_RISK_FLOOR, align_percentages
+from ...use_cases.ai.score_text import LOW_RISK_FLOOR, align_percentages
 from ...infrastructure.mongodb.connection import get_mongo_client, get_database_name
 from ...infrastructure.mongodb.conversation_repository import ConversationRepository
 from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
@@ -95,7 +95,7 @@ def _parse_image_report(raw_text: str) -> dict:
     inconclusive = verdict.lower() == 'inconclusive'
     raw_scam = 50.0 if inconclusive else (confidence if scam_verdict else 100.0 - confidence)
     scam_score = raw_scam
-    # Same rule as text classification: scores this low show a clean 0.
+    # Scores this low show a clean 0.
     if not inconclusive and scam_score <= LOW_RISK_FLOOR:
         scam_score = 0.0
     legit_score = 100.0 - scam_score
