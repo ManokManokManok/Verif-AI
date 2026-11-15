@@ -8,7 +8,7 @@ Minimal starter using Django with a clean architecture layout and MongoDB Atlas.
 - Windows PowerShell
 
 ## Quick Start (Windows)
-For teammate-focused steps, see the team guide: [backend/SETUP_TEAM.md](backend/SETUP_TEAM.md).
+For teammate-focused steps, see the team guide: [SETUP_TEAM.md](SETUP_TEAM.md).
 1. Create and activate a virtual environment:
 ```powershell
 python -m venv .venv
@@ -23,6 +23,17 @@ pip install -r backend\requirements.txt
 Copy-Item backend\.env.example backend\.env
 ```
 Edit `backend/.env` with `DJANGO_SECRET_KEY`, `MONGODB_URI`, `MONGODB_DB_NAME`, and `JWT_SECRET_KEY`. Set a stable `PASSWORD_RESET_CODE_SECRET` as well (or keep the stable `JWT_SECRET_KEY` fallback) so reset codes remain verifiable for their 10-minute lifetime if the Django launcher is restarted.
+MFA is enabled by default; disabling it for local testing requires both
+`DJANGO_DEBUG=True` and `MFA_ENABLED=False`.
+
+Scam detection runs the gatekeeper, then the multi-head BERT classifier for
+messages routed to analysis, followed by generative explanations. For the ONNX
+backend, put the matching `model.onnx` and `tokenizer.json` in
+`backend\models\onnx`. The supplied reference export is in
+`REFERENCE (dont galaw muna -kench)\ONNX reformat`. The model is too large for
+Git and must be included separately when sharing the project folder. Without
+ONNX assets, the loader attempts the configured Hugging Face/PyTorch model;
+if BERT cannot load, analysis returns a service-unavailable error.
 
 4. Run initial checks and start the server:
 ```powershell
@@ -123,37 +134,38 @@ This backend implements a comprehensive authentication system with JWT-based sta
 
 #### Authentication Endpoints
 ```
-POST /api/auth/register           - User registration
-POST /api/auth/login              - User login
-POST /api/auth/refresh            - Refresh access token
-POST /api/auth/logout             - Logout (blacklist tokens)
-POST /api/auth/send-verification  - Send email verification
-POST /api/auth/verify-email       - Verify email with token
-POST /api/auth/request-reset      - Request a password reset code
-POST /api/auth/reset-password     - Reset password with email and code (legacy links remain temporarily supported)
+POST /api/auth/register/           - User registration
+POST /api/auth/login/              - User login
+POST /api/auth/refresh/            - Refresh access token
+POST /api/auth/logout/             - Logout (blacklist tokens)
+POST /api/auth/send-verification/  - Send email verification
+POST /api/auth/verify-email/       - Verify email with token
+POST /api/auth/request-reset/      - Request a password reset code
+POST /api/auth/reset-password/     - Reset password with email and code (legacy links supported)
 ```
 
 #### User Management Endpoints
 ```
-GET  /api/users/profile           - Get current user profile
-POST /api/users/check-permission  - Check user permissions
+GET  /api/auth/profile/           - Get current user profile
+POST /api/auth/check-permission/  - Check user permissions
 ```
 
 ### Usage Examples
 
 #### User Registration
 ```bash
-curl -X POST http://localhost:8000/api/auth/register \
+curl -X POST http://localhost:8000/api/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
+    "username": "johndoe",
     "password": "SecurePass123!"
   }'
 ```
 
 #### User Login
 ```bash
-curl -X POST http://localhost:8000/api/auth/login \
+curl -X POST http://localhost:8000/api/auth/login/ \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -164,12 +176,12 @@ curl -X POST http://localhost:8000/api/auth/login \
 #### Email Verification
 ```bash
 # Send verification email
-curl -X POST http://localhost:8000/api/auth/send-verification \
+curl -X POST http://localhost:8000/api/auth/send-verification/ \
   -H "Content-Type: application/json" \
   -d '{"email": "user@example.com"}'
 
 # Verify email with token
-curl -X POST http://localhost:8000/api/auth/verify-email \
+curl -X POST http://localhost:8000/api/auth/verify-email/ \
   -H "Content-Type: application/json" \
   -d '{"token": "verification_token_here"}'
 ```
@@ -177,12 +189,12 @@ curl -X POST http://localhost:8000/api/auth/verify-email \
 #### Password Reset
 ```bash
 # Request password reset
-curl -X POST http://localhost:8000/api/auth/request-reset \
+curl -X POST http://localhost:8000/api/auth/request-reset/ \
   -H "Content-Type: application/json" \
   -d '{"email": "user@example.com"}'
 
 # Reset password with the emailed code
-curl -X POST http://localhost:8000/api/auth/reset-password \
+curl -X POST http://localhost:8000/api/auth/reset-password/ \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -193,14 +205,14 @@ curl -X POST http://localhost:8000/api/auth/reset-password \
 
 #### Token Refresh
 ```bash
-curl -X POST http://localhost:8000/api/auth/refresh \
+curl -X POST http://localhost:8000/api/auth/refresh/ \
   -H "Content-Type: application/json" \
   -d '{"refresh_token": "refresh_token_here"}'
 ```
 
 #### Logout
 ```bash
-curl -X POST http://localhost:8000/api/auth/logout \
+curl -X POST http://localhost:8000/api/auth/logout/ \
   -H "Authorization: Bearer access_token_here" \
   -H "Content-Type: application/json" \
   -d '{"refresh_token": "refresh_token_here"}'
@@ -361,7 +373,7 @@ Uses pluggable email backends via `EMAIL_BACKEND`:
 For `nodemailer`, run `npm install` inside `backend/` to install bridge dependencies.
 
 #### Token Blacklisting
-Currently uses an in-memory mock service. For production, configure Redis or use the MongoDB-based blacklisting service.
+The authentication endpoints use the MongoDB-backed token blacklist service.
 
 #### Default Roles
 The system creates users with a default "user" role. Additional roles can be created and managed through the role management system.

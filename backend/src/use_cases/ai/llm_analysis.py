@@ -19,7 +19,7 @@ class LLMAnalysisUseCase:
     
     def __init__(self, llm_model):
         """
-        Initialize with a loaded Gemma model.
+        Initialize with a generative AI provider.
         
         Args:
             llm_model: Provider exposing create_chat_completion()
@@ -29,7 +29,7 @@ class LLMAnalysisUseCase:
     
     def analyze(self, message: str, bert_result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Analyze a message using Gemma LLM.
+        Analyze a message using the configured generative AI provider.
         
         Args:
             message: The text message to analyze
@@ -50,9 +50,6 @@ class LLMAnalysisUseCase:
                 }
         """
         try:
-            # Always run Gemma to provide a human-readable summary and markers.
-            # For scam cases Gemma explains why it's likely a scam and lists red flags.
-            # For legitimate cases Gemma explains why it appears legitimate and lists green flags.
             summary = self._get_summary(message, bert_result)
 
             # Get key linguistic markers (red flags or green flags depending on verdict)
@@ -76,18 +73,20 @@ class LLMAnalysisUseCase:
         """Short do/don't guidance for the submission; empty on any failure."""
         import json
 
-        empty = {'score_explanation': '', 'suggested_action': '', 'avoid': []}
+        empty = {'score_explanation': '', 'missing_context': [], 'suggested_action': '', 'avoid': []}
         try:
             safe_message = self.sanitizer.sanitize(message, context="llm_guidance").sanitized_text
             schema = {
                 "type": "object",
                 "properties": {
                     "score_explanation": {"type": "string", "description": "1-3 sentences on why the classifier's score fits, citing details from the message."},
+                    "missing_context": {"type": "array", "items": {"type": "string"}, "maxItems": 3,
+                                        "description": "Unknown facts that could change the assessment. Empty if none."},
                     "suggested_action": {"type": "string", "description": "One short, safe next step."},
                     "avoid": {"type": "array", "items": {"type": "string"}, "maxItems": 3,
                               "description": "Specific things the user should NOT do in response to this message. Empty if low risk."},
                 },
-                "required": ["score_explanation", "suggested_action", "avoid"],
+                "required": ["score_explanation", "missing_context", "suggested_action", "avoid"],
             }
             prompt = (
                 "A classifier gave this message an estimated scam risk of "
@@ -103,8 +102,10 @@ class LLMAnalysisUseCase:
             )
             data = json.loads(raw)
             avoid = data.get('avoid')
+            missing = data.get('missing_context')
             return {
                 'score_explanation': str(data.get('score_explanation') or '').strip()[:600],
+                'missing_context': [str(m).strip()[:200] for m in missing if str(m).strip()][:3] if isinstance(missing, list) else [],
                 'suggested_action': str(data.get('suggested_action') or '').strip()[:300],
                 'avoid': [str(a).strip()[:200] for a in avoid if str(a).strip()][:3] if isinstance(avoid, list) else [],
             }

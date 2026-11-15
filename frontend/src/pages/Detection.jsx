@@ -8,7 +8,6 @@ import {
   hasGuestFeatureBeenUsed,
   GUEST_USE_LIMIT_CODE,
 } from '../api/chatbot';
-import mockChatHistory from '../mock_chat_history.json';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AppNavLinks from '../components/AppNavLinks';
@@ -426,7 +425,6 @@ function Detection() {
         ? await analyzeImage(selectedImage, accessToken)
         : await detectScamRequest(text);
       if (selectedImage && !isLoggedIn) setGuestImageUsed(true);
-      console.log('[DETECTION RESULT]', result);
       setDetectionResult(result);
       
       // Refresh history list to include the new detection
@@ -671,7 +669,6 @@ function Detection() {
       if (isLoggedIn && accessToken && detectionResult.ref_id) {
         // Get or create the analysis-guided conversation for authenticated user
         const conversation = await getAnalysisConversation(detectionResult.ref_id, accessToken);
-        console.log('[GUIDANCE CONVERSATION]', conversation);
         
         navigate('/chatbot', {
           state: {

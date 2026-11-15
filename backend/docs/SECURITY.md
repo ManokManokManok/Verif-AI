@@ -8,17 +8,17 @@
 |---------|---------------|
 | Password hashing | BCrypt, 12 rounds (`BCryptPasswordHasher`) |
 | Password policy | 8+ chars, upper + lower + digit + special (`PasswordValidator`) |
-| JWT tokens | HS256, 24 hours  / 7 day refresh (`JWTService`) |
-| Token blacklisting | `MockTokenBlacklistService` (in-memory — swap for Mongo/Redis in prod) |
+| JWT tokens | HS256, 15-minute access / 7-day refresh by default (`JWTService`); lifetimes are configurable |
+| Token blacklisting | MongoDB-backed blacklist service |
 | Rate limiting | Sliding-window per endpoint (`RateLimiter`) |
 
 ### Token Lifecycle
 
 ```
-Register → (email verification) → Login → Access Token (24 hours)
+Register → (email verification) → Login → Access Token (15 minutes by default)
                                         ↘ Refresh Token (7 days)
 Access expires → POST /api/auth/refresh/ → New access token
-Logout → Tokens blacklisted
+Logout → Access token blacklisted; refresh token also blacklisted if supplied
 ```
 
 ## Input Validation

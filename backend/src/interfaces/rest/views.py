@@ -207,8 +207,7 @@ from ...infrastructure.mongodb.repositories import MongoDBUserRepository, MongoD
 from ...infrastructure.mongodb.analysis_repository import AnalysisResultRepository
 from ...infrastructure.jwt_service import JWTService
 from ...infrastructure.token_blacklist_service import MongoDBTokenBlacklistService
-from ...infrastructure.ai.loaders import load_multihead_model, lite_mode
-from ...use_cases.ai.gemini_classification import GeminiClassificationUseCase
+from ...infrastructure.ai.loaders import load_multihead_model
 from ...infrastructure.ai.genai_provider import get_genai_provider
 from ...infrastructure.rate_limiter import rate_limit, check_rate_limit
 from ...infrastructure.rate_limiter import get_client_ip as _get_client_ip
@@ -703,13 +702,12 @@ def login(request: Request) -> Response:
             }
         }, status=status.HTTP_401_UNAUTHORIZED)
     
-    except Exception as e:
-        import traceback
-        traceback.print_exc()  # Print full traceback to console
+    except Exception:
+        logger.exception("Login failed unexpectedly")
         return Response({
             'error': {
                 'code': 'INTERNAL_ERROR',
-                'message': f'An unexpected error occurred: {str(e)}'
+                'message': 'An unexpected error occurred'
             }
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1727,7 +1725,7 @@ def detect_scam(request: Request) -> Response:
         "label": "Scam",
         "scam_type": "Banking Access & Payment",
         "type_confidence": 92.3,
-        "summary": "Short explanation from Gemma",
+        "summary": "Short generative explanation",
         "key_markers": ["marker 1", "marker 2", ...]
     }
     
@@ -1762,20 +1760,15 @@ def detect_scam(request: Request) -> Response:
             try:
                 jwt_service = get_jwt_service()
                 payload = jwt_service.verify_access_token(token)
-                logger.debug(f"[JWT PAYLOAD] {payload}")
                 user_id = payload.get('user_id')
-                logger.debug(f"[JWT user_id] value={user_id} type={type(user_id)}")
-                logger.debug(f"[DEBUG] Extracted user_id from JWT: {user_id}")
             except Exception as jwt_error:
                 logger.warning(f"[JWT] Could not extract user_id: {jwt_error}")
         
         # Log sanitized message for security monitoring
         logger.info(f"[SCAM DETECTION] Analyzing message: {sanitize_for_logging(message, 100)}")
         
-        # Gatekeeper: screen the message before BERT (set GATEKEEPER_DISABLED=true to skip it while testing)
-        gate = {'route': 'analyze'}
-        if os.getenv('GATEKEEPER_DISABLED', '').strip().lower() not in ('1', 'true', 'yes', 'on'):
-            gate = GatekeeperUseCase(get_genai_provider()).evaluate(message)
+        # Gatekeeper: screen the message before BERT
+        gate = GatekeeperUseCase(get_genai_provider()).evaluate(message)
         if gate['route'] != 'analyze':
             logger.info(f"[GATEKEEPER] route={gate['route']} reason={gate['reason_code']}")
             return Response({
@@ -1784,54 +1777,27 @@ def detect_scam(request: Request) -> Response:
                 **gate,
             }, status=status.HTTP_200_OK)
 
-        # Classification: local BERT, or Gemini only when LITE_MODE is on
-        # (or when the local model cannot be loaded).
-        use_gemini_classifier = lite_mode()
-        bert_result = None
-        llm_result = {'summary': '', 'key_markers': []}
-
-        if not use_gemini_classifier:
-            try:
-                tokenizer, model, scam_types = load_multihead_model()
-            except Exception as load_error:
-                logger.error(f"[SCAM DETECTION] Local model unavailable: {load_error}")
-                tokenizer = model = scam_types = None
-
-            if model is None or tokenizer is None:
-                if get_genai_provider().gemini is None:
-                    return Response({
-                        'error': {
-                            'code': 'MODEL_NOT_LOADED',
-                            'message': 'Scam detection model is not available'
-                        }
-                    }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-                logger.warning("[SCAM DETECTION] Falling back to Gemini classification")
-                use_gemini_classifier = True
-            else:
-                # Step 1: BERT Analysis
-                scam_detection = ScamDetectionUseCase(tokenizer, model, scam_types)
-                bert_result = scam_detection.detect(message)
-
-        if use_gemini_classifier:
-            try:
-                gemini_result = GeminiClassificationUseCase(get_genai_provider()).detect(message)
-            except Exception as classify_error:
-                logger.error(f"[GEMINI CLASSIFIER] Error: {classify_error}")
-                return Response({
-                    'error': {
-                        'code': 'MODEL_NOT_LOADED',
-                        'message': 'Scam detection is temporarily unavailable'
-                    }
-                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            llm_result = {
-                'summary': gemini_result.pop('summary'),
-                'key_markers': gemini_result.pop('key_markers'),
-                'score_explanation': gemini_result.pop('score_explanation', ''),
-                'missing_context': gemini_result.pop('missing_context', []),
-                'suggested_action': gemini_result.pop('suggested_action', ''),
-                'avoid': gemini_result.pop('avoid', []),
-            }
-            bert_result = gemini_result
+        # Step 1: BERT classification
+        try:
+            tokenizer, model, scam_types = load_multihead_model()
+        except Exception as load_error:
+            logger.error("[SCAM DETECTION] Local model unavailable: %s", load_error, exc_info=True)
+            return Response({
+                'error': {
+                    'code': 'MODEL_NOT_LOADED',
+                    'message': 'Scam detection model is not available'
+                }
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if model is None or tokenizer is None:
+            logger.error("[SCAM DETECTION] Local model or tokenizer is unavailable")
+            return Response({
+                'error': {
+                    'code': 'MODEL_NOT_LOADED',
+                    'message': 'Scam detection model is not available'
+                }
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        scam_detection = ScamDetectionUseCase(tokenizer, model, scam_types)
+        bert_result = scam_detection.detect(message)
 
         # Log classifier result
         logger.info(f"[CLASSIFIER] Label: {bert_result['label']}")
@@ -1842,11 +1808,9 @@ def detect_scam(request: Request) -> Response:
             logger.info(f"[CLASSIFIER] Type Confidence: {bert_result['type_confidence']:.2f}%")
         
         # Step 2: Gemini-first generative analysis with lazy Gemma fallback
-        # (already produced by the Gemini classifier when it was used)
         try:
-            if not use_gemini_classifier:
-                llm_analysis = LLMAnalysisUseCase(get_genai_provider())
-                llm_result = llm_analysis.analyze(message, bert_result)
+            llm_analysis = LLMAnalysisUseCase(get_genai_provider())
+            llm_result = llm_analysis.analyze(message, bert_result)
             logger.info(f"[GENAI] Summary: {llm_result.get('summary','')[:100]}...")
             logger.info(f"[GENAI] Key Markers: {llm_result.get('key_markers')}")
         except Exception as llm_error:
@@ -1908,8 +1872,8 @@ def detect_scam(request: Request) -> Response:
                 scam_type=bert_result.get('scam_type') or 'Not Scam',
                 confidence_bps=confidence_bps,
                 is_scam=bert_result['is_scam'],
-                analyzer_type='llm' if use_gemini_classifier else 'bert',
-                analyzer_version='gemini-classifier-v1' if use_gemini_classifier else 'v1',
+                analyzer_type='bert',
+                analyzer_version='v1',
                 message_hash=message_hash,
                 user_id=resolved_user_id,
                 message=message if resolved_user_id else None,
@@ -1930,16 +1894,9 @@ def detect_scam(request: Request) -> Response:
                 review_reason=preliminary_check.review_reason,
             )
             
-            # Log the analysis entity before saving
-            logger.debug(f"[DEBUG] AnalysisResult entity before save: {{'ref_id': {analysis.ref_id}, 'user_id': {analysis.user_id}, 'scam_class': {analysis.scam_class}, 'scam_type': {analysis.scam_type}, 'confidence_bps': {analysis.confidence_bps}, 'is_scam': {analysis.is_scam}, 'analyzer_type': {analysis.analyzer_type}, 'analyzer_version': {analysis.analyzer_version}, 'message_hash': {analysis.message_hash}, 'created_at': {analysis.created_at}}}")
-
             # Save to database
             repository = get_analysis_repository()
             saved_analysis = repository.save(analysis)
-
-            # Log the document as it will be sent to MongoDB
-            doc_for_db = repository._entity_to_document(analysis)
-            logger.debug(f"[DEBUG] Document sent to MongoDB: {doc_for_db}")
 
             logger.info(f"[DB] Analysis saved: ref_id={saved_analysis.ref_id}")
 
@@ -1977,12 +1934,6 @@ def detect_scam(request: Request) -> Response:
             'needs_review': needs_review,
             'review_reason': review_reason,
             'reviewed_result': _public_reviewed_result(saved_analysis) if saved_analysis else None,
-            # Debug info for browser console
-            'jwt_debug': {
-                'payload': payload if 'payload' in locals() else None,
-                'user_id_value': user_id if 'user_id' in locals() else None,
-                'user_id_type': str(type(user_id)) if 'user_id' in locals() else None,
-            }
         }
         
         logger.info("=" * 80)

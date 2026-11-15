@@ -1,5 +1,4 @@
 import bcrypt
-import os
 import re
 import secrets
 import string
@@ -101,14 +100,6 @@ class EmailValidator:
 
 
 class TokenGenerator:
-    # !!!!! TESTING ENVIRONMENT ONLY ON EVENT OF SENDGRID SLOWDOWN !!!!!
-    # Set this to True to bypass verification and use a fixed token for testing.
-    # MUST be False in production.
-    BYPASS_VERIFICATION_CODE = False  # Set True to bypass
-
-    # Fixed bypass token — 32 hex chars so it passes the TOKEN min_length validator.
-    _BYPASS_TOKEN = 'deadbeefdeadbeefdeadbeefdeadbeef'
-
     @staticmethod
     def generate_secure_token(length: int = 32) -> str:
         """
@@ -125,13 +116,10 @@ class TokenGenerator:
     @staticmethod
     def generate_verification_token() -> str:
         """
-        Generate email verification token.
-        If BYPASS_VERIFICATION_CODE is True, always return a fixed token for testing.
+        Generate an email verification token.
         Returns:
-            32-character verification token (or fixed bypass token if bypassed)
+            32-character verification token
         """
-        if TokenGenerator.BYPASS_VERIFICATION_CODE or os.environ.get('BYPASS_VERIFICATION_CODE') == '1':
-            return TokenGenerator._BYPASS_TOKEN
         return TokenGenerator.generate_secure_token(16)
     
     @staticmethod
@@ -156,52 +144,7 @@ class EmailService(Protocol):
         ...
 
 
-class MockEmailService:
-    """
-    Mock email service for development/testing.
-    In production, replace with actual email service (SendGrid, SES, etc.).
-    """
-    def send_verification_email(self, email: str, token: str) -> bool:
-        """
-        Send verification email (mock implementation).
-        
-        Args:
-            email: Recipient email
-            token: Verification token
-        
-        Returns:
-            True if email would be sent successfully
-        """
-        print(f"MOCK: Sending verification email to {email}")
-        print(f"MOCK: Verification token: {token}")
-        print(f"MOCK: Verification link: http://localhost:8000/api/auth/verify-email?token={token}")
-        return True
-    
-    def send_password_reset_email(self, email: str, token: str) -> bool:
-        """
-        Send password reset email (mock implementation).
-        
-        Args:
-            email: Recipient email
-            token: Password reset token
-        
-        Returns:
-            True if email would be sent successfully
-        """
-        print(f"MOCK: Sending password reset email to {email}")
-        print(f"MOCK: Reset token: {token}")
-        print(f"MOCK: Reset link: http://localhost:8000/api/auth/reset-password?token={token}")
-        return True
-
-    def send_password_reset_code_email(self, email: str, code: str) -> bool:
-        print(f"MOCK: Password reset code email to {email}")
-        print(f"MOCK: Reset code: {code}")
-        return True
-
-
 class MFACodeGenerator:
-    # Set this to True to bypass MFA code and always return '000000' for testing
-    BYPASS_MFA_CODE = False  # Set True to bypass
     """
     Multi-Factor Authentication code generator.
 
@@ -220,8 +163,6 @@ class MFACodeGenerator:
         Returns:
             Zero-padded numeric string, e.g. "042917".
         """
-        if MFACodeGenerator.BYPASS_MFA_CODE or os.environ.get('BYPASS_MFA_CODE') == '1':
-            return '000000'
         return ''.join(secrets.choice(string.digits) for _ in range(length))
 
     @staticmethod

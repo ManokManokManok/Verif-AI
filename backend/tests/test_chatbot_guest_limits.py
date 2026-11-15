@@ -16,6 +16,16 @@ from src.apps.chatbot.guest_limits import claim_guest_use
 from src.use_cases.chatbot.general_chatbot import STATIC_CHAT_PROMPTS
 
 
+def test_image_report_keeps_aligned_low_risk_score():
+    report = views._parse_image_report(
+        '{"verdict":"Likely legitimate","confidence":87.6,'
+        '"summary":"The risk is 12%."}'
+    )
+    assert report['scam_score'] == 0.0
+    assert report['legit_score'] == 100.0
+    assert report['summary'] == 'The risk is 0%.'
+
+
 class GuestFeatureUsageTests(unittest.TestCase):
     def setUp(self):
         self.api_factory = APIRequestFactory()

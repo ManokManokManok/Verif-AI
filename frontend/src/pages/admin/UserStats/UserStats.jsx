@@ -45,6 +45,8 @@ export default function UserStats({ onNotify }) {
     error: reportsError,
     refresh: refreshReports,
     updateStatus,
+    pagination,
+    goToPage,
   } = useUserReports(reportFilter);
 
   // Handle report status update
@@ -345,11 +347,8 @@ export default function UserStats({ onNotify }) {
             data={reports}
             loading={reportsLoading}
             emptyMessage={`No ${reportFilter === 'all' ? '' : reportFilter} reports found`}
-            pagination={reportsData?.pagination}
-            onPageChange={(page) => {
-              // Handle pagination - would need to update the hook
-              console.log('Page change:', page);
-            }}
+            pagination={pagination}
+            onPageChange={goToPage}
           />
         )}
       </div>

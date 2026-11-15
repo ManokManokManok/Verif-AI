@@ -132,10 +132,6 @@ export function useUserStats(dateRange = {}, period = 'all_time') {
         period,
       });
 
-      if (import.meta.env.DEV) {
-        console.debug('[useUserStats] raw API response:', res);
-      }
-      
       if (res.success) setStats(res.data);
     } catch (err) {
       setError(err.message || 'Failed to fetch user statistics');
@@ -165,18 +161,30 @@ export function useUserReports(status = null) {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const latestRequest = useRef(0);
 
   const fetchData = useCallback(async (page = 1) => {
+    const requestId = ++latestRequest.current;
     try {
       setLoading(true);
       setError(null);
       
-      const res = await getUserReports({
+      let res = await getUserReports({
         status,
         page,
         limit: pagination.limit,
       });
+
+      if (requestId !== latestRequest.current) return;
+      if (res.success && page > Math.max(1, res.data.total_pages)) {
+        res = await getUserReports({
+          status,
+          page: Math.max(1, res.data.total_pages),
+          limit: pagination.limit,
+        });
+      }
       
+      if (requestId !== latestRequest.current) return;
       if (res.success) {
         setReports(res.data.reports);
         setPagination({
@@ -187,9 +195,11 @@ export function useUserReports(status = null) {
         });
       }
     } catch (err) {
-      setError(err.message || 'Failed to fetch reports');
+      if (requestId === latestRequest.current) {
+        setError(err.message || 'Failed to fetch reports');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   }, [status, pagination.limit]);
 

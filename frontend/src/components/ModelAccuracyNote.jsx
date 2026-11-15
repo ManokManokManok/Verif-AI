@@ -111,8 +111,8 @@ export default function ModelAccuracyNote({ className = '' }) {
           {infoOpen && (
             <div className="modelNote__popover" role="note">
               <p>
-                This figure comes from testing the model on part of our own dataset. The margin of
-                error shows how far the real accuracy could be above or below that number.
+                The accuracy figure comes from testing the model. The displayed margin is an
+                approximate allowance, not a statistically verified confidence interval.
               </p>
               <p>
                 Your result can differ. Accuracy depends on the wording, length, language and type

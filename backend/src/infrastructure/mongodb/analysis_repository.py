@@ -441,8 +441,6 @@ class AnalysisResultRepository:
             doc["_id"] = entity.id
         if entity.message_hash:
             doc["message_hash"] = entity.message_hash
-        logger.debug(f"[DEBUG] AnalysisResult entity before mapping: {entity}")
-        logger.debug(f"[DEBUG] MongoDB document to be saved: {doc}")
         return doc
     
     def _document_to_entity(self, doc: Dict[str, Any]) -> AnalysisResult:
