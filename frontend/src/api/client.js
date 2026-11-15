@@ -28,6 +28,9 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
   'http://localhost:8000/api';
 
+const SERVER_UNAVAILABLE_MESSAGE =
+  'Having trouble connecting to Verif-AI. The servers may be turned off or access may be restricted. To request access, contact kenchitomeldan@gmail.com.';
+
 /** Request timeout: 2 minutes only */
 const REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -186,9 +189,7 @@ async function apiRequest(path, options = {}) {
       throw timeoutErr;
     }
     if (err instanceof TypeError) {
-      const connectionError = new Error(
-        'Having trouble connecting to Verif-AI. Please try again in a moment.'
-      );
+      const connectionError = new Error(SERVER_UNAVAILABLE_MESSAGE);
       connectionError.name = 'NetworkError';
       connectionError.cause = err;
       throw connectionError;
@@ -229,7 +230,12 @@ async function apiRequest(path, options = {}) {
     }
     
     // Extract error message and validation details from API response
-    let message = data?.error?.message || data?.message || `Request failed with status ${response.status}`;
+    const lambdaAccessDenied = response.status === 403 &&
+      typeof data?.Message === 'string' &&
+      /^Forbidden(?:\.|$)/.test(data.Message);
+    let message = lambdaAccessDenied
+      ? SERVER_UNAVAILABLE_MESSAGE
+      : data?.error?.message || data?.message || `Request failed with status ${response.status}`;
     
     // If the API returned validation error details, format them nicely
     if (data?.error?.details) {
